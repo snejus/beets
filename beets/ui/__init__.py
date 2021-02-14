@@ -484,7 +484,7 @@ DARK_COLORS = {
     "black": 0,
     "darkred": 1,
     "darkgreen": 2,
-    "brown": 3,
+    "brown": '103;38;5',
     "darkyellow": 3,
     "darkblue": 4,
     "purple": 5,
@@ -519,12 +519,11 @@ def _colorize(color, text):
     in a terminal that is ANSI color-aware. The color must be something
     in DARK_COLORS or LIGHT_COLORS.
     """
-    if color in DARK_COLORS:
-        escape = COLOR_ESCAPE + "%im" % (DARK_COLORS[color] + 30)
-    elif color in LIGHT_COLORS:
-        escape = COLOR_ESCAPE + "%i;01m" % (LIGHT_COLORS[color] + 30)
-    else:
-        raise ValueError(u'no such color %s', color)
+    escape = COLOR_ESCAPE + ("%sm" % color)
+    # elif color in LIGHT_COLORS:
+    #     escape = COLOR_ESCAPE + "%i;01m" % (LIGHT_COLORS[color] + 30)
+    # else:
+        # raise ValueError(u'no such color %s', color)
     return escape + text + RESET_COLOR
 
 
@@ -543,9 +542,9 @@ def colorize(color_name, text):
     # In case a 3rd party plugin is still passing the actual color ('red')
     # instead of the abstract color name ('text_error')
     color = COLORS.get(color_name)
-    if not color:
-        log.debug(u'Invalid color_name: {0}', color_name)
-        color = color_name
+    # if not color:
+    #     log.debug(u'Invalid color_name: {0}', color_name)
+    #     color = color_name
     return _colorize(color, text)
 
 
