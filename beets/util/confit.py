@@ -17,9 +17,6 @@ from __future__ import division, absolute_import, print_function
 
 import confuse
 
-import warnings
-warnings.warn("beets.util.confit is deprecated; use confuse instead")
-
 # Import everything from the confuse module into this module.
 for key, value in confuse.__dict__.items():
     if key not in ['__name__']:
@@ -27,4 +24,4 @@ for key, value in confuse.__dict__.items():
 
 
 # Cleanup namespace.
-del key, value, warnings, confuse
+del key, value, confuse
