@@ -503,18 +503,8 @@ COLOR_NAMES = ['text_success', 'text_warning', 'text_error', 'text_highlight',
 COLORS = None
 
 
-def _colorize(color, text):
-    """Returns a string that prints the given text in the given color
-    in a terminal that is ANSI color-aware. The color must be something
-    in DARK_COLORS or LIGHT_COLORS.
-    """
-    if color in DARK_COLORS:
-        escape = COLOR_ESCAPE + "%im" % (DARK_COLORS[color] + 30)
-    elif color in LIGHT_COLORS:
-        escape = COLOR_ESCAPE + "%i;01m" % (LIGHT_COLORS[color] + 30)
-    else:
-        raise ValueError(u'no such color %s', color)
-    return escape + text + RESET_COLOR
+def _colorize(color: str, text: str) -> str:
+    return COLOR_ESCAPE + color + "m" + text + RESET_COLOR
 
 
 def colorize(color_name, text):
@@ -524,18 +514,7 @@ def colorize(color_name, text):
     if not config['ui']['color'] or 'NO_COLOR' in os.environ.keys():
         return text
 
-    global COLORS
-    if not COLORS:
-        COLORS = dict((name,
-                       config['ui']['colors'][name].as_str())
-                      for name in COLOR_NAMES)
-    # In case a 3rd party plugin is still passing the actual color ('red')
-    # instead of the abstract color name ('text_error')
-    color = COLORS.get(color_name)
-    if not color:
-        log.debug(u'Invalid color_name: {0}', color_name)
-        color = color_name
-    return _colorize(color, text)
+    return _colorize(config['ui']['colors'][color_name].as_str(), text)
 
 
 def _colordiff(a, b, highlight='text_highlight',
@@ -571,19 +550,13 @@ def _colordiff(a, b, highlight='text_highlight',
             b_out.append(b[b_start:b_end])
         elif op == 'insert':
             # Right only.
-            b_out.append(colorize(highlight, b[b_start:b_end]))
+            b_out.append(colorize('text_success', b[b_start:b_end]))
         elif op == 'delete':
             # Left only.
-            a_out.append(colorize(highlight, a[a_start:a_end]))
+            a_out.append(colorize('text_error', a[a_start:a_end]))
         elif op == 'replace':
-            # Right and left differ. Colorise with second highlight if
-            # it's just a case change.
-            if a[a_start:a_end].lower() != b[b_start:b_end].lower():
-                color = highlight
-            else:
-                color = minor_highlight
-            a_out.append(colorize(color, a[a_start:a_end]))
-            b_out.append(colorize(color, b[b_start:b_end]))
+            a_out.append(colorize('text_error', a[a_start:a_end]))
+            b_out.append(colorize('text_success', b[b_start:b_end]))
         else:
             assert(False)
 
@@ -596,8 +569,7 @@ def colordiff(a, b, highlight='text_highlight'):
     """
     if config['ui']['color']:
         return _colordiff(a, b, highlight)
-    else:
-        return six.text_type(a), six.text_type(b)
+    return six.text_type(a), six.text_type(b)
 
 
 def get_path_formats(subview=None):
@@ -620,12 +592,9 @@ def get_replacements():
         repl = repl or ''
         try:
             replacements.append((re.compile(pattern), repl))
-        except re.error:
-            raise UserError(
-                u'malformed regular expression in replace: {0}'.format(
-                    pattern
-                )
-            )
+        except re.error as exc:
+            msg = u'malformed regular expression in replace: {0}'.format(pattern)
+            raise UserError(msg) from exc
     return replacements
 
 
@@ -646,7 +615,7 @@ def term_width():
     except IOError:
         return fallback
     try:
-        height, width = struct.unpack('hh', buf)
+        _, width = struct.unpack('hh', buf)
     except struct.error:
         return fallback
     return width
@@ -680,7 +649,7 @@ def _field_diff(field, old, old_fmt, new, new_fmt):
         oldstr, newstr = colordiff(oldval, newstr)
     else:
         oldstr = colorize('text_error', oldstr)
-        newstr = colorize('text_error', newstr)
+        newstr = colorize('text_success', newstr)
 
     return u'{0} -> {1}'.format(oldstr, newstr)
 
@@ -761,7 +730,7 @@ def show_path_changes(path_changes):
     if max_width > col_width:
         # Print every change over two lines
         for source, dest in zip(sources, destinations):
-            log.info(u'{0} \n  -> {1}', source, dest)
+            log.info(u'{0} \n  -> {1}', source, colorize('text_highlight_minor', dest))
     else:
         # Print every change on a single line, and add a header
         title_pad = max_width - len('Source ') + len(' -> ')
