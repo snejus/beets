@@ -21,6 +21,7 @@ from __future__ import division, absolute_import, print_function
 
 import os
 import re
+from time import ctime
 from platform import python_version
 from collections import namedtuple, Counter
 from itertools import chain
@@ -1126,9 +1127,9 @@ def update_items(lib, query, album, move, pretend, fields):
                 continue
 
             # Did the item change since last checked?
-            if item.current_mtime() <= item.mtime:
-                log.debug(u'skipping {0} because mtime is up to date ({1})',
-                          displayable_path(item.path), item.mtime)
+            log.debug(u'{0} last modified: {1}', displayable_path(item.path), ctime(item.current_mtime()))
+            if item.current_mtime() == item.mtime:
+                log.debug(u'skipping {0}: no changes since {1}', displayable_path(item.path), ctime(item.mtime))
                 continue
 
             # Read new data.
