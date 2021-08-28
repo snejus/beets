@@ -169,8 +169,7 @@ class MPDStats:
         item = self.lib.items(query).get()
         if item:
             return item
-        else:
-            self._log.info("item not found: {}", displayable_path(path))
+        self._log.info("item not found: {}", displayable_path(path))
 
     def update_item(self, item, attribute, value=None, increment=None):
         """Update the beets item. Set attribute to value or increment the value
@@ -220,8 +219,19 @@ class MPDStats:
 
         Returns whether the change was manual (skipped previous song or not)
         """
+        if "_CHECK" in song["path"]:
+            return
+
         elapsed = song["elapsed_at_start"] + (time.time() - song["started"])
         skipped = elapsed / song["duration"] < self.played_ratio_threshold
+
+        # played_for = time.time() - song["started"]
+        # if played_for < 1:
+        #     return
+        #
+        # diff = abs(song["remaining"] - played_for)
+        # skipped = diff >= self.time_threshold
+
         if skipped:
             self.handle_skipped(song)
         else:
