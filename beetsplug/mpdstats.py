@@ -288,8 +288,19 @@ class MPDStats:
 
         Returns whether the change was manual (skipped previous song or not)
         """
+        if "_CHECK" in song["path"]:
+            return
+
         elapsed = song["elapsed_at_start"] + (time.time() - song["started"])
         skipped = elapsed / song["duration"] < self.played_ratio_threshold
+
+        # played_for = time.time() - song["started"]
+        # if played_for < 1:
+        #     return
+        #
+        # diff = abs(song["remaining"] - played_for)
+        # skipped = diff >= self.time_threshold
+
         if skipped:
             self.handle_skipped(song)
         else:
