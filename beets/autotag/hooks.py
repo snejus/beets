@@ -17,16 +17,20 @@
 from __future__ import annotations
 
 import re
-from collections import namedtuple
+from copy import deepcopy
+from dataclasses import dataclass
 from functools import total_ordering
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
+    ClassVar,
     Dict,
     Iterable,
     Iterator,
     List,
     Optional,
+    Set,
     Tuple,
     TypeVar,
     Union,
@@ -34,12 +38,18 @@ from typing import (
 )
 
 from jellyfish import levenshtein_distance
+from typing_extensions import Self
 from unidecode import unidecode
 
 from beets import config, logging, plugins
 from beets.autotag import mb
 from beets.library import Item
-from beets.util import as_string, cached_classproperty
+from beets.util import as_string, cached_classproperty, colorize
+
+if TYPE_CHECKING:
+    from beets.library import Item
+
+JSONDict = Dict[str, Any]
 
 log = logging.getLogger("beets")
 
@@ -51,6 +61,9 @@ class AttrDict(Dict[str, V]):
     """A dictionary that supports attribute ("dot") access, so `d.field`
     is equivalent to `d['field']`.
     """
+
+    def copy(self) -> Self:
+        return deepcopy(self)
 
     def __getattr__(self, attr: str) -> V:
         if attr in self:
@@ -168,11 +181,9 @@ class AlbumInfo(AttrDict):
         self.discogs_artistid = discogs_artistid
         self.update(kwargs)
 
-    def copy(self) -> AlbumInfo:
-        dupe = AlbumInfo([])
-        dupe.update(self)
-        dupe.tracks = [track.copy() for track in self.tracks]
-        return dupe
+    @property
+    def name(self) -> Optional[str]:
+        return self.album
 
 
 class TrackInfo(AttrDict):
@@ -258,10 +269,9 @@ class TrackInfo(AttrDict):
         self.album = album
         self.update(kwargs)
 
-    def copy(self) -> TrackInfo:
-        dupe = TrackInfo()
-        dupe.update(self)
-        return dupe
+    @property
+    def name(self) -> Optional[str]:
+        return self.title
 
 
 # Candidate distance scoring.
@@ -378,6 +388,13 @@ class Distance:
         for key in weights_view.keys():
             weights[key] = weights_view[key].as_number()
         return weights
+
+    @property
+    def penalties(self) -> List[str]:
+        return [
+            k.replace("album_", "").replace("track_", "").replace("_", " ")
+            for k in self._penalties
+        ]
 
     # Access the components and their aggregates.
 
@@ -588,12 +605,79 @@ class Distance:
 
 
 # Structures that compose all the information for a candidate match.
+@dataclass
+class Match:
+    disambig_fields_key: ClassVar[str]
+    distance: Distance
+    info: AttrDict
 
-AlbumMatch = namedtuple(
-    "AlbumMatch", ["distance", "info", "mapping", "extra_items", "extra_tracks"]
-)
+    @property
+    def dist(self) -> str:
+        if self.distance <= config["match"]["strong_rec_thresh"].as_number():
+            color = "text_success"
+        elif self.distance <= config["match"]["medium_rec_thresh"].as_number():
+            color = "text_warning"
+        else:
+            color = "text_error"
+        return colorize(color, "%.1f%%" % ((1 - self.distance) * 100))
 
-TrackMatch = namedtuple("TrackMatch", ["distance", "info"])
+    @property
+    def name(self) -> str:
+        return self.info.name
+
+    @property
+    def penalty(self, limit: int = 0) -> Optional[str]:
+        """Returns a colorized string that indicates all the penalties
+        applied to a distance object.
+        """
+        penalties = self.distance.penalties
+        if penalties:
+            if limit and len(penalties) > limit:
+                penalties = penalties[:limit] + ["..."]
+            return colorize("text_warning", f"({', '.join(penalties)})")
+        return None
+
+    @property
+    def disambig_fields(self) -> Iterable[str]:
+        return config["match"][self.disambig_fields_key].as_str_seq()
+
+    @property
+    def dist_data(self) -> JSONDict:
+        return {
+            "name": self.name,
+            "distance": self.dist,
+            "penalty": self.penalty,
+            "dist_count": round(float(1 - self.distance), 2),
+            "dist": round(float(1 - self.distance), 2),
+        }
+
+    @property
+    def disambig_data(self) -> JSONDict:
+        """Return data for an AlbumInfo or TrackInfo object that
+        provides context that helps disambiguate similar-looking albums and
+        tracks.
+        """
+        dist_fields = self.dist_data.keys()
+        match_fields = [k for k in self.disambig_fields if k not in dist_fields]
+        data = {
+            **self.dist_data,
+            **{k: self.info.get(k, None) for k in match_fields},
+        }
+
+        return {k: v for k, v in data.items() if k in self.disambig_fields}
+
+
+@dataclass
+class TrackMatch(Match):
+    disambig_fields_key = "singleton_disambig_fields"
+
+
+@dataclass
+class AlbumMatch(Match):
+    disambig_fields_key = "album_disambig_fields"
+    mapping: Dict["Item", TrackInfo]
+    extra_items: Set["Item"]
+    extra_tracks: Set[TrackInfo]
 
 
 # Aggregation of sources.

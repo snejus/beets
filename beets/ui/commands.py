@@ -16,25 +16,27 @@
 interface.
 """
 
-
+import operator as op
 import os
 import re
 from collections import Counter, namedtuple
 from itertools import chain
+from math import floor
 from platform import python_version
-from typing import Sequence
+from time import localtime, strftime
+from typing import Any, Dict, Iterable, List, Set, Union
+
+from rich import box
+from rich.align import Align
+from rich.console import Console
+from rich_tables.fields import FIELDS_MAP
+from rich_tables.generic import flexitable
+from rich_tables.utils import border_panel, make_difftext, new_table, wrap
 
 import beets
 from beets import autotag, config, importer, library, logging, plugins, ui, util
 from beets.autotag import Recommendation, hooks
-from beets.ui import (
-    decargs,
-    input_,
-    print_,
-    print_column_layout,
-    print_newline_layout,
-    show_path_changes,
-)
+from beets.ui import decargs, input_, print_, show_path_changes
 from beets.util import (
     MoveOperation,
     ancestry,
@@ -48,6 +50,8 @@ from . import _store_dict
 
 VARIOUS_ARTISTS = "Various Artists"
 PromptChoice = namedtuple("PromptChoice", ["short", "long", "callback"])
+
+console = Console(force_terminal=True, force_interactive=True)
 
 # Global logger.
 log = logging.getLogger("beets")
@@ -195,569 +199,160 @@ default_commands.append(HelpCommand())
 # Importer utilities and support.
 
 
-def disambig_string(info):
-    """Generate a string for an AlbumInfo or TrackInfo object that
-    provides context that helps disambiguate similar-looking albums and
-    tracks.
-    """
-    if isinstance(info, hooks.AlbumInfo):
-        disambig = get_album_disambig_fields(info)
-    elif isinstance(info, hooks.TrackInfo):
-        disambig = get_singleton_disambig_fields(info)
-    else:
-        return ""
+def get_diff(field_name: str, before: Any, after: Any) -> str:
+    if field_name == "length":
+        before = FIELDS_MAP["length"](int(float(before or 0)))
+        after = FIELDS_MAP["length"](int(float(after or 0)))
 
-    return ", ".join(disambig)
+    return make_difftext(str(before or ""), str(after or ""))
 
 
-def get_singleton_disambig_fields(info: hooks.TrackInfo) -> Sequence[str]:
-    out = []
-    chosen_fields = config["match"]["singleton_disambig_fields"].as_str_seq()
-    calculated_values = {
-        "index": "Index {}".format(str(info.index)),
-        "track_alt": "Track {}".format(info.track_alt),
-        "album": (
-            "[{}]".format(info.album)
-            if (
-                config["import"]["singleton_album_disambig"].get()
-                and info.get("album")
-            )
-            else ""
-        ),
-    }
-
-    for field in chosen_fields:
-        if field in calculated_values:
-            out.append(str(calculated_values[field]))
-        else:
-            try:
-                out.append(str(info[field]))
-            except (AttributeError, KeyError):
-                print(f"Disambiguation string key {field} does not exist.")
-
-    return out
+track_info_to_item_field: Dict[str, str] = {
+    "artist_id": "mb_artistid",
+    "track_id": "mb_trackid",
+    "va": "comp",
+    "index": "track",
+    "mediums": "disctotal",
+    "medium_total": "tracktotal",
+    "medium_index": "track",
+    "medium": "disc",
+    "releasegroup_id": "mb_releasegroupid",
+    "release_track_id": "mb_releasetrackid",
+}
+album_info_to_item_field = {
+    **track_info_to_item_field,
+    "artist": "albumartist",
+    "album_id": "mb_albumid",
+    "artist_sort": "albumartist_sort",
+    "artist_credit": "albumartist_credit",
+}
+track_overwrite_fields = set(config["overwrite_null"]["track"].as_str_seq())
+album_overwrite_fields = set(config["overwrite_null"]["album"].as_str_seq())
 
 
-def get_album_disambig_fields(info: hooks.AlbumInfo) -> Sequence[str]:
-    out = []
-    chosen_fields = config["match"]["album_disambig_fields"].as_str_seq()
-    calculated_values = {
-        "media": (
-            "{}x{}".format(info.mediums, info.media)
-            if (info.mediums and info.mediums > 1)
-            else info.media
-        ),
-    }
-
-    for field in chosen_fields:
-        if field in calculated_values:
-            out.append(str(calculated_values[field]))
-        else:
-            try:
-                out.append(str(info[field]))
-            except (AttributeError, KeyError):
-                print(f"Disambiguation string key {field} does not exist.")
-
-    return out
-
-
-def dist_colorize(string, dist):
-    """Formats a string as a colorized similarity string according to
-    a distance.
-    """
-    if dist <= config["match"]["strong_rec_thresh"].as_number():
-        string = ui.colorize("text_success", string)
-    elif dist <= config["match"]["medium_rec_thresh"].as_number():
-        string = ui.colorize("text_warning", string)
-    else:
-        string = ui.colorize("text_error", string)
-    return string
-
-
-def dist_string(dist):
-    """Formats a distance (a float) as a colorized similarity percentage
-    string.
-    """
-    string = "{:.1f}%".format(((1 - dist) * 100))
-    return dist_colorize(string, dist)
-
-
-def penalty_string(distance, limit=None):
-    """Returns a colorized string that indicates all the penalties
-    applied to a distance object.
-    """
-    penalties = []
-    for key in distance.keys():
-        key = key.replace("album_", "")
-        key = key.replace("track_", "")
-        key = key.replace("_", " ")
-        penalties.append(key)
-    if penalties:
-        if limit and len(penalties) > limit:
-            penalties = penalties[:limit] + ["..."]
-        # Prefix penalty string with U+2260: Not Equal To
-        penalty_string = "\u2260 {}".format(", ".join(penalties))
-        return ui.colorize("changed", penalty_string)
-
-
-class ChangeRepresentation:
-    """Keeps track of all information needed to generate a (colored) text
-    representation of the changes that will be made if an album or singleton's
-    tags are changed according to `match`, which must be an AlbumMatch or
-    TrackMatch object, accordingly.
-    """
-
-    cur_artist = None
-    # cur_album set if album, cur_title set if singleton
-    cur_album = None
-    cur_title = None
-    match = None
-    indent_header = ""
-    indent_detail = ""
-
-    def __init__(self):
-        # Read match header indentation width from config.
-        match_header_indent_width = config["ui"]["import"]["indentation"][
-            "match_header"
-        ].as_number()
-        self.indent_header = ui.indent(match_header_indent_width)
-
-        # Read match detail indentation width from config.
-        match_detail_indent_width = config["ui"]["import"]["indentation"][
-            "match_details"
-        ].as_number()
-        self.indent_detail = ui.indent(match_detail_indent_width)
-
-        # Read match tracklist indentation width from config
-        match_tracklist_indent_width = config["ui"]["import"]["indentation"][
-            "match_tracklist"
-        ].as_number()
-        self.indent_tracklist = ui.indent(match_tracklist_indent_width)
-        self.layout = config["ui"]["import"]["layout"].as_choice(
-            {
-                "column": 0,
-                "newline": 1,
-            }
-        )
-
-    def print_layout(
-        self, indent, left, right, separator=" -> ", max_width=None
-    ):
-        if not max_width:
-            # If no max_width provided, use terminal width
-            max_width = ui.term_width()
-        if self.layout == 0:
-            print_column_layout(indent, left, right, separator, max_width)
-        else:
-            print_newline_layout(indent, left, right, separator, max_width)
-
-    def show_match_header(self):
-        """Print out a 'header' identifying the suggested match (album name,
-        artist name,...) and summarizing the changes that would be made should
-        the user accept the match.
-        """
-        # Print newline at beginning of change block.
-        print_("")
-
-        # 'Match' line and similarity.
-        print_(
-            self.indent_header + f"Match ({dist_string(self.match.distance)}):"
-        )
-
-        if self.match.info.get("album"):
-            # Matching an album - print that
-            artist_album_str = (
-                f"{self.match.info.artist}" + f" - {self.match.info.album}"
-            )
-        else:
-            # Matching a single track
-            artist_album_str = (
-                f"{self.match.info.artist}" + f" - {self.match.info.title}"
-            )
-        print_(
-            self.indent_header
-            + dist_colorize(artist_album_str, self.match.distance)
-        )
-
-        # Penalties.
-        penalties = penalty_string(self.match.distance)
-        if penalties:
-            print_(self.indent_header + penalties)
-
-        # Disambiguation.
-        disambig = disambig_string(self.match.info)
-        if disambig:
-            print_(self.indent_header + disambig)
-
-        # Data URL.
-        if self.match.info.data_url:
-            url = ui.colorize("text_faint", f"{self.match.info.data_url}")
-            print_(self.indent_header + url)
-
-    def show_match_details(self):
-        """Print out the details of the match, including changes in album name
-        and artist name.
-        """
-        # Artist.
-        artist_l, artist_r = self.cur_artist or "", self.match.info.artist
-        if artist_r == VARIOUS_ARTISTS:
-            # Hide artists for VA releases.
-            artist_l, artist_r = "", ""
-        if artist_l != artist_r:
-            artist_l, artist_r = ui.colordiff(artist_l, artist_r)
-            # Prefix with U+2260: Not Equal To
-            left = {
-                "prefix": ui.colorize("changed", "\u2260") + " Artist: ",
-                "contents": artist_l,
-                "suffix": "",
-            }
-            right = {"prefix": "", "contents": artist_r, "suffix": ""}
-            self.print_layout(self.indent_detail, left, right)
-
-        else:
-            print_(self.indent_detail + "*", "Artist:", artist_r)
-
-        if self.cur_album:
-            # Album
-            album_l, album_r = self.cur_album or "", self.match.info.album
-            if (
-                self.cur_album != self.match.info.album
-                and self.match.info.album != VARIOUS_ARTISTS
-            ):
-                album_l, album_r = ui.colordiff(album_l, album_r)
-                # Prefix with U+2260: Not Equal To
-                left = {
-                    "prefix": ui.colorize("changed", "\u2260") + " Album: ",
-                    "contents": album_l,
-                    "suffix": "",
-                }
-                right = {"prefix": "", "contents": album_r, "suffix": ""}
-                self.print_layout(self.indent_detail, left, right)
-            else:
-                print_(self.indent_detail + "*", "Album:", album_r)
-        elif self.cur_title:
-            # Title - for singletons
-            title_l, title_r = self.cur_title or "", self.match.info.title
-            if self.cur_title != self.match.info.title:
-                title_l, title_r = ui.colordiff(title_l, title_r)
-                # Prefix with U+2260: Not Equal To
-                left = {
-                    "prefix": ui.colorize("changed", "\u2260") + " Title: ",
-                    "contents": title_l,
-                    "suffix": "",
-                }
-                right = {"prefix": "", "contents": title_r, "suffix": ""}
-                self.print_layout(self.indent_detail, left, right)
-            else:
-                print_(self.indent_detail + "*", "Title:", title_r)
-
-    def make_medium_info_line(self, track_info):
-        """Construct a line with the current medium's info."""
-        track_media = track_info.get("media", "Media")
-        # Build output string.
-        if self.match.info.mediums > 1 and track_info.disctitle:
-            return (
-                f"* {track_media} {track_info.medium}: {track_info.disctitle}"
-            )
-        elif self.match.info.mediums > 1:
-            return f"* {track_media} {track_info.medium}"
-        elif track_info.disctitle:
-            return f"* {track_media}: {track_info.disctitle}"
-        else:
-            return ""
-
-    def format_index(self, track_info):
-        """Return a string representing the track index of the given
-        TrackInfo or Item object.
-        """
-        if isinstance(track_info, hooks.TrackInfo):
-            index = track_info.index
-            medium_index = track_info.medium_index
-            medium = track_info.medium
-            mediums = self.match.info.mediums
-        else:
-            index = medium_index = track_info.track
-            medium = track_info.disc
-            mediums = track_info.disctotal
-        if config["per_disc_numbering"]:
-            if mediums and mediums > 1:
-                return f"{medium}-{medium_index}"
-            else:
-                return str(medium_index if medium_index is not None else index)
-        else:
-            return str(index)
-
-    def make_track_numbers(self, item, track_info):
-        """Format colored track indices."""
-        cur_track = self.format_index(item)
-        new_track = self.format_index(track_info)
-        templ = "(#{})"
-        changed = False
-        # Choose color based on change.
-        if cur_track != new_track:
-            changed = True
-            if item.track in (track_info.index, track_info.medium_index):
-                highlight_color = "text_highlight_minor"
-            else:
-                highlight_color = "text_highlight"
-        else:
-            highlight_color = "text_faint"
-
-        cur_track = templ.format(cur_track)
-        new_track = templ.format(new_track)
-        lhs_track = ui.colorize(highlight_color, cur_track)
-        rhs_track = ui.colorize(highlight_color, new_track)
-        return lhs_track, rhs_track, changed
-
-    @staticmethod
-    def make_track_titles(item, track_info):
-        """Format colored track titles."""
-        new_title = track_info.title
-        if not item.title.strip():
-            # If there's no title, we use the filename. Don't colordiff.
-            cur_title = displayable_path(os.path.basename(item.path))
-            return cur_title, new_title, True
-        else:
-            # If there is a title, highlight differences.
-            cur_title = item.title.strip()
-            cur_col, new_col = ui.colordiff(cur_title, new_title)
-            return cur_col, new_col, cur_title != new_title
-
-    @staticmethod
-    def make_track_lengths(item, track_info):
-        """Format colored track lengths."""
-        changed = False
-        if (
-            item.length
-            and track_info.length
-            and abs(item.length - track_info.length)
-            >= config["ui"]["length_diff_thresh"].as_number()
+def get_track_diff(
+    old: library.Item, new: hooks.TrackInfo, fields: List[str]
+) -> hooks.AttrDict:
+    skip = {"data_url", "artist_id", "track_id"}
+    saved_fields = new.keys()
+    fields = [f for f in fields if f not in skip]
+    diffs = hooks.AttrDict({f: new.get(f, "") for f in fields})
+    for field in fields:
+        new_value = new.get(field)
+        old_value = old.get(track_info_to_item_field.get(field, field))
+        if field in saved_fields or (
+            new_value is not None or field in track_overwrite_fields
         ):
-            highlight_color = "text_highlight"
-            changed = True
-        else:
-            highlight_color = "text_highlight_minor"
+            diffs[field] = get_diff(field, old_value, new_value)
 
-        # Handle nonetype lengths by setting to 0
-        cur_length0 = item.length if item.length else 0
-        new_length0 = track_info.length if track_info.length else 0
-        # format into string
-        cur_length = f"({ui.human_seconds_short(cur_length0)})"
-        new_length = f"({ui.human_seconds_short(new_length0)})"
-        # colorize
-        lhs_length = ui.colorize(highlight_color, cur_length)
-        rhs_length = ui.colorize(highlight_color, new_length)
-
-        return lhs_length, rhs_length, changed
-
-    def make_line(self, item, track_info):
-        """Extract changes from item -> new TrackInfo object, and colorize
-        appropriately. Returns (lhs, rhs) for column printing.
-        """
-        # Track titles.
-        lhs_title, rhs_title, diff_title = self.make_track_titles(
-            item, track_info
-        )
-        # Track number change.
-        lhs_track, rhs_track, diff_track = self.make_track_numbers(
-            item, track_info
-        )
-        # Length change.
-        lhs_length, rhs_length, diff_length = self.make_track_lengths(
-            item, track_info
-        )
-
-        changed = diff_title or diff_track or diff_length
-
-        # Construct lhs and rhs dicts.
-        # Previously, we printed the penalties, however this is no longer
-        # the case, thus the 'info' dictionary is unneeded.
-        # penalties = penalty_string(self.match.distance.tracks[track_info])
-
-        prefix = ui.colorize("changed", "\u2260 ") if changed else "* "
-        lhs = {
-            "prefix": prefix + lhs_track + " ",
-            "contents": lhs_title,
-            "suffix": " " + lhs_length,
-        }
-        rhs = {"prefix": "", "contents": "", "suffix": ""}
-        if not changed:
-            # Only return the left side, as nothing changed.
-            return (lhs, rhs)
-        else:
-            # Construct a dictionary for the "changed to" side
-            rhs = {
-                "prefix": rhs_track + " ",
-                "contents": rhs_title,
-                "suffix": " " + rhs_length,
-            }
-            return (lhs, rhs)
-
-    def print_tracklist(self, lines):
-        """Calculates column widths for tracks stored as line tuples:
-        (left, right). Then prints each line of tracklist.
-        """
-        if len(lines) == 0:
-            # If no lines provided, e.g. details not required, do nothing.
-            return
-
-        def get_width(side):
-            """Return the width of left or right in uncolorized characters."""
-            try:
-                return len(
-                    ui.uncolorize(
-                        " ".join(
-                            [side["prefix"], side["contents"], side["suffix"]]
-                        )
-                    )
-                )
-            except KeyError:
-                # An empty dictionary -> Nothing to report
-                return 0
-
-        # Check how to fit content into terminal window
-        indent_width = len(self.indent_tracklist)
-        terminal_width = ui.term_width()
-        joiner_width = len("".join(["* ", " -> "]))
-        col_width = (terminal_width - indent_width - joiner_width) // 2
-        max_width_l = max(get_width(line_tuple[0]) for line_tuple in lines)
-        max_width_r = max(get_width(line_tuple[1]) for line_tuple in lines)
-
-        if (
-            (max_width_l <= col_width)
-            and (max_width_r <= col_width)
-            or (
-                ((max_width_l > col_width) or (max_width_r > col_width))
-                and ((max_width_l + max_width_r) <= col_width * 2)
-            )
-        ):
-            # All content fits. Either both maximum widths are below column
-            # widths, or one of the columns is larger than allowed but the
-            # other is smaller than allowed.
-            # In this case we can afford to shrink the columns to fit their
-            # largest string
-            col_width_l = max_width_l
-            col_width_r = max_width_r
-        else:
-            # Not all content fits - stick with original half/half split
-            col_width_l = col_width
-            col_width_r = col_width
-
-        # Print out each line, using the calculated width from above.
-        for left, right in lines:
-            left["width"] = col_width_l
-            right["width"] = col_width_r
-            self.print_layout(self.indent_tracklist, left, right)
+    return diffs
 
 
-class AlbumChange(ChangeRepresentation):
-    """Album change representation, setting cur_album"""
-
-    def __init__(self, cur_artist, cur_album, match):
-        super().__init__()
-        self.cur_artist = cur_artist
-        self.cur_album = cur_album
-        self.match = match
-
-    def show_match_tracks(self):
-        """Print out the tracks of the match, summarizing changes the match
-        suggests for them.
-        """
-        # Tracks.
-        # match is an AlbumMatch named tuple, mapping is a dict
-        # Sort the pairs by the track_info index (at index 1 of the namedtuple)
-        pairs = list(self.match.mapping.items())
-        pairs.sort(key=lambda item_and_track_info: item_and_track_info[1].index)
-        # Build up LHS and RHS for track difference display. The `lines` list
-        # contains `(left, right)` tuples.
-        lines = []
-        medium = disctitle = None
-        for item, track_info in pairs:
-            # If the track is the first on a new medium, show medium
-            # number and title.
-            if medium != track_info.medium or disctitle != track_info.disctitle:
-                # Create header for new medium
-                header = self.make_medium_info_line(track_info)
-                if header != "":
-                    # Print tracks from previous medium
-                    self.print_tracklist(lines)
-                    lines = []
-                    print_(self.indent_detail + header)
-                # Save new medium details for future comparison.
-                medium, disctitle = track_info.medium, track_info.disctitle
-
-            # Construct the line tuple for the track.
-            left, right = self.make_line(item, track_info)
-            if right["contents"] != "":
-                lines.append((left, right))
-            else:
-                if config["import"]["detail"]:
-                    lines.append((left, right))
-        self.print_tracklist(lines)
-
-        # Missing and unmatched tracks.
-        if self.match.extra_tracks:
-            print_(
-                "Missing tracks ({0}/{1} - {2:.1%}):".format(
-                    len(self.match.extra_tracks),
-                    len(self.match.info.tracks),
-                    len(self.match.extra_tracks) / len(self.match.info.tracks),
-                )
-            )
-        for track_info in self.match.extra_tracks:
-            line = f" ! {track_info.title} (#{self.format_index(track_info)})"
-            if track_info.length:
-                line += f" ({ui.human_seconds_short(track_info.length)})"
-            print_(ui.colorize("text_warning", line))
-        if self.match.extra_items:
-            print_(f"Unmatched tracks ({len(self.match.extra_items)}):")
-        for item in self.match.extra_items:
-            line = " ! {} (#{})".format(item.title, self.format_index(item))
-            if item.length:
-                line += " ({})".format(ui.human_seconds_short(item.length))
-            print_(ui.colorize("text_warning", line))
+track_fields = config["match"]["singleton_disambig_fields"].as_str_seq()
 
 
-class TrackChange(ChangeRepresentation):
-    """Track change representation, comparing item with match."""
-
-    def __init__(self, cur_artist, cur_title, match):
-        super().__init__()
-        self.cur_artist = cur_artist
-        self.cur_title = cur_title
-        self.match = match
-
-
-def show_change(cur_artist, cur_album, match):
+def show_album_change(
+    cur_artist: str, cur_album: str, match: hooks.AlbumMatch
+) -> None:
     """Print out a representation of the changes that will be made if an
     album's tags are changed according to `match`, which must be an AlbumMatch
     object.
     """
-    change = AlbumChange(
-        cur_artist=cur_artist, cur_album=cur_album, match=match
+    pairs = list(match.mapping.items())
+    pairs.sort(key=lambda item_and_track_info: item_and_track_info[1].index)
+
+    new = match.info.copy()
+    old = pairs[0][0].copy()
+    old["album"] = cur_album
+
+    show_item_change(old, new, {"tracks", "data_url"})
+
+    fields = track_fields
+    tracks_table = new_table(
+        *fields,
+        highlight=False,
+        box=box.HORIZONTALS,
+        border_style="white",
     )
+    for item, track_info in pairs:
+        data = get_track_diff(item, track_info, fields)
+        data["artist"] = data.get("artist") or cur_artist
+        # data["index"] = str(data["index"])
 
-    # Print the match header.
-    change.show_match_header()
+        tracks_table.add_row(*map(str, op.itemgetter(*fields)(data)))
+        tracks_table.rows[-1].style = "dim"
 
-    # Print the match details.
-    change.show_match_details()
+    # Missing and unmatched tracks.
+    for n, tracks in [
+        ("Missing", match.extra_tracks),
+        ("Unmatched", match.extra_items),
+    ]:
+        if tracks:
+            tracks_table.add_row(end_section=True)
+            tracks_table.add_row(f"[b]{n}[/]")
+            for track in tracks:
+                track = track.copy()
+                if track.length:
+                    track.length = strftime(
+                        "%M:%S", localtime(floor(float(track.length)))
+                    )
 
-    # Print the match tracks.
-    change.show_match_tracks()
+                values = map(str, (track.get(f) or "" for f in fields))
+                tracks_table.add_row(*values, style="b yellow")
+
+    title = wrap("Tracks", "b i cyan")
+    console.print(border_panel(tracks_table, title=title))
 
 
-def show_item_change(item, match):
+def show_item_change(
+    old: library.Item,
+    new: Union[autotag.AlbumInfo, autotag.TrackInfo],
+    skip: Set[str] = set(),
+) -> None:
     """Print out the change that would occur by tagging `item` with the
-    metadata from `match`, a TrackMatch object.
+    metadata from `match` - either an album or a track.
     """
-    change = TrackChange(
-        cur_artist=item.artist, cur_title=item.title, match=match
-    )
-    # Print the match header.
-    change.show_match_header()
-    # Print the match details.
-    change.show_match_details()
+    new_meta = new_table()  # for all new metadata
+    upd_meta = new_table()  # for changes only
+
+    if isinstance(new, hooks.AlbumInfo):
+        info_to_item_field = album_info_to_item_field
+        overwrite_fields = album_overwrite_fields
+    else:
+        info_to_item_field = track_info_to_item_field
+        overwrite_fields = track_overwrite_fields
+
+    fields = sorted(new.keys() - skip)
+    saved_fields = new.keys()
+    for field in fields:
+        old_value = old.get(info_to_item_field.get(field, field), "")
+        new_value = new.get(field)
+        if field == "va":
+            old_value = bool(old_value)
+        elif field == "releasegroup_id" and old_value == "0":
+            old_value = ""
+        if field in saved_fields or (
+            new_value is not None or field in overwrite_fields
+        ):
+            new_meta.add_row(wrap(field, "b"), str(new_value))
+            if str(old_value or "") != str(new_value or ""):
+                diff = get_diff(field, old_value, new_value)
+                upd_meta.add_row(wrap(field, "b"), diff)
+
+    if "tracklist" in old:
+        old["comments"] += "\n\nTracklist\n\n" + old["tracklist"]
+
+    if upd_meta.row_count:
+        _type = "Album" if isinstance(new, hooks.AlbumInfo) else "Singleton"
+        color = "magenta" if _type == "Album" else "cyan"
+        updates_panel = border_panel(
+            upd_meta, title="Updates", border_style="yellow"
+        )
+        info_panel = border_panel(new_meta, title=_type, border_style=color)
+        row = [Align.center(updates_panel, vertical="bottom"), info_panel]
+        console.print(new_table(rows=[row]))
+
+    console.print(wrap(new.data_url, "b grey35"))
 
 
 def summarize_items(items, singleton):
@@ -840,6 +435,32 @@ def _summary_judgment(rec):
     return action
 
 
+def print_singleton_candidates(candidates: Iterable[hooks.TrackMatch]) -> None:
+    candidata = [
+        {"id": str(i), **m.disambig_data} for i, m in enumerate(candidates, 1)
+    ]
+    console.print(
+        border_panel(flexitable(candidata), title="Singleton candidates")
+    )
+    console.print("")
+
+
+def print_album_candidates(candidates: Iterable[hooks.AlbumMatch]) -> None:
+    candidata = []
+    track_diffs_table = new_table("id", *track_fields)
+    for idx, candidate in enumerate(candidates, 1):
+        i = str(idx)
+        candidata.append({"id": i, **candidate.disambig_data})
+        for old, new in candidate.mapping.items():
+            track_diff = {"id": i, **get_track_diff(old, new, track_fields)}
+            track_diffs_table.add_row(*track_diff.values())
+        track_diffs_table.add_row("")
+
+    console.print(border_panel(track_diffs_table, title="Album tracks"))
+    console.print(border_panel(flexitable(candidata), title="Album candidates"))
+    console.print("")
+
+
 def choose_candidate(
     candidates,
     singleton,
@@ -903,42 +524,13 @@ def choose_candidate(
 
         if not bypass_candidates:
             # Display list of candidates.
-            print_("")
-            print_(
-                'Finding tags for {} "{} - {}".'.format(
-                    "track" if singleton else "album",
-                    item.artist if singleton else cur_artist,
-                    item.title if singleton else cur_album,
-                )
-            )
-
-            print_(ui.indent(2) + "Candidates:")
-            for i, match in enumerate(candidates):
-                # Index, metadata, and distance.
-                index0 = "{0}.".format(i + 1)
-                index = dist_colorize(index0, match.distance)
-                dist = "({:.1f}%)".format((1 - match.distance) * 100)
-                distance = dist_colorize(dist, match.distance)
-                metadata = "{0} - {1}".format(
-                    match.info.artist,
-                    match.info.title if singleton else match.info.album,
-                )
-                if i == 0:
-                    metadata = dist_colorize(metadata, match.distance)
-                else:
-                    metadata = ui.colorize("text_highlight_minor", metadata)
-                line1 = [index, distance, metadata]
-                print_(ui.indent(2) + " ".join(line1))
-
-                # Penalties.
-                penalties = penalty_string(match.distance, 3)
-                if penalties:
-                    print_(ui.indent(13) + penalties)
-
-                # Disambiguation
-                disambig = disambig_string(match.info)
-                if disambig:
-                    print_(ui.indent(13) + disambig)
+            template = 'Finding tags for {} "{} - {}".'
+            if singleton:
+                print_(template.format("track", item.artist, item.title))
+                print_singleton_candidates(candidates)
+            else:
+                print_(template.format("album", cur_artist, cur_album))
+                print_album_candidates(candidates)
 
             # Ask the user for a choice.
             sel = ui.input_options(choice_opts, numrange=(1, len(candidates)))
@@ -956,9 +548,9 @@ def choose_candidate(
 
         # Show what we're about to do.
         if singleton:
-            show_item_change(item, match)
+            show_item_change(item, match.info, {"data_url", "bpm"})
         else:
-            show_change(cur_artist, cur_album, match)
+            show_album_change(cur_artist, cur_album, match)
 
         # Exact match => tag automatically if we're not in timid mode.
         if rec == Recommendation.strong and not config["import"]["timid"]:
@@ -1061,7 +653,7 @@ class TerminalImportSession(importer.ImportSession):
         action = _summary_judgment(task.rec)
         if action == importer.action.APPLY:
             match = task.candidates[0]
-            show_change(task.cur_artist, task.cur_album, match)
+            show_album_change(task.cur_artist, task.cur_album, match)
             return match
         elif action is not None:
             return action
@@ -1675,14 +1267,16 @@ def update_items(lib, query, album, move, pretend, fields, exclude_fields=None):
             # Special-case album artist when it matches track artist. (Hacky
             # but necessary for preserving album-level metadata for non-
             # autotagged imports.)
+            old_item = lib.get_item(item.id)
             if not item.albumartist:
-                old_item = lib.get_item(item.id)
                 if old_item.albumartist == old_item.artist == item.artist:
                     item.albumartist = old_item.albumartist
                     item._dirty.discard("albumartist")
 
             # Check for and display changes.
-            changed = ui.show_model_changes(item, fields=item_fields)
+            changed = ui.show_model_changes(
+                item, old=old_item, fields=fields or library.Item._media_fields
+            )
 
             # Save changes.
             if not pretend:
@@ -2192,7 +1786,7 @@ def move_items(
             )
 
         for obj in objs:
-            log.debug("moving: {0}", util.displayable_path(obj.path))
+            show_path_changes([(obj.path, obj.destination(basedir=dest))])
 
             if export:
                 # Copy without affecting the database.
