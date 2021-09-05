@@ -45,7 +45,7 @@ from typing import (
     Union,
 )
 
-from rich.text import Text
+from rich_tables.utils import diff, make_console
 from unidecode import unidecode
 
 from beets import config
@@ -1151,15 +1151,14 @@ def colorize(color_name: str, text: str) -> str:
     return f"[{color}]{text}[/{color}]"
 
 
-def uncolorize(text: str) -> str:
-    return Text(text).plain
+console = make_console(highlight=False, stderr=True)
 
 
-def color_split(colored_text: str, index: int) -> tuple[str, str]:
-    pre, post = [ln.markup for ln in Text(colored_text).divide((index,))]
-    return pre, post
-
-
-def color_len(colored_text: str) -> int:
-    """Return the length of a string without color codes."""
-    return len(uncolorize(colored_text))
+def colordiff(a: str, b: str) -> str | tuple[str, str]:
+    """Colorize differences between two values if color is enabled.
+    (Like _colordiff but conditional.)
+    """
+    if config["ui"]["color"]:
+        return str(diff(a, b))
+    else:
+        return str(a), str(b)

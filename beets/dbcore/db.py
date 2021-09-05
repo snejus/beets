@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any, AnyStr, Callable, Generic, TypeVar, cast
 from packaging.version import Version
 from rich import print
 from rich_tables.generic import flexitable
+from typing_extensions import Self
 from unidecode import unidecode
 
 import beets
@@ -473,7 +474,7 @@ class Model(ABC, Generic[D]):
 
         return self._db
 
-    def copy(self) -> Model:
+    def copy(self) -> Self:
         """Create a copy of the model object.
 
         The field values and other state is duplicated, but the new copy
