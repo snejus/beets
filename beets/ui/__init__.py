@@ -541,22 +541,37 @@ def _colordiff(a, b, highlight='text_highlight',
 
     a_out = []
     b_out = []
-
     matcher = SequenceMatcher(lambda x: False, a, b)
-    for op, a_start, a_end, b_start, b_end in matcher.get_opcodes():
+    opcodes = matcher.get_opcodes()
+    opcount = len(opcodes)
+    for op, a_start, a_end, b_start, b_end in opcodes:
+        old_chunk = a[a_start:a_end]
+        new_chunk = b[b_start:b_end]
         if op == 'equal':
             # In both strings.
-            a_out.append(a[a_start:a_end])
-            b_out.append(b[b_start:b_end])
+            if opcount == 2:
+                if old_chunk != a:
+                    a_out.append(old_chunk)
+                if new_chunk != b:
+                    b_out.append(new_chunk)
+            else:
+                a_out.append(old_chunk)
+                b_out.append(new_chunk)
+
         elif op == 'insert':
             # Right only.
-            b_out.append(colorize('text_success', b[b_start:b_end]))
+            if a and opcount == 2:
+                a_out = [colorize('text_warning', a)]
+
+            b_out.append(colorize('text_success', new_chunk))
         elif op == 'delete':
             # Left only.
-            a_out.append(colorize('text_error', a[a_start:a_end]))
+            a_out.append(colorize('text_error', old_chunk))
+            if b and opcount == 2:
+                b_out.append(colorize('text_warning', b))
         elif op == 'replace':
-            a_out.append(colorize('text_error', a[a_start:a_end]))
-            b_out.append(colorize('text_success', b[b_start:b_end]))
+            a_out.append(colorize('text_error', old_chunk))
+            b_out.append(colorize('text_success', new_chunk))
         else:
             assert(False)
 
@@ -651,7 +666,9 @@ def _field_diff(field, old, old_fmt, new, new_fmt):
         oldstr = colorize('text_error', oldstr)
         newstr = colorize('text_success', newstr)
 
-    return u'{0} -> {1}'.format(oldstr, newstr)
+    if len(oldstr) and len(newstr):
+        return u'{0} -> {1}'.format(oldstr, newstr)
+    return u'{0}{1}'.format(oldstr, newstr)
 
 
 def show_model_changes(new, old=None, fields=None, always=False):
@@ -714,8 +731,8 @@ def show_path_changes(path_changes):
 
     vs.
 
-    Source
-      -> Destination
+    Source ->
+    Destination
     """
     sources, destinations = zip(*path_changes)
 
@@ -724,13 +741,13 @@ def show_path_changes(path_changes):
     destinations = list(map(util.displayable_path, destinations))
 
     # Calculate widths for terminal split
-    col_width = (term_width() - len(' -> ')) // 2
+    col_width = (term_width() - len(' ->')) // 2
     max_width = len(max(sources + destinations, key=len))
 
     if max_width > col_width:
         # Print every change over two lines
         for source, dest in zip(sources, destinations):
-            log.info(u'{0} \n  -> {1}', source, colorize('text_highlight_minor', dest))
+            log.info(u'{0} ->\n{1}', *colordiff(source, dest))
     else:
         # Print every change on a single line, and add a header
         title_pad = max_width - len('Source ') + len(' -> ')
