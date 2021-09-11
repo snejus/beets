@@ -755,7 +755,8 @@ def show_path_changes(path_changes):
         log.info(u'Source {0} Destination', ' ' * title_pad)
         for source, dest in zip(sources, destinations):
             pad = max_width - len(source)
-            log.info(u'{0} {1} -> {2}', source, ' ' * pad, dest)
+            fmted_source, fmted_dest = colordiff(source, dest)
+            log.info(u'{0} {1} -> {2}', fmted_source,  " " * pad, fmted_dest)
 
 
 # Helper functions for option parsing.
