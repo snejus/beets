@@ -316,13 +316,13 @@ def show_change(cur_artist, cur_album, match):
             medium, disctitle = track_info.medium, track_info.disctitle
 
         # Titles.
-        new_title = track_info.artist + " - " + track_info.title
+        new_title = (track_info.artist or "") + " - " + track_info.title
         if not item.title.strip():
             # If there's no title, we use the filename.
             cur_title = displayable_path(os.path.basename(item.path))
             lhs, rhs = cur_title, new_title
         else:
-            cur_title = item.artist + " - " + item.title
+            cur_title = (item.artist or "") + " - " + item.title
             lhs, rhs = ui.colordiff(cur_title, new_title)
         lhs_width = len(cur_title)
 
