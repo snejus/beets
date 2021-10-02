@@ -48,6 +48,7 @@ class SmartPlaylistPlugin(BeetsPlugin):
                 "forward_slash": False,
                 "prefix": u"",
                 "urlencode": False,
+                "rewrite": False,
             }
         )
 
@@ -152,8 +153,9 @@ class SmartPlaylistPlugin(BeetsPlugin):
 
             except ParsingError as exc:
                 self._log.warning(
-                    u"invalid query in playlist {}: {}", playlist["name"], exc
+                    u"invalid query in playlist {}", playlist["name"], exc_info=True
                 )
+                del exc
                 continue
 
             self._unmatched_playlists.add(playlist_data)
@@ -193,7 +195,7 @@ class SmartPlaylistPlugin(BeetsPlugin):
         for playlist in self._matched_playlists:
             playlist_name, (query, q_sort), (album_query, a_q_sort) = playlist
             playlists_files[playlist_name] = set()
-            self._log.debug(u"Creating playlist {0}", playlist_name)
+            self._log.debug(u"Querying playlist {0}", playlist_name)
             items = []
 
             if query:
@@ -223,12 +225,12 @@ class SmartPlaylistPlugin(BeetsPlugin):
                 playlists_files[m3u], key=lambda x: x.decode().casefold()
             )
             m3u_path = syspath(normpath(os.path.join(playlist_dir, bytestring_path(m3u))))
-            if os.path.exists(m3u_path):
+            if self.config["rewrite"].get() or not os.path.exists(m3u_path):
+                current_playlist = []
+            else:
                 current_playlist = list(
                     map(str.encode, map(str.strip, open(m3u_path, "r").readlines()))
                 )
-            else:
-                current_playlist = []
 
             if current_playlist != new_playlist:
                 updated_count = updated_count + 1
