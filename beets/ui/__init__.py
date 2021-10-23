@@ -44,6 +44,9 @@ from beets.dbcore import query as db_query
 from beets.dbcore import db
 import confuse
 import six
+from rich.console import Console
+
+console = Console(force_interactive=1, force_terminal=1)
 
 # On Windows platforms, use colorama to support "ANSI" terminal colors.
 if sys.platform == 'win32':
@@ -1264,26 +1267,30 @@ def main(args=None):
     exception handlers that print friendly error messages.
     """
     try:
-        _raw_main(args)
+        try:
+            _raw_main(args)
+        except Exception:
+            console.print_exception(extra_lines=4, show_locals=True)
+            raise
     except UserError as exc:
         message = exc.args[0] if exc.args else None
         log.error(u'error: {0}', message)
-        sys.exit(1)
+        # sys.exit(1)
     except util.HumanReadableException as exc:
         exc.log(log)
-        sys.exit(1)
+        # sys.exit(1)
     except library.FileOperationError as exc:
         # These errors have reasonable human-readable descriptions, but
         # we still want to log their tracebacks for debugging.
         log.debug('{}', traceback.format_exc())
         log.error('{}', exc)
-        sys.exit(1)
+        # sys.exit(1)
     except confuse.ConfigError as exc:
         log.error(u'configuration error: {0}', exc)
-        sys.exit(1)
+        # sys.exit(1)
     except db_query.InvalidQueryError as exc:
         log.error(u'invalid query: {0}', exc)
-        sys.exit(1)
+        # sys.exit(1)
     except IOError as exc:
         if exc.errno == errno.EPIPE:
             # "Broken pipe". End silently.
@@ -1299,4 +1306,4 @@ def main(args=None):
             u'the library file might have a permissions problem',
             exc
         )
-        sys.exit(1)
+        # sys.exit(1)
