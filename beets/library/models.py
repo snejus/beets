@@ -1037,6 +1037,10 @@ class Item(LibModel):
 
         `operation` should be an instance of `util.MoveOperation`.
         """
+        if os.path.exists(dest) and not os.path.exists(self.path):
+            self.path = dest
+            return
+
         if not util.samefile(self.path, dest):
             dest = util.unique_path(dest)
         if operation == MoveOperation.MOVE:
