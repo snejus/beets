@@ -1553,10 +1553,17 @@ def main(args=None):
     exception handlers that print friendly error messages.
     """
     try:
-        _raw_main(args)
+        try:
+            _raw_main(args)
+        except Exception:
+            console.print_exception(extra_lines=4, show_locals=True)
+            raise
     except UserError as exc:
         message = exc.args[0] if exc.args else None
-        log.error("error: {0}", message)
+        if 'No matching' in message:
+            log.error(u'error: {0}', message)
+        else:
+            console.print_exception(extra_lines=4, show_locals=True)
         sys.exit(1)
     except util.HumanReadableException as exc:
         exc.log(log)
