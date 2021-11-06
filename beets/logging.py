@@ -21,13 +21,19 @@ that when getLogger(name) instantiates a logger that logger uses
 {}-style formatting.
 """
 
-from __future__ import division, absolute_import, print_function
+from __future__ import absolute_import, division, print_function
 
-from copy import copy
-from logging import *  # noqa
 import subprocess
 import threading
+from copy import copy
+
 import six
+from rich.logging import RichHandler
+
+from logging import *  # noqa
+
+
+FORMAT = "{name}\t{message}"
 
 
 def logsafe(val):
@@ -52,7 +58,7 @@ def logsafe(val):
         # (a) only do this for paths, if they can be given a distinct
         # type, and (b) warn the developer if they do this for other
         # bytestrings.
-        return val.decode('utf-8', 'replace')
+        return val.decode("utf-8", "replace")
 
     # A "problem" object: needs a workaround.
     elif isinstance(val, subprocess.CalledProcessError):
@@ -61,7 +67,7 @@ def logsafe(val):
         except UnicodeDecodeError:
             # An object with a broken __unicode__ formatter. Use __str__
             # instead.
-            return str(val).decode('utf-8', 'replace')
+            return str(val).decode("utf-8", "replace")
 
     # Other objects are used as-is so field access, etc., still works in
     # the format string.
@@ -88,16 +94,16 @@ class StrFormatLogger(Logger):
     def _log(self, level, msg, args, exc_info=None, extra=None, **kwargs):
         """Log msg.format(*args, **kwargs)"""
         m = self._LogMessage(msg, args, kwargs)
-        return super(StrFormatLogger, self)._log(level, m, (), exc_info, extra)
+        return super()._log(level, m, (), exc_info, extra)
 
 
 class ThreadLocalLevelLogger(Logger):
-    """A version of `Logger` whose level is thread-local instead of shared.
-    """
+    """A version of `Logger` whose level is thread-local instead of shared."""
+
     def __init__(self, name, level=NOTSET):
         self._thread_level = threading.local()
         self.default_level = NOTSET
-        super(ThreadLocalLevelLogger, self).__init__(name, level)
+        super().__init__(name, level)
 
     @property
     def level(self):

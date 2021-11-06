@@ -36,6 +36,26 @@ except ImportError:
     from urllib import pathname2url
 
 
+def timeit(method, **kwargs):
+    def timed(*args, **kw):
+        import time
+
+        name = method.__name__
+        ts = time.monotonic()
+        result = method(*args, **kw)
+        te = time.monotonic()
+        if "log_time" in kw:
+            name = kw.get("log_name", method.__name__.upper())
+            kw["log_time"][name] = int((te - ts) * 1000)
+        else:
+            print(
+                "{:<10.2f} ms  {} ({})".format((te - ts) * 1000, name, kwargs)
+            )
+        return result
+
+    return timed
+
+
 class SmartPlaylistPlugin(BeetsPlugin):
     def __init__(self):
         super(SmartPlaylistPlugin, self).__init__()
@@ -69,7 +89,7 @@ class SmartPlaylistPlugin(BeetsPlugin):
         return [spl_update]
 
     def update_cmd(self, lib, opts, args):
-        self.build_queries()
+        timeit(self.build_queries)()
         if args:
             args = set(ui.decargs(args))
             for a in list(args):
@@ -196,13 +216,18 @@ class SmartPlaylistPlugin(BeetsPlugin):
             playlist_name, (query, q_sort), (album_query, a_q_sort) = playlist
             playlists_files[playlist_name] = set()
             self._log.debug(u"Querying playlist {0}", playlist_name)
-            items = []
 
-            if query:
-                items.extend(lib.items(query, q_sort))
-            if album_query:
-                for album in lib.albums(album_query, a_q_sort):
-                    items.extend(album.items())
+            def add_items():
+                items = []
+                if query:
+                    items.extend(lib.items(query, q_sort))
+                if album_query:
+                    for album in lib.albums(album_query, a_q_sort):
+                        items.extend(album.items())
+                return items
+
+            # items = timeit(add_items, name=playlist_name, query=query)()
+            items = add_items()
 
             # As we allow tags in the m3u names, we'll need to iterate through
             # the items and generate the correct m3u file names.

@@ -279,6 +279,10 @@ def match_by_id(items):
         log.debug(u'No album ID found.')
         return None
 
+    if "bandcamp.com" in first:
+        log.debug(u'Bandcamp album ID does not apply.')
+        return None
+
     # Is there a consensus on the MB album ID?
     for other in albumids:
         if other != first:

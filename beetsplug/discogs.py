@@ -102,21 +102,21 @@ class DiscogsPlugin(BeetsPlugin):
         self.discogs_client = Client(USER_AGENT, c_key, c_secret, token, secret)
 
     def _time_to_next_request(self):
-        print(self.rate_limit_per_minute)
+        # print(self.rate_limit_per_minute)
         seconds_between_requests = 60 / self.rate_limit_per_minute
         seconds_since_last_request = time.time() - self.last_request_timestamp
-        print("Timestamp: " + str(self.last_request_timestamp))
-        print("Seconds between: " + str(seconds_between_requests))
+        # print("Timestamp: " + str(self.last_request_timestamp))
+        # print("Seconds between: " + str(seconds_between_requests))
         seconds_to_wait = seconds_between_requests - seconds_since_last_request
-        print("S to wait: " + str(seconds_to_wait))
+        # print("S to wait: " + str(seconds_to_wait))
         return seconds_to_wait
 
     def request_start(self):
         """wait for rate limit if needed"""
         time_to_next_request = self._time_to_next_request()
-        print("Time to next: " + str(time_to_next_request))
+        # print("Time to next: " + str(time_to_next_request))
         if time_to_next_request > 0:
-            self._log.debug(
+            self._log.info(
                 "hit rate limit, waiting for {0} seconds", time_to_next_request
             )
             time.sleep(time_to_next_request)
@@ -140,7 +140,7 @@ class DiscogsPlugin(BeetsPlugin):
         try:
             _, _, url = auth_client.get_authorize_url()
         except CONNECTION_ERRORS as e:
-            self._log.debug(u"connection error: {0}", e)
+            self._log.info(u"connection error: {0}", e)
             raise beets.ui.UserError(u"communication with Discogs failed")
 
         beets.ui.print_(u"To authenticate with Discogs, visit:")
@@ -153,11 +153,11 @@ class DiscogsPlugin(BeetsPlugin):
         except DiscogsAPIError:
             raise beets.ui.UserError(u"Discogs authorization failed")
         except CONNECTION_ERRORS as e:
-            self._log.debug(u"connection error: {0}", e)
+            self._log.info(u"connection error: {0}", e)
             raise beets.ui.UserError(u"Discogs token request failed")
 
         # Save the token for later use.
-        self._log.debug(u"Discogs token {0}, secret {1}", token, secret)
+        self._log.info(u"Discogs token {0}, secret {1}", token, secret)
         with open(self._tokenfile(), "w") as f:
             json.dump({"token": token, "secret": secret}, f)
 
@@ -185,14 +185,14 @@ class DiscogsPlugin(BeetsPlugin):
         try:
             return self.get_albums(query)
         except DiscogsAPIError as e:
-            self._log.debug(u"API Error: {0} (query: {1})", e, query)
+            self._log.info(u"API Error: {0} (query: {1})", e, query)
             if e.status_code == 401:
                 self.reset_auth()
                 return self.candidates(items, artist, album, va_likely)
             else:
                 return []
         except CONNECTION_ERRORS:
-            self._log.debug(u"Connection error in album search", exc_info=True)
+            self._log.info(u"Connection error in album search", exc_info=True)
             return []
 
     def album_for_id(self, album_id):
@@ -202,7 +202,7 @@ class DiscogsPlugin(BeetsPlugin):
         if not self.discogs_client:
             return
 
-        self._log.debug(u"Searching for release {0}", album_id)
+        self._log.info(u"Searching for release {0}", album_id)
         # Discogs-IDs are simple integers. We only look for those at the end
         # of an input string as to avoid confusion with other metadata plugins.
         # An optional bracket can follow the integer, as this is how discogs
@@ -216,7 +216,7 @@ class DiscogsPlugin(BeetsPlugin):
             getattr(result, "title")
         except DiscogsAPIError as e:
             if e.status_code != 404:
-                self._log.debug(
+                self._log.info(
                     u"API Error: {0} (query: {1})", e, result.data["resource_url"]
                 )
                 if e.status_code == 401:
@@ -224,7 +224,7 @@ class DiscogsPlugin(BeetsPlugin):
                     return self.album_for_id(album_id)
             return None
         except CONNECTION_ERRORS:
-            self._log.debug(u"Connection error in album lookup", exc_info=True)
+            self._log.info(u"Connection error in album lookup", exc_info=True)
             return None
         return self.get_album_info(result)
 
@@ -245,7 +245,7 @@ class DiscogsPlugin(BeetsPlugin):
             self.request_finished()
 
         except CONNECTION_ERRORS:
-            self._log.debug(
+            self._log.info(
                 u"Communication error while searching for {0!r}", query, exc_info=True
             )
             return []
@@ -255,7 +255,7 @@ class DiscogsPlugin(BeetsPlugin):
         """Fetches a master release given its Discogs ID and returns its year
         or None if the master release is not found.
         """
-        self._log.debug(u"Searching for master release {0}", master_id)
+        self._log.info(u"Searching for master release {0}", master_id)
         result = Master(self.discogs_client, {"id": master_id})
 
         self.request_start()
@@ -264,18 +264,18 @@ class DiscogsPlugin(BeetsPlugin):
             self.request_finished()
             return year
         except DiscogsAPIError as e:
-            self._log.debug(
+            self._log.info(
                 u"API Error: {0} (query: {1})", e, result.data["resource_url"]
             )
             # if e.status_code != 404:
-            #     self._log.debug(u'API Error: {0} (query: {1})', e,
+            #     self._log.info(u'API Error: {0} (query: {1})', e,
             #                     result.data['resource_url'])
             #     if e.status_code == 401:
             #         self.reset_auth()
             return self.get_master_year(master_id)
             # return None
         except CONNECTION_ERRORS:
-            self._log.debug(u"Connection error in master release lookup", exc_info=True)
+            self._log.info(u"Connection error in master release lookup", exc_info=True)
             return None
 
     def get_album_info(self, result):
@@ -319,15 +319,13 @@ class DiscogsPlugin(BeetsPlugin):
 
         # Extract information for the optional AlbumInfo fields that are
         # contained on nested discogs fields.
-        # from pprint import pprint
 
-        # pprint(result.data)
         albumtype = media = label = catalogno = labelid = None
         if result.data.get("formats"):
             albumtype = (
                 ", ".join(result.data["formats"][0].get("descriptions", []))
             ).lower() or None
-            media = result.data["formats"][0]["name"]
+            media = result.data["formats"][0]["name"].replace("File", "Digital Media")
         if result.data.get("labels"):
             label = result.data["labels"][0].get("name")
             catalogno = result.data["labels"][0].get("catno")
@@ -407,7 +405,7 @@ class DiscogsPlugin(BeetsPlugin):
             # FIXME: this is an extra precaution for making sure there are no
             # side effects after #2222. It should be removed after further
             # testing.
-            self._log.debug(u"{}", traceback.format_exc())
+            self._log.info(u"{}", traceback.format_exc())
             self._log.error(u"uncaught exception in coalesce_tracks: {}", exc)
             clean_tracklist = tracklist
         tracks = []
@@ -628,7 +626,7 @@ class DiscogsPlugin(BeetsPlugin):
             if subindex and subindex.startswith("."):
                 subindex = subindex[1:]
         else:
-            self._log.debug(u"Invalid position: {0}", position)
+            self._log.info(u"Invalid position: {0}", position)
             medium = index = subindex = None
         return medium or None, index or None, subindex or None
 
