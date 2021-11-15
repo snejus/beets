@@ -19,6 +19,7 @@ CLI commands are implemented in the ui.commands module.
 """
 from __future__ import absolute_import, division, print_function
 
+import typing as t
 import errno
 import optparse
 import os
@@ -44,9 +45,11 @@ from rich.logging import RichHandler
 from rich.traceback import install
 from six.moves import input
 
-install(show_locals=True, extra_lines=8, width=os.environ.get("COLUMNS", 150))
+JSONDict = t.Dict[str, t.Any]
 
-console = Console(force_interactive=1, force_terminal=1)
+install(show_locals=True, extra_lines=8, width=int(os.environ.get("COLUMNS")) or 150)
+
+console = Console(force_interactive=True, force_terminal=True)
 
 # On Windows platforms, use colorama to support "ANSI" terminal colors.
 if sys.platform == "win32":
@@ -120,7 +123,7 @@ def decargs(arglist):
     return arglist
 
 
-def print_(*strings, **kwargs):
+def print_(*strings: str, **kwargs: JSONDict) -> None:
     """Like print, but rather than raising an error when a character
     is not in the terminal's encoding's character set, just silently
     replaces it.
@@ -521,7 +524,7 @@ def _colorize(color: str, text: str) -> str:
     return COLOR_ESCAPE + color + "m" + text + RESET_COLOR
 
 
-def colorize(color_name, text):
+def colorize(color_name: str, text: str) -> str:
     """Colorize text if colored output is enabled. (Like _colorize but
     conditional.)
     """

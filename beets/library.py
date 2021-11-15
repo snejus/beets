@@ -17,6 +17,7 @@
 """
 from __future__ import division, absolute_import, print_function
 
+import typing as t
 import os
 import sys
 import unicodedata
@@ -651,7 +652,7 @@ class Item(LibModel):
             keys = list(keys)
         return keys
 
-    def get(self, key, default=None, with_album=True):
+    def get(self, key: str, default: t.Any = None, with_album: bool = True) -> t.Any:
         """Get the value for a given key or `default` if it does not
         exist. Set `with_album` to false to skip album fallback.
         """

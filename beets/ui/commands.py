@@ -19,6 +19,7 @@ interface.
 
 from __future__ import division, absolute_import, print_function
 
+import typing as t
 import os
 import re
 from time import ctime
@@ -152,7 +153,7 @@ default_commands.append(HelpCommand())
 
 # Importer utilities and support.
 
-def disambig_string(info):
+def disambig_string(info: t.Union[hooks.AlbumInfo, hooks.TrackInfo]) -> t.Optional[str]:
     """Generate a string for an AlbumInfo or TrackInfo object that
     provides context that helps disambiguate similar-looking albums and
     tracks.
@@ -181,10 +182,11 @@ def disambig_string(info):
             disambig.append(info.albumdisambig)
 
     if disambig:
-        return u', '.join(disambig)
+        return ', '.join(disambig)
+    return None
 
 
-def dist_string(dist):
+def dist_string(dist: hooks.Distance) -> str:
     """Formats a distance (a float) as a colorized similarity percentage
     string.
     """
@@ -198,7 +200,7 @@ def dist_string(dist):
     return out
 
 
-def penalty_string(distance, limit=None):
+def penalty_string(distance: hooks.Distance, limit: t.Optional[int] = None) -> t.Optional[str]:
     """Returns a colorized string that indicates all the penalties
     applied to a distance object.
     """
@@ -211,10 +213,22 @@ def penalty_string(distance, limit=None):
     if penalties:
         if limit and len(penalties) > limit:
             penalties = penalties[:limit] + ['...']
-        return ui.colorize('text_warning', u'(%s)' % ', '.join(penalties))
+        return ui.colorize('text_warning', "(" + ', '.join(penalties) + ")")
+    return None
 
 
-def show_change(cur_artist, cur_album, match):
+def print_match_info(match: t.Union[hooks.AlbumMatch, hooks.TrackMatch]) -> None:
+    info = []
+    info.append('(Similarity: {})'.format(dist_string(match.distance)))
+    penalties = penalty_string(match.distance)
+    if penalties:
+        info.append(penalties)
+    disambig = disambig_string(match.info)
+    if disambig:
+        info.append(ui.colorize('text_highlight_minor', '(' + disambig + ')'))
+    print_(' '.join(info))
+
+def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> None:
     """Print out a representation of the changes that will be made if an
     album's tags are changed according to `match`, which must be an AlbumMatch
     object.
@@ -241,119 +255,57 @@ def show_change(cur_artist, cur_album, match):
         else:
             return six.text_type(index)
 
+    def print_album_changes(new, old) -> None:
+        keymap = {
+            "artist_id": "mb_artistid",
+            "album_id": "mb_albumid",
+            "va": "comp",
+        }
+        table = new_table()
+        skip = {"data_url", "mediums", "tracks", "artist"}
+        for key in sorted(filter(lambda x: x not in skip, new.keys())):
+            before = old.get(keymap.get(key, key) or "")
+            if key == "va":
+                before = {1: True, 0: False}.get(before, before) or ""
+            before = before
+            after = new.get(key)
+            if (before or after):
+                table.add_row(wrap(key, "b"), make_difftext(str(before or ""), str(after or "")))
+
+        console.print(border_panel(table))
+
     pairs = list(match.mapping.items())
     pairs.sort(key=lambda item_and_track_info: item_and_track_info[1].index)
 
     new = match.info.copy()
     old = pairs[0][0].copy()
     old["album"] = cur_album
-    old["albumartist"] = cur_artist
     if config['artist_credit']:
-        new["artist"] = new["artist_credit"]
+        new["artist"] = new["artist_credit"] or new["artist"]
+        new["albumartist"] = new["artist"]
 
-    info = []
-    # Similarity.
-    info.append(u'(Similarity: %s)' % dist_string(match.distance))
-    # Penalties.
-    penalties = penalty_string(match.distance)
-    if penalties:
-        info.append(penalties)
-    # Disambiguation.
-    disambig = disambig_string(match.info)
-    if disambig:
-        info.append(ui.colorize('text_highlight_minor', u'(%s)' % disambig))
-    print_(' '.join(info))
-
-    table = new_table()
-    for key in sorted(filter(lambda x: x != "tracks", new.keys())):
-        before = str(old.get(key) or "")
-        after = str(new.get(key) or "")
-        if (before or after) and (before != after):
-            table.add_row(wrap(key, "b"), make_difftext(before, after))
-
-    console.print(border_panel(table))
+    print_match_info(match)
+    print_album_changes(new, old)
 
     fields = ["index", "track_alt", "artist", "title", "length"]
     tracks_table = new_table(*fields, highlight=False)
 
-    def _make_track_diff(a, b):
+    def _make_track_diff(a: library.Item, b: hooks.TrackMatch) -> t.List[str]:
+        keymap = {"index": "track"}
         cols = []
         for key in fields:
-            cols.append(make_difftext(str(a.get(key) or ""), str(b.get(key) or "")))
+            before = str(a.get(keymap.get(key, key)) or "")
+            after = str(b.get(key) or "")
+            if key == "length":
+                before = before.split(".")[0]
+                after = after.split(".")[0]
+            cols.append(make_difftext(before, after))
         return cols
 
     for item, track_info in pairs:
         track_info["artist"] = track_info.get("artist") or cur_artist
         tracks_table.add_row(*_make_track_diff(item, track_info))
     console.print(border_panel(tracks_table))
-
-
-        # media = match.info.media or 'Media'
-        # medium, disctitle = track_info.medium, track_info.disctitle
-        # lhs = media
-        # if match.info.mediums > 1:
-        #     lhs += " {}".format(medium)
-        # if disctitle:
-        #     lhs += ": {}".format(disctitle)
-        # if lhs != media:
-        #     lines.append((lhs, u'', 0))
-
-        # # Titles.
-        # # If there's no title, we use the filename.
-        # cur_title = item.title.strip() or displayable_path(os.path.basename(item.path))
-        # new_title = track_info.title
-
-        # lhs, rhs = cur_title, new_title
-        # if cur_title != new_title:
-        #     lhs, rhs = ui.colordiff(cur_title, new_title)
-
-        # lhs_width = len(cur_title)
-
-        # # Track number change.
-        # cur_track, new_track = format_index(item), format_index(track_info)
-        # if cur_track != new_track:
-        #     if item.track in (track_info.index, track_info.medium_index):
-        #         color = 'text_highlight_minor'
-        #     else:
-        #         color = 'text_highlight'
-        #     templ = ui.colorize(color, u' (#{0})')
-        #     lhs += templ.format(cur_track)
-        #     rhs += templ.format(new_track)
-        #     lhs_width += len(cur_track) + 4
-
-        # # Length change.
-        # if item.length and track_info.length and \
-        #         abs(item.length - track_info.length) > \
-        #         config['ui']['length_diff_thresh'].as_number():
-        #     cur_length = ui.human_seconds_short(item.length)
-        #     new_length = ui.human_seconds_short(track_info.length)
-        #     templ = ui.colorize('text_highlight', u' ({0})')
-        #     lhs += templ.format(cur_length)
-        #     rhs += templ.format(new_length)
-        #     lhs_width += len(cur_length) + 3
-
-        # # Penalties.
-        # penalties = penalty_string(match.distance.tracks[track_info])
-        # if penalties:
-        #     rhs += ' %s' % penalties
-
-        # if lhs != rhs:
-        #     lines.append((u' * %s' % lhs, rhs, lhs_width))
-        # elif config['import']['detail']:
-        #     lines.append((u' * %s' % lhs, '', lhs_width))
-
-    # # Print each track in two columns, or across two lines.
-    # col_width = (ui.term_width() - len(''.join([' * ', ' -> ']))) // 2
-    # if lines:
-        # max_width = max(w for _, _, w in lines)
-        # for lhs, rhs, lhs_width in lines:
-        #     if not rhs:
-        #         print_(lhs)
-        #     elif max_width > col_width:
-        #         print_(u'%s ->\n   %s' % (lhs, rhs))
-        #     else:
-        #         pad = max_width - lhs_width
-        #         print_(u'%s%s -> %s' % (lhs, ' ' * pad, rhs))
 
     # Missing and unmatched tracks.
     if match.extra_tracks:
@@ -383,13 +335,12 @@ def show_change(cur_artist, cur_album, match):
         print_(ui.colorize('text_warning', line))
 
 
-def show_item_change(item, match):
+def show_item_change(item: library.Item, match: hooks.TrackMatch) -> None:
     """Print out the change that would occur by tagging `item` with the
     metadata from `match`, a TrackMatch object.
     """
     old = item
     new = match.info
-
     table = new_table()
     for key in sorted(new.keys()):
         before = str(old.get(key) or "")
@@ -398,38 +349,9 @@ def show_item_change(item, match):
             table.add_row(wrap(key, "b"), make_difftext(before, after))
 
     console.print(border_panel(table))
-    # cur_artist, new_artist = item.artist, match.info.artist
-    # cur_title, new_title = item.title, match.info.title
-
-    # if cur_artist != new_artist or cur_title != new_title:
-    #     cur_artist, new_artist = ui.colordiff(cur_artist, new_artist)
-    #     cur_title, new_title = ui.colordiff(cur_title, new_title)
-
-    #     print_(u"Correcting track tags from:")
-    #     print_(u"    %s - %s" % (cur_artist, cur_title))
-    #     print_(u"To:")
-    #     print_(u"    %s - %s" % (new_artist, new_title))
-
-    # else:
-    #     print_(u"Tagging track: %s - %s" % (cur_artist, cur_title))
-
-    # Data URL.
     if new.data_url:
         print_(u'URL:\n    %s' % new.data_url)
-
-    # Info line.
-    info = []
-    # Similarity.
-    info.append(u'(Similarity: %s)' % dist_string(match.distance))
-    # Penalties.
-    penalties = penalty_string(match.distance)
-    if penalties:
-        info.append(penalties)
-    # Disambiguation.
-    disambig = disambig_string(match.info)
-    if disambig:
-        info.append(ui.colorize('text_highlight_minor', u'(%s)' % disambig))
-    print_(' '.join(info))
+    print_match_info(match)
 
 
 def summarize_items(items, singleton):

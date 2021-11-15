@@ -32,7 +32,7 @@ import confuse
 from beets import config
 from beets.autotag.hooks import AlbumInfo, TrackInfo
 from beets.plugins import BeetsPlugin, MetadataSourcePlugin, get_distance
-from beetsplug.bandcamp._metaguru import get_country
+# from beetsplug.bandcamp._metaguru import get_country
 from discogs_client import Client, Master, Release
 from discogs_client.exceptions import DiscogsAPIError
 from requests.exceptions import ConnectionError
@@ -309,9 +309,9 @@ class DiscogsPlugin(BeetsPlugin):
         va = result.data["artists"][0].get("name", "").lower() == "various"
         year = result.data.get("year")
         mediums = [t.medium for t in tracks]
-        country = result.data.get("country")
-        if not re.match(r"[A-Z][A-Z]", country):
-            country = get_country(country)
+        country = result.data.get("country").replace("UK", "GB")
+        # if not re.match(r"[A-Z][A-Z]", country):
+            # country = get_country(country)
         data_url = result.data.get("uri")
         style = self.format(result.data.get("styles"))
         genre = self.format(result.data.get("genres"))
