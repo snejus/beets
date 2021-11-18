@@ -47,7 +47,7 @@ from six.moves import input
 
 JSONDict = t.Dict[str, t.Any]
 
-install(show_locals=True, extra_lines=8, width=int(os.environ.get("COLUMNS")) or 150)
+install(show_locals=True, extra_lines=8, width=int(os.environ.get("COLUMNS") or 150))
 
 console = Console(force_interactive=True, force_terminal=True)
 
