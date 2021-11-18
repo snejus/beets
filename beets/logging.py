@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # This file is part of beets.
 # Copyright 2016, Adrian Sampson.
 #
@@ -49,7 +48,7 @@ def logsafe(val):
       example.
     """
     # Already Unicode.
-    if isinstance(val, six.text_type):
+    if isinstance(val, str):
         return val
 
     # Bytestring: needs decoding.
@@ -63,7 +62,7 @@ def logsafe(val):
     # A "problem" object: needs a workaround.
     elif isinstance(val, subprocess.CalledProcessError):
         try:
-            return six.text_type(val)
+            return str(val)
         except UnicodeDecodeError:
             # An object with a broken __unicode__ formatter. Use __str__
             # instead.
@@ -80,7 +79,7 @@ class StrFormatLogger(Logger):
     instead of %-style formatting.
     """
 
-    class _LogMessage(object):
+    class _LogMessage:
         def __init__(self, msg, args, kwargs):
             self.msg = msg
             self.args = args
@@ -88,7 +87,7 @@ class StrFormatLogger(Logger):
 
         def __str__(self):
             args = [logsafe(a) for a in self.args]
-            kwargs = dict((k, logsafe(v)) for (k, v) in self.kwargs.items())
+            kwargs = {k: logsafe(v) for (k, v) in self.kwargs.items()}
             return self.msg.format(*args, **kwargs)
 
     def _log(self, level, msg, args, exc_info=None, extra=None, **kwargs):

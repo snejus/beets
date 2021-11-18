@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # This file is part of beets.
 # Copyright 2016, Dang Mai <contact@dangmai.net>.
 #
@@ -94,7 +93,7 @@ class SmartPlaylistPlugin(BeetsPlugin):
             args = set(ui.decargs(args))
             for a in list(args):
                 if not a.endswith(".m3u"):
-                    args.add("{0}.m3u".format(a))
+                    args.add(f"{a}.m3u")
 
             playlists = set(
                 (name, q, a_q)
@@ -144,7 +143,7 @@ class SmartPlaylistPlugin(BeetsPlugin):
                     qs = playlist.get(key)
                     if qs is None:
                         query_and_sort = None, None
-                    elif isinstance(qs, six.string_types):
+                    elif isinstance(qs, str):
                         query_and_sort = parse_query_string(qs, model_cls)
                     elif len(qs) == 1:
                         query_and_sort = parse_query_string(qs[0], model_cls)

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # This file is part of beets.
 # Copyright 2016, Adrian Sampson.
 #
@@ -101,7 +100,7 @@ class DiscogsPlugin(BeetsPlugin):
         try:
             with open(self._tokenfile()) as f:
                 tokendata = json.load(f)
-        except IOError:
+        except OSError:
             # No token yet. Generate one.
             token, secret = self.authenticate(c_key, c_secret)
         else:
@@ -145,11 +144,11 @@ class DiscogsPlugin(BeetsPlugin):
             self._log.info(u"connection error: {0}", e)
             raise beets.ui.UserError(u"communication with Discogs failed")
 
-        beets.ui.print_(u"To authenticate with Discogs, visit:")
+        beets.ui.print_("To authenticate with Discogs, visit:")
         beets.ui.print_(url)
 
         # Ask for the code and validate it.
-        code = beets.ui.input_(u"Enter the code:")
+        code = beets.ui.input_("Enter the code:")
         try:
             token, secret = auth_client.get_access_token(code)
         except DiscogsAPIError:
@@ -447,7 +446,7 @@ class DiscogsPlugin(BeetsPlugin):
         # If a medium has two sides (ie. vinyl or cassette), each pair of
         # consecutive sides should belong to the same medium.
         if all([track.medium is not None for track in tracks]):
-            m = sorted(set([track.medium.lower() for track in tracks]))
+            m = sorted({track.medium.lower() for track in tracks})
             # If all track.medium are single consecutive letters, assume it is
             # a 2-sided medium.
             if "".join(m) in ascii_lowercase:

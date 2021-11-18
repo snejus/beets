@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # This file is part of beets.
 # Copyright 2016, Adrian Sampson.
 #
@@ -310,7 +309,7 @@ def input_options(
                 default_name = colorize("action_default", default_name)
                 tmpl = "# selection (default %s)"
                 prompt_parts.append(tmpl % default_name)
-                prompt_part_lengths.append(len(tmpl % six.text_type(default)))
+                prompt_part_lengths.append(len(tmpl % str(default)))
             else:
                 prompt_parts.append("# selection")
                 prompt_part_lengths.append(len(prompt_parts[-1]))
@@ -432,7 +431,7 @@ def human_bytes(size):
     unit = "B"
     for power in powers:
         if size < 1024:
-            return u"%3.1f %s%s" % (size, power, unit)
+            return f"{size:3.1f} {power}{unit}"
         size /= 1024.0
         unit = u"iB"
     return u"big"
@@ -462,7 +461,7 @@ def human_seconds(interval):
         increment, suffix = units[-1]
         interval /= float(increment)
 
-    return u"%3.1f %ss" % (interval, suffix)
+    return f"{interval:3.1f} {suffix}s"
 
 
 def human_seconds_short(interval):
@@ -810,7 +809,7 @@ def _store_dict(option, opt_str, value, parser):
     option_values[key] = value
 
 
-class CommonOptionsParser(optparse.OptionParser, object):
+class CommonOptionsParser(optparse.OptionParser):
     """Offers a simple way to add common formatting options.
 
     Options available include:
@@ -827,7 +826,7 @@ class CommonOptionsParser(optparse.OptionParser, object):
     """
 
     def __init__(self, *args, **kwargs):
-        super(CommonOptionsParser, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._album_flags = False
         # this serves both as an indicator that we offer the feature AND allows
         # us to check whether it has been specified on the CLI - bypassing the
@@ -888,7 +887,7 @@ class CommonOptionsParser(optparse.OptionParser, object):
         By default this affects both items and albums. If add_album_option()
         is used then the target will be autodetected.
 
-        Sets the format property to u'$path' on the options extracted from the
+        Sets the format property to '$path' on the options extracted from the
         CLI.
         """
         path = optparse.Option(
@@ -1004,7 +1003,7 @@ class SubcommandsOptionParser(CommonOptionsParser):
         kwargs["add_help_option"] = False
 
         # Super constructor.
-        super(SubcommandsOptionParser, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         # Our root parser needs to stop on the first unrecognized argument.
         self.disable_interspersed_args()
@@ -1020,7 +1019,7 @@ class SubcommandsOptionParser(CommonOptionsParser):
     # Add the list of subcommands to the help message.
     def format_help(self, formatter=None):
         # Get the original help message, to which we will append.
-        out = super(SubcommandsOptionParser, self).format_help(formatter)
+        out = super().format_help(formatter)
         if formatter is None:
             formatter = self.formatter
 
@@ -1105,7 +1104,7 @@ class SubcommandsOptionParser(CommonOptionsParser):
         cmdname = args.pop(0)
         subcommand = self._subcommand_for_name(cmdname)
         if not subcommand:
-            raise UserError(u"unknown command '{0}'".format(cmdname))
+            raise UserError(f"unknown command '{cmdname}'")
 
         suboptions, subargs = subcommand.parse_args(args)
         return subcommand, suboptions, subargs
