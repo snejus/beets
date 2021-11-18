@@ -24,6 +24,7 @@ import re
 import socket
 import time
 import traceback
+import typing as t
 from string import ascii_lowercase
 
 import beets
@@ -32,11 +33,19 @@ import confuse
 from beets import config
 from beets.autotag.hooks import AlbumInfo, TrackInfo
 from beets.plugins import BeetsPlugin, MetadataSourcePlugin, get_distance
-# from beetsplug.bandcamp._metaguru import get_country
+from beetsplug.bandcamp._metaguru import Helpers
 from discogs_client import Client, Master, Release
 from discogs_client.exceptions import DiscogsAPIError
 from requests.exceptions import ConnectionError
 from six.moves import http_client
+
+console = None
+try:
+    from rich.console import Console
+
+    console = Console(force_terminal=True, force_interactive=True)
+except ModuleNotFoundError:
+    pass
 
 USER_AGENT = u"beets/{0} +https://beets.io/".format(beets.__version__)
 API_KEY = "rAzVUQYRaoFjeBjyWuWZ"
@@ -69,10 +78,10 @@ class DiscogsPlugin(BeetsPlugin):
         self.config["apikey"].redact = True
         self.config["apisecret"].redact = True
         self.config["user_token"].redact = True
-        self.discogs_client = None
+        self.discogs_client = None  # type: Client
         self.register_listener("import_begin", self.setup)
         self.rate_limit_per_minute = 25
-        self.last_request_timestamp = 0
+        self.last_request_timestamp: float = 0
 
     def setup(self, session=None):
         """Create the `discogs_client` field. Authenticate if necessary."""
@@ -101,31 +110,24 @@ class DiscogsPlugin(BeetsPlugin):
 
         self.discogs_client = Client(USER_AGENT, c_key, c_secret, token, secret)
 
-    def _time_to_next_request(self):
-        # print(self.rate_limit_per_minute)
+    def _time_to_next_request(self) -> float:
         seconds_between_requests = 60 / self.rate_limit_per_minute
         seconds_since_last_request = time.time() - self.last_request_timestamp
-        # print("Timestamp: " + str(self.last_request_timestamp))
-        # print("Seconds between: " + str(seconds_between_requests))
         seconds_to_wait = seconds_between_requests - seconds_since_last_request
-        # print("S to wait: " + str(seconds_to_wait))
         return seconds_to_wait
 
-    def request_start(self):
+    def request_start(self) -> None:
         """wait for rate limit if needed"""
         time_to_next_request = self._time_to_next_request()
-        # print("Time to next: " + str(time_to_next_request))
         if time_to_next_request > 0:
-            self._log.info(
-                "hit rate limit, waiting for {0} seconds", time_to_next_request
-            )
+            self._log.info("hit rate limit, waiting for {} seconds", time_to_next_request)
             time.sleep(time_to_next_request)
 
-    def request_finished(self):
+    def request_finished(self) -> None:
         """update timestamp for rate limiting"""
         self.last_request_timestamp = time.time()
 
-    def reset_auth(self):
+    def reset_auth(self) -> None:
         """Delete token file & redo the auth steps."""
         os.remove(self._tokenfile())
         self.setup()
@@ -230,11 +232,10 @@ class DiscogsPlugin(BeetsPlugin):
 
     def get_albums(self, query):
         """Returns a list of AlbumInfo objects for a discogs search query."""
-        # Strip non-word characters from query. Things like "!" and "-" can
-        # cause a query to return no results, even if they match the artist or
-        # album title. Use `re.UNICODE` flag to avoid stripping non-english
-        # word characters.
-        query = re.sub(r"(?u)\W+", " ", query)
+        # Strip non-word characters from query. Things like "!" and "-" can cause a query
+        # to return no results, even if they match the artist or album title.
+        # Use `re.UNICODE` flag to avoid stripping non-english word characters.
+        query = re.sub(r"(?u)\W+", " ", query, re.UNICODE)
         # Strip medium information from query, Things like "CD1" and "disk 1"
         # can also negate an otherwise positive result.
         query = re.sub(r"(?i)\b(CD|disc)\s*\d+", "", query)
@@ -264,9 +265,7 @@ class DiscogsPlugin(BeetsPlugin):
             self.request_finished()
             return year
         except DiscogsAPIError as e:
-            self._log.info(
-                u"API Error: {0} (query: {1})", e, result.data["resource_url"]
-            )
+            self._log.info(u"API Error: {0} (query: {1})", e, result.data["resource_url"])
             # if e.status_code != 404:
             #     self._log.info(u'API Error: {0} (query: {1})', e,
             #                     result.data['resource_url'])
@@ -309,39 +308,44 @@ class DiscogsPlugin(BeetsPlugin):
         va = result.data["artists"][0].get("name", "").lower() == "various"
         year = result.data.get("year")
         mediums = [t.medium for t in tracks]
-        country = result.data.get("country").replace("UK", "GB")
-        # if not re.match(r"[A-Z][A-Z]", country):
-            # country = get_country(country)
+        country = (result.data.get("country") or "").replace("UK", "GB")
+        if not re.match(r"[A-Z][A-Z]", country):
+            country = Helpers.get_country(country)
         data_url = result.data.get("uri")
-        style = self.format(result.data.get("styles"))
-        genre = self.format(result.data.get("genres"))
+        genre = self.format(result.data.get("styles"))
+        style = self.format(result.data.get("genres"))
         discogs_albumid = self.extract_release_id(result.data.get("uri"))
 
         # Extract information for the optional AlbumInfo fields that are
         # contained on nested discogs fields.
 
         albumtype = media = label = catalogno = labelid = None
-        if result.data.get("formats"):
+        formats = result.data.get("formats") or []
+        if formats:
             albumtype = (
-                ", ".join(result.data["formats"][0].get("descriptions", []))
-            ).lower() or None
-            media = result.data["formats"][0]["name"].replace("File", "Digital Media")
+                ", ".join(*map(lambda x: x.get("descriptions") or "", formats))
+            ).lower()
+            media = albumtype.replace("File", "Digital Media")
         if result.data.get("labels"):
             label = result.data["labels"][0].get("name")
             catalogno = result.data["labels"][0].get("catno")
             labelid = result.data["labels"][0].get("id")
+        # if console:
+            # console.print(tracks[0])
 
         # Additional cleanups (various artists name, catalog number, media).
         if va:
             artist = config["va_name"].as_str()
         if catalogno == "none":
             catalogno = None
-        else:
+        elif catalogno:
             catalogno = catalogno.upper()
         # Explicitly set the `media` for the tracks, since it is expected by
         # `autotag.apply_metadata`, and set `medium_total`.
+        # albumtype = tracks[0].disctitle
         for track in tracks:
             track.media = media
+            # track.disctitle = disctitle
             track.medium_total = mediums.count(track.medium)
             # Discogs does not have track IDs. Invent our own IDs as proposed
             # in #2336.
@@ -362,14 +366,13 @@ class DiscogsPlugin(BeetsPlugin):
             artist_id=artist_id,
             tracks=tracks,
             albumstatus="Official",
-            albumtype="to-sort-out",
-            # albumtype=albumtype,
+            albumtype=albumtype,
             comments=result.data.get("notes") or None,
             va=va,
             year=int(released[0] if len(released[0]) else 0),
             month=int(released[1] if len(released) > 1 else 0),
             day=int(released[2] if len(released) > 2 else 0),
-            label=re.sub(r" \([0-9]+\)", "", label),
+            label=re.sub(r" \([0-9]+\)", "", str(label)),
             mediums=len(set(mediums)),
             releasegroup_id=master_id,
             catalognum=catalogno,
@@ -601,36 +604,30 @@ class DiscogsPlugin(BeetsPlugin):
             medium_index=medium_index,
         )
 
-    def get_track_index(self, position):
+    def get_track_index(self, position: str) -> t.Iterable[t.Optional[str]]:
         """Returns the medium, medium index and subtrack index for a discogs
         track position."""
         # Match the standard Discogs positions (12.2.9), which can have several
         # forms (1, 1-1, A1, A1.1, A1a, ...).
         match = re.match(
-            r"^(.*?)"  # medium: everything before medium_index.
-            r"(\d*?)"  # medium_index: a number at the end of
-            # `position`, except if followed by a subtrack
-            # index.
+            r"^(?P<medium>.*?)"  # medium: everything before medium_index.
+            r"(?P<medium_index>\d*?)"  # medium_index: a number at the end of
+            # `position`, except if followed by a subtrack index.
             # subtrack_index: can only be matched if medium
             # or medium_index have been matched, and can be
-            r"((?<=\w)\.[\w]+"  # - a dot followed by a string (A.1, 2.A)
+            r"(?P<subindex>(?:(?<=\w)\.)[\w]+"  # - a dot followed by a string (A.1, 2.A)
             r"|(?<=\d)[A-Z]+"  # - a string that follows a number (1A, B2a)
-            r")?"
-            r"$",
+            r")?$",
             position.upper(),
         )
 
+        # medium = index = subindex = None
         if match:
-            medium, index, subindex = match.groups()
+            return match.groups()
+        self._log.info(u"Invalid position: {0}", position)
+        return None, None, None
 
-            if subindex and subindex.startswith("."):
-                subindex = subindex[1:]
-        else:
-            self._log.info(u"Invalid position: {0}", position)
-            medium = index = subindex = None
-        return medium or None, index or None, subindex or None
-
-    def get_track_length(self, duration):
+    def get_track_length(self, duration: str) -> t.Optional[int]:
         """Returns the track length in seconds for a discogs duration."""
         try:
             length = time.strptime(duration, "%M:%S")
