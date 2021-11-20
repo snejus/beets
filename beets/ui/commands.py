@@ -177,6 +177,8 @@ def disambig_string(info: t.Union[hooks.AlbumInfo, hooks.TrackInfo]) -> t.Option
             disambig.append(info.catalognum)
         if info.albumtype:
             disambig.append(info.albumtype)
+        if info.albumstatus:
+            disambig.append(info.albumstatus)
         if info.albumdisambig:
             disambig.append(info.albumdisambig)
 
@@ -326,7 +328,7 @@ def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> Non
         print_('Unmatched tracks ({}):'.format(len(match.extra_items)))
         pad_width = max(len(item.title) for item in match.extra_items)
     for item in match.extra_items:
-        line = u' ! {0: <{width}} (#{1: >2})'.format(" - ".join(item.artist, item.title),
+        line = u' ! {0: <{width}} (#{1: >2})'.format(" - ".join([item.artist, item.title]),
                                                      format_index(item),
                                                      width=pad_width)
         if item.length:

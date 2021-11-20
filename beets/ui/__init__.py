@@ -16,8 +16,6 @@
 interface. To invoke the CLI, just call beets.ui.main(). The actual
 CLI commands are implemented in the ui.commands module.
 """
-from __future__ import absolute_import, division, print_function
-
 import typing as t
 import errno
 import optparse
@@ -62,9 +60,11 @@ if sys.platform == "win32":
 
 log = logging.getLogger("beets")
 if not log.handlers:
-    handler = RichHandler()
-    handler.setFormatter(logging.Formatter(fmt="{name}\t{message}", datefmt="[%X]", style="{"))
-    log.addHandler(handler)
+    log.addHandler(logging.StreamHandler())
+    # handler = logging.StreamHandler()
+    # handler = RichHandler()
+    # handler.setFormatter(logging.Formatter(fmt="{name}\t{message}", datefmt="[%X]", style="{"))
+    # log.addHandler(handler)
 
 log.propagate = False  # Don't propagate to root handler.
 

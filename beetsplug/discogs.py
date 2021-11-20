@@ -17,6 +17,7 @@ python3-discogs-client library.
 """
 from __future__ import absolute_import, division, print_function
 
+from operator import truth, itemgetter
 import json
 import os
 import re
@@ -248,8 +249,8 @@ class DiscogsPlugin(BeetsPlugin):
             self._log.info(
                 u"Communication error while searching for {0!r}", query, exc_info=True
             )
-            return []
-        return [album for album in map(self.get_album_info, releases[:5]) if album]
+            return iter([])
+        return filter(truth, map(self.get_album_info, releases[:5]))
 
     def get_master_year(self, master_id):
         """Fetches a master release given its Discogs ID and returns its year
@@ -320,11 +321,18 @@ class DiscogsPlugin(BeetsPlugin):
 
         albumtype = media = label = catalogno = labelid = None
         formats = result.data.get("formats") or []
+        albumstatus = "Official"
         if formats:
-            albumtype = (
-                ", ".join(*map(lambda x: x.get("descriptions") or "", formats))
-            ).lower()
-            media = albumtype.replace("File", "Digital Media")
+            _format = formats[0]
+            descs = _format["descriptions"]
+            media = _format["name"].replace("File", "Digital Media")
+            if "Promo" in descs:
+                albumstatus = "Promotional"
+                descs.remove("Promo")
+            if "Album" in descs:
+                albumtype = "album"
+                descs.remove("Album")
+            disctitle = " ".join(descs)
         if result.data.get("labels"):
             label = result.data["labels"][0].get("name")
             catalogno = result.data["labels"][0].get("catno")
@@ -344,6 +352,7 @@ class DiscogsPlugin(BeetsPlugin):
         # albumtype = tracks[0].disctitle
         for track in tracks:
             track.media = media
+            track.disctitle = disctitle
             # track.disctitle = disctitle
             track.medium_total = mediums.count(track.medium)
             # Discogs does not have track IDs. Invent our own IDs as proposed
@@ -364,7 +373,7 @@ class DiscogsPlugin(BeetsPlugin):
             artist=artist,
             artist_id=artist_id,
             tracks=tracks,
-            albumstatus="Official",
+            albumstatus=albumstatus,
             albumtype=albumtype,
             comments=result.data.get("notes") or None,
             va=va,

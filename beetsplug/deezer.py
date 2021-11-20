@@ -107,18 +107,19 @@ class DeezerPlugin(MetadataSourcePlugin, BeetsPlugin):
         :rtype: beets.autotag.hooks.TrackInfo
         """
         artist, artist_id = self.get_artist(
-            track_data.get('contributors', [track_data['artist']])
+            track_data.get('contributors', [track_data.get('artist') or ""])
         )
+        position = track_data.get('track_position')
         return TrackInfo(
             title=track_data['title'],
             track_id=track_data['id'],
             artist=artist,
             artist_id=artist_id,
             length=track_data['duration'],
-            index=track_data['track_position'],
-            isrc=track_data['isrc'],
-            medium=track_data['disk_number'],
-            medium_index=track_data['track_position'],
+            index=position,
+            isrc=track_data.get('isrc'),
+            medium=track_data.get('disk_number'),
+            medium_index=position,
             medium_total=total,
             data_source=self.data_source,
             data_url=track_data['link'],
