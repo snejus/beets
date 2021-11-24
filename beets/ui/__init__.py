@@ -38,7 +38,6 @@ from beets.dbcore import query as db_query
 from beets.util import as_string
 from beets.util.functemplate import template
 from rich.console import Console
-from rich.logging import RichHandler
 from rich.traceback import install
 from six.moves import input
 
@@ -46,7 +45,7 @@ JSONDict = t.Dict[str, t.Any]
 
 install(show_locals=True, extra_lines=8, width=int(os.environ.get("COLUMNS") or 150))
 
-console = Console(force_interactive=True, force_terminal=True)
+console = Console(force_interactive=True, force_terminal=True, stderr=True)
 
 # On Windows platforms, use colorama to support "ANSI" terminal colors.
 if sys.platform == "win32":
@@ -61,10 +60,6 @@ if sys.platform == "win32":
 log = logging.getLogger("beets")
 if not log.handlers:
     log.addHandler(logging.StreamHandler())
-    # handler = logging.StreamHandler()
-    # handler = RichHandler()
-    # handler.setFormatter(logging.Formatter(fmt="{name}\t{message}", datefmt="[%X]", style="{"))
-    # log.addHandler(handler)
 
 log.propagate = False  # Don't propagate to root handler.
 
@@ -1315,22 +1310,22 @@ def main(args=None):
     except UserError as exc:
         message = exc.args[0] if exc.args else None
         log.error(u"error: {0}", message)
-        # sys.exit(1)
+        sys.exit(1)
     except util.HumanReadableException as exc:
         exc.log(log)
-        # sys.exit(1)
+        sys.exit(1)
     except library.FileOperationError as exc:
         # These errors have reasonable human-readable descriptions, but
         # we still want to log their tracebacks for debugging.
         log.debug("{}", traceback.format_exc())
         log.error("{}", exc)
-        # sys.exit(1)
+        sys.exit(1)
     except confuse.ConfigError as exc:
         log.error(u"configuration error: {0}", exc)
-        # sys.exit(1)
+        sys.exit(1)
     except db_query.InvalidQueryError as exc:
         log.error(u"invalid query: {0}", exc)
-        # sys.exit(1)
+        sys.exit(1)
     except IOError as exc:
         if exc.errno == errno.EPIPE:
             # "Broken pipe". End silently.
@@ -1346,4 +1341,4 @@ def main(args=None):
             u"the library file might have a permissions problem",
             exc,
         )
-        # sys.exit(1)
+        sys.exit(1)
