@@ -201,7 +201,8 @@ def dist_string(dist: hooks.Distance) -> str:
     return out
 
 
-def penalty_string(distance: hooks.Distance, limit: t.Optional[int] = None) -> t.Optional[str]:
+def penalty_string(distance, limit=None):
+    # type: (hooks.Distance, t.Optional[int]) -> t.Optional[str]
     """Returns a colorized string that indicates all the penalties
     applied to a distance object.
     """
@@ -228,6 +229,7 @@ def print_match_info(match: t.Union[hooks.AlbumMatch, hooks.TrackMatch]) -> None
     if disambig:
         info.append(ui.colorize('text_highlight_minor', '(' + disambig + ')'))
     print_(' '.join(info))
+
 
 def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> None:
     """Print out a representation of the changes that will be made if an
@@ -256,25 +258,6 @@ def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> Non
         else:
             return str(index)
 
-    def print_album_changes(new, old) -> None:
-        keymap = {
-            "artist_id": "mb_artistid",
-            "album_id": "mb_albumid",
-            "va": "comp",
-        }
-        table = new_table()
-        skip = {"data_url", "mediums", "tracks", "artist"}
-        for key in sorted(filter(lambda x: x not in skip, new.keys())):
-            before = old.get(keymap.get(key, key) or "")
-            if key == "va":
-                before = {1: True, 0: False}.get(before, before) or ""
-            before = before
-            after = new.get(key)
-            if (before or after):
-                table.add_row(wrap(key, "b"), make_difftext(str(before or ""), str(after or "")))
-
-        console.print(border_panel(table))
-
     pairs = list(match.mapping.items())
     pairs.sort(key=lambda item_and_track_info: item_and_track_info[1].index)
 
@@ -286,12 +269,21 @@ def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> Non
         new["albumartist"] = new["artist"]
 
     print_match_info(match)
-    print_album_changes(new, old)
+    keymap = {
+        # "artist_id": "mb_albumartistid",
+        "album_id": "mb_albumid",
+        "va": "comp",
+        "index": "track",
+        "track_id": "mb_trackid",
+        "artist_id": "mb_artistid",
+    }
+    skip = {"data_url", "mediums", "tracks", "artist"}
+    show_item_change(old, new, keymap, skip)
 
     fields = ["index", "track_alt", "artist", "title", "length", "disctitle"]
     tracks_table = new_table(*fields, highlight=False)
 
-    def _make_track_diff(a: library.Item, b: hooks.TrackMatch) -> t.List[str]:
+    def _make_track_diff(a: library.Item, b: hooks.TrackInfo) -> t.List[str]:
         keymap = {"index": "track"}
         cols = []
         for key in fields:
@@ -328,31 +320,45 @@ def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> Non
         print_('Unmatched tracks ({}):'.format(len(match.extra_items)))
         pad_width = max(len(item.title) for item in match.extra_items)
     for item in match.extra_items:
-        line = u' ! {0: <{width}} (#{1: >2})'.format(" - ".join([item.artist, item.title]),
-                                                     format_index(item),
-                                                     width=pad_width)
+        parts = [" - ".join([item.artist, item.title]), format_index(item)]
+        line = " ! {0: <{width}} (#{1: >2})".format(*parts, width=pad_width)
         if item.length:
             line += ' (%s)' % ui.human_seconds_short(item.length)
         print_(ui.colorize('text_warning', line))
 
 
-def show_item_change(item: library.Item, match: hooks.TrackMatch) -> None:
+def show_item_change(
+    old: library.Item,
+    new: t.Union[autotag.AlbumInfo, autotag.TrackInfo],
+    keymap: t.Dict[str, t.Any] = {},
+    skip: t.Set[str] = set(),
+) -> None:
     """Print out the change that would occur by tagging `item` with the
-    metadata from `match`, a TrackMatch object.
+    metadata from `match` - either an album or a track.
     """
-    old = item
-    new = match.info
-    table = new_table()
-    for key in sorted(new.keys()):
-        before = str(old.get(key) or "")
-        after = str(new.get(key) or "")
-        if (before or after) and (before != after):
-            table.add_row(wrap(key, "b"), make_difftext(before, after))
+    new_meta = new_table()  # for all new metadata
+    upd_meta = new_table()  # for changes only
 
-    console.print(border_panel(table))
+    for field in sorted(filter(lambda x: x not in skip, new.keys())):
+        bold_field = wrap(field, "b")
+        after = str(new.get(field) or "")
+        new_meta.add_row(bold_field, after)
+
+        before = old.get(keymap.get(field, field) or "")
+        if field == "va":
+            before = {1: True, 0: False}.get(before, before)
+        before = str(before or "")
+
+        if before != after:
+            upd_meta.add_row(bold_field, make_difftext(before, after))
+
+    new_panel = border_panel(new_meta)
+    upd_panel = border_panel(upd_meta, title="Updates")
     if new.data_url:
-        print_(u'URL:\n    %s' % new.data_url)
-    print_match_info(match)
+        new_panel.subtitle = upd_panel.subtitle = wrap(new.data_url, "b grey35")
+
+    console.print(new_panel)
+    console.print(upd_panel)
 
 
 def summarize_items(items, singleton):
@@ -533,7 +539,8 @@ def choose_candidate(candidates, singleton, rec, cur_artist=None,
 
         # Show what we're about to do.
         if singleton:
-            show_item_change(item, match)
+            keymap = {"track_id": "mb_trackid", "artist_id": "mb_artistid"}
+            show_item_change(item, match.info, keymap, {"data_url", "bpm", "length"})
         else:
             show_change(cur_artist, cur_album, match)
 
@@ -1046,10 +1053,10 @@ def update_items(lib, query, album, move, pretend, fields):
 
             # Did the item change since last checked?
             file_mtime = item.current_mtime()
-            last_updated = item.mtime
+            last_updated = ctime(item.mtime)
             file_path = displayable_path(item.path)
             if file_mtime == last_updated:
-                log.debug("skipping {}: no changes since {}", file_path, ctime(last_updated))
+                log.debug("skipping {}: no changes since {}", file_path, last_updated)
                 continue
             else:
                 log.info("updating {}: modified on {}", file_path, ctime(file_mtime))
