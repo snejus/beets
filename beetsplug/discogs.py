@@ -17,7 +17,6 @@ python3-discogs-client library.
 """
 from __future__ import absolute_import, division, print_function
 
-from operator import truth, itemgetter
 import json
 import os
 import re
@@ -25,6 +24,7 @@ import socket
 import time
 import traceback
 import typing as t
+from operator import itemgetter, truth, attrgetter
 from string import ascii_lowercase
 
 import beets
@@ -319,26 +319,36 @@ class DiscogsPlugin(BeetsPlugin):
         # Extract information for the optional AlbumInfo fields that are
         # contained on nested discogs fields.
 
-        albumtype = media = label = catalogno = labelid = None
+        albumtype = albumtypes = media = label = catalogno = labelid = None
         formats = result.data.get("formats") or []
         albumstatus = "Official"
         if formats:
             _format = formats[0]
-            descs = _format["descriptions"]
-            media = _format["name"].replace("File", "Digital Media")
+            descs = set(_format.get("descriptions") or [])
+            media = (_format.get("name") or "").replace("File", "Digital Media")
+            print(descs)
             if "Promo" in descs:
                 albumstatus = "Promotional"
                 descs.remove("Promo")
             if "Album" in descs:
                 albumtype = "album"
                 descs.remove("Album")
+            if "Compilation" in descs:
+                albumtype = "compilation"
+                va = True
+                descs.remove("Compilation")
             disctitle = " ".join(descs)
         if result.data.get("labels"):
             label = result.data["labels"][0].get("name")
             catalogno = result.data["labels"][0].get("catno")
             labelid = result.data["labels"][0].get("id")
-        # if console:
-            # console.print(tracks[0])
+        if not albumtype:
+            titles = set(map(lambda x: x.get("main_title"), map(Helpers.parse_track_name, map(attrgetter("title"), tracks))))
+            if len(titles) < 2:
+                albumtype = "single"
+            albumtype = "album"
+
+        albumtypes = "; ".join([albumtype])
 
         # Additional cleanups (various artists name, catalog number, media).
         if va:
@@ -375,6 +385,7 @@ class DiscogsPlugin(BeetsPlugin):
             tracks=tracks,
             albumstatus=albumstatus,
             albumtype=albumtype,
+            albumtypes=albumtypes,
             comments=result.data.get("notes") or None,
             va=va,
             year=int(released[0] if len(released[0]) else 0),
@@ -396,7 +407,7 @@ class DiscogsPlugin(BeetsPlugin):
             discogs_artistid=artist_id,
         )
 
-    def format(self, classification):
+    def format(self, classification: str) -> t.Optional[str]:
         if classification:
             return self.config["separator"].as_str().join(sorted(classification))
         else:
