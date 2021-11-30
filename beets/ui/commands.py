@@ -341,7 +341,11 @@ def show_item_change(
 
     for field in sorted(filter(lambda x: x not in skip, new.keys())):
         bold_field = wrap(field, "b")
-        after = str(new.get(field) or "")
+        after = new.get(field)
+        if after is None:
+            continue
+        else:
+            after = str(after or "")
         new_meta.add_row(bold_field, after)
 
         before = old.get(keymap.get(field, field) or "")

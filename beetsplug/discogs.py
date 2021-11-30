@@ -318,37 +318,47 @@ class DiscogsPlugin(BeetsPlugin):
 
         # Extract information for the optional AlbumInfo fields that are
         # contained on nested discogs fields.
-
-        albumtype = albumtypes = media = label = catalogno = labelid = None
+        albumtypes = set()
+        albumtype = media = label = catalogno = labelid = None
         formats = result.data.get("formats") or []
         albumstatus = "Official"
+        albumtype = ""
         if formats:
             _format = formats[0]
             descs = set(_format.get("descriptions") or [])
             media = (_format.get("name") or "").replace("File", "Digital Media")
-            print(descs)
             if "Promo" in descs:
                 albumstatus = "Promotional"
                 descs.remove("Promo")
             if "Album" in descs:
                 albumtype = "album"
                 descs.remove("Album")
+                albumtypes.add(albumtype)
             if "Compilation" in descs:
                 albumtype = "compilation"
                 va = True
                 descs.remove("Compilation")
+                albumtypes.add(albumtype)
+            if "Single" in descs:
+                descs.remove("Single")
+                if len(tracks) > 1:
+                    albumtype = "album"
+                else:
+                    albumtype = "single"
+                albumtypes.add(albumtype)
             disctitle = " ".join(descs)
+        print(descs)
         if result.data.get("labels"):
             label = result.data["labels"][0].get("name")
             catalogno = result.data["labels"][0].get("catno")
             labelid = result.data["labels"][0].get("id")
+
         if not albumtype:
             titles = set(map(lambda x: x.get("main_title"), map(Helpers.parse_track_name, map(attrgetter("title"), tracks))))
             if len(titles) < 2:
                 albumtype = "single"
             albumtype = "album"
-
-        albumtypes = "; ".join([albumtype])
+            albumtypes.add(albumtype)
 
         # Additional cleanups (various artists name, catalog number, media).
         if va:
@@ -385,7 +395,7 @@ class DiscogsPlugin(BeetsPlugin):
             tracks=tracks,
             albumstatus=albumstatus,
             albumtype=albumtype,
-            albumtypes=albumtypes,
+            albumtypes="; ".join(albumtypes),
             comments=result.data.get("notes") or None,
             va=va,
             year=int(released[0] if len(released[0]) else 0),
