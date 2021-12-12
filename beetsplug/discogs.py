@@ -377,7 +377,7 @@ class DiscogsPlugin(BeetsPlugin):
             track.medium_total = mediums.count(track.medium)
             # Discogs does not have track IDs. Invent our own IDs as proposed
             # in #2336.
-            track.track_id = str(album_id) + "-" + track.track_alt
+            track.track_id = str(album_id) + "-" + (track.track_alt or str(track.index))
 
         # Retrieve master release id (returns None if there isn't one).
         master_id = result.data.get("master_id")
@@ -455,7 +455,9 @@ class DiscogsPlugin(BeetsPlugin):
                     divisions += next_divisions
                     del next_divisions[:]
                 track_info = self.get_track_info(track, index, divisions)
-                track_info.track_alt = track["position"]
+                pos = track.get("position")
+                if pos and not pos.isnumeric():
+                    track_info.track_alt = pos
                 tracks.append(track_info)
             else:
                 next_divisions.append(track["title"])
