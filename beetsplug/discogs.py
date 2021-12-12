@@ -341,11 +341,8 @@ class DiscogsPlugin(BeetsPlugin):
                 albumtypes.add(albumtype)
             if "Single" in descs:
                 descs.remove("Single")
-                if len(tracks) > 1:
-                    albumtype = "album"
-                else:
-                    albumtype = "single"
-                albumtypes.add(albumtype)
+                albumtype = "album"
+                albumtypes.add("single")
             disctitle = " ".join(descs)
         print(descs)
         if result.data.get("labels"):
@@ -375,18 +372,16 @@ class DiscogsPlugin(BeetsPlugin):
             track.disctitle = disctitle
             # track.disctitle = disctitle
             track.medium_total = mediums.count(track.medium)
-            # Discogs does not have track IDs. Invent our own IDs as proposed
-            # in #2336.
+            # Discogs does not have track IDs. Invent our own IDs as proposed in #2336.
             track.track_id = str(album_id) + "-" + (track.track_alt or str(track.index))
 
-        # Retrieve master release id (returns None if there isn't one).
-        master_id = result.data.get("master_id")
-        # Assume `original_year` is equal to `year` for releases without
         # a master release, otherwise fetch the master release.
         original_year = year
         # original_year = self.get_master_year(master_id) if master_id else year
         released = (result.data.get("released") or "").split("-")
 
+        if len(tracks) == 1:
+            album = album_id = albumstatus = albumtype = albumtypes = ""
         return AlbumInfo(
             album=album,
             album_id=album_id,
@@ -396,14 +391,15 @@ class DiscogsPlugin(BeetsPlugin):
             albumstatus=albumstatus,
             albumtype=albumtype,
             albumtypes="; ".join(albumtypes),
-            comments=result.data.get("notes") or None,
             va=va,
+            mediums=len(set(mediums)),
+            releasegroup_id=result.data.get("master_id"),
+
+            comments=result.data.get("notes") or None,
             year=int(released[0] if len(released[0]) else 0),
             month=int(released[1] if len(released) > 1 else 0),
             day=int(released[2] if len(released) > 2 else 0),
             label=re.sub(r" \([0-9]+\)", "", str(label)),
-            mediums=len(set(mediums)),
-            releasegroup_id=master_id,
             catalognum=catalogno,
             country=country,
             style=style,
