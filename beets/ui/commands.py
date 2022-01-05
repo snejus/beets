@@ -20,11 +20,12 @@ interface.
 import typing as t
 import os
 import re
+from datetime import datetime
 from time import ctime
 from platform import python_version
 from collections import namedtuple, Counter
 from itertools import chain
-from .table import new_table, make_difftext, border_panel, wrap
+from rich_tables.utils import new_table, make_difftext, border_panel, wrap
 
 import beets
 from beets import ui
@@ -40,6 +41,7 @@ from beets.util import syspath, normpath, ancestry, displayable_path, \
 from beets import library
 from beets import config
 from beets import logging
+from rich import print_json, print
 
 from . import _store_dict
 from rich.console import Console
@@ -264,9 +266,8 @@ def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> Non
     new = match.info.copy()
     old = pairs[0][0].copy()
     old["album"] = cur_album
-    if config['artist_credit']:
-        new["artist"] = new["artist_credit"] or new["artist"]
-        new["albumartist"] = new["artist"]
+    # if config['artist_credit']:
+    new["albumartist"] = new["artist"]
 
     print_match_info(match)
     keymap = {
@@ -283,21 +284,23 @@ def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> Non
     fields = ["index", "track_alt", "artist", "title", "length", "disctitle"]
     tracks_table = new_table(*fields, highlight=False)
 
-    def _make_track_diff(a: library.Item, b: hooks.TrackInfo) -> t.List[str]:
+    def _make_track_diff(a: library.Item, b: hooks.TrackInfo) -> t.Tuple[bool, t.List[str]]:
         keymap = {"index": "track"}
-        cols = []
-        for key in fields:
-            before = str(a.get(keymap.get(key, key)) or "")
-            after = str(b.get(key) or "")
-            if key == "length":
-                before = before.split(".")[0]
-                after = after.split(".")[0]
-            cols.append(make_difftext(before, after))
-        return cols
+        vals_before = list(map(str, map(lambda x: a.get(keymap.get(x, x)) or "", fields)))
+        vals_after = list(map(str, map(lambda x: b.get(x) or "", fields)))
+        vals_before[4] = datetime.fromtimestamp(round(float(vals_before[4] or 0))).strftime("%M:%S")
+        vals_after[4] = datetime.fromtimestamp(round(float(vals_after[4] or 0))).strftime("%M:%S")
+        if vals_before == vals_after:
+            return False, vals_before
+        return True, list(map(make_difftext, vals_before, vals_after))
 
     for item, track_info in pairs:
         track_info["artist"] = track_info.get("artist") or cur_artist
-        tracks_table.add_row(*_make_track_diff(item, track_info))
+        different, row = _make_track_diff(item, track_info)
+        if different:
+            tracks_table.add_row(*row)
+        else:
+            tracks_table.add_row(*row, style="dim")
     console.print(border_panel(tracks_table))
 
     # Missing and unmatched tracks.
@@ -307,12 +310,16 @@ def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> Non
                len(match.info.tracks),
                len(match.extra_tracks) / len(match.info.tracks)
                ))
-        pad_width = max(len(track_info.title) for track_info in
-                        match.extra_tracks)
-    for track_info in match.extra_tracks:
-        line = ' ! {0: <{width}} (#{1: >2})'.format(track_info.title,
-                                                    format_index(track_info),
-                                                    width=pad_width)
+        max_artist_width = max(len(track_info.get("artist") or "") for track_info in match.extra_tracks)
+        max_title_width = max(len(track_info.title) for track_info in match.extra_tracks)
+    for track in match.extra_tracks:
+        line = ' {0: <{artist_width}} - {1: <{title_width}} (#{2: >2})'.format(
+            track.get("artist") or "",
+            track.title,
+            format_index(track),
+            artist_width=max_artist_width,
+            title_width=max_title_width + 2,
+        )
         if track_info.length:
             line += ' (%s)' % ui.human_seconds_short(track_info.length)
         print_(ui.colorize('text_warning', line))
@@ -340,12 +347,11 @@ def show_item_change(
     upd_meta = new_table()  # for changes only
 
     for field in sorted(filter(lambda x: x not in skip, new.keys())):
-        bold_field = wrap(field, "b")
         after = new.get(field)
-        if after is None:
+        if after is None and field not in config["overwrite_null"]["album"].as_str_seq():
             continue
-        else:
-            after = str(after or "")
+        after = str(after or "")
+        bold_field = wrap(field, "b")
         new_meta.add_row(bold_field, after)
 
         before = old.get(keymap.get(field, field) or "")
@@ -357,12 +363,13 @@ def show_item_change(
             upd_meta.add_row(bold_field, make_difftext(before, after))
 
     new_panel = border_panel(new_meta)
-    upd_panel = border_panel(upd_meta, title="Updates")
-    if new.data_url:
-        new_panel.subtitle = upd_panel.subtitle = wrap(new.data_url, "b grey35")
 
+    if new.data_url:
+        new_panel.subtitle = wrap(new.data_url, "b grey35")
     console.print(new_panel)
-    console.print(upd_panel)
+
+    if upd_meta.row_count:
+        console.print(border_panel(upd_meta, title="Updates"))
 
 
 def summarize_items(items, singleton):
@@ -1063,7 +1070,7 @@ def update_items(lib, query, album, move, pretend, fields):
                 log.debug("skipping {}: no changes since {}", file_path, last_updated)
                 continue
             else:
-                log.info("updating {}: modified on {}", file_path, ctime(file_mtime))
+                log.debug("updating {}: modified on {}", file_path, ctime(file_mtime))
 
             # Read new data.
             try:

@@ -38,6 +38,7 @@ from discogs_client import Client, Master, Release
 from discogs_client.exceptions import DiscogsAPIError
 from requests.exceptions import ConnectionError
 from six.moves import http_client
+from rich import print
 
 console = None
 try:
@@ -323,6 +324,7 @@ class DiscogsPlugin(BeetsPlugin):
         formats = result.data.get("formats") or []
         albumstatus = "Official"
         albumtype = ""
+        print(f"{artist} - {album}")
         if formats:
             _format = formats[0]
             descs = set(_format.get("descriptions") or [])
@@ -335,16 +337,15 @@ class DiscogsPlugin(BeetsPlugin):
                 descs.remove("Album")
                 albumtypes.add(albumtype)
             if "Compilation" in descs:
-                albumtype = "compilation"
+                albumtype = "album"
                 va = True
                 descs.remove("Compilation")
-                albumtypes.add(albumtype)
+                albumtypes.add("album")
+                albumtypes.add("compilation")
             if "Single" in descs:
                 descs.remove("Single")
                 albumtype = "album"
                 albumtypes.add("single")
-            disctitle = " ".join(descs)
-        print(descs)
         if result.data.get("labels"):
             label = result.data["labels"][0].get("name")
             catalogno = result.data["labels"][0].get("catno")
@@ -358,8 +359,6 @@ class DiscogsPlugin(BeetsPlugin):
             albumtypes.add(albumtype)
 
         # Additional cleanups (various artists name, catalog number, media).
-        if va:
-            artist = config["va_name"].as_str()
         if catalogno == "none":
             catalogno = None
         elif catalogno:
@@ -368,12 +367,15 @@ class DiscogsPlugin(BeetsPlugin):
         # `autotag.apply_metadata`, and set `medium_total`.
         # albumtype = tracks[0].disctitle
         for track in tracks:
+            if not track.artist:
+                track.artist = artist
             track.media = media
-            track.disctitle = disctitle
-            # track.disctitle = disctitle
             track.medium_total = mediums.count(track.medium)
             # Discogs does not have track IDs. Invent our own IDs as proposed in #2336.
             track.track_id = str(album_id) + "-" + (track.track_alt or str(track.index))
+
+        if va:
+            artist = config["va_name"].as_str()
 
         # a master release, otherwise fetch the master release.
         original_year = year
@@ -381,7 +383,11 @@ class DiscogsPlugin(BeetsPlugin):
         released = (result.data.get("released") or "").split("-")
 
         if len(tracks) == 1:
-            album = album_id = albumstatus = albumtype = albumtypes = ""
+            t = tracks[0]
+            albumtype = "single"
+            albumtypes = [albumtype]
+            album = artist + " - " + t.title
+            album_id = t.track_id
         return AlbumInfo(
             album=album,
             album_id=album_id,
@@ -515,15 +521,7 @@ class DiscogsPlugin(BeetsPlugin):
             medium_count = 1 if medium_count == 0 else medium_count
             track.medium, track.medium_index = medium_count, index_count
 
-        # Get `disctitle` from Discogs index tracks. Assume that an index track
-        # before the first track of each medium is a disc title.
-        for track in tracks:
-            if track.medium_index == 1:
-                if track.index in index_tracks:
-                    disctitle = index_tracks[track.index]
-                else:
-                    disctitle = None
-            track.disctitle = disctitle
+        track.data_source = "discogs"
 
         return tracks
 
