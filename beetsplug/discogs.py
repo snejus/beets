@@ -168,11 +168,11 @@ class DiscogsPlugin(BeetsPlugin):
 
     def album_distance(self, items, album_info, mapping):
         """Returns the album distance."""
-        return get_distance(data_source="Discogs", info=album_info, config=self.config)
+        return get_distance(data_source="discogs", info=album_info, config=self.config)
 
     def track_distance(self, item, track_info):
         """Returns the track distance."""
-        return get_distance(data_source="Discogs", info=track_info, config=self.config)
+        return get_distance(data_source="discogs", info=track_info, config=self.config)
 
     def candidates(self, items, artist, album, va_likely, extra_tags=None):
         """Returns a list of AlbumInfo objects for discogs search results
@@ -396,7 +396,7 @@ class DiscogsPlugin(BeetsPlugin):
             tracks=tracks,
             albumstatus=albumstatus,
             albumtype=albumtype,
-            albumtypes="; ".join(albumtypes),
+            albumtypes="; ".join(sorted(albumtypes)),
             va=va,
             mediums=len(set(mediums)),
             releasegroup_id=result.data.get("master_id"),

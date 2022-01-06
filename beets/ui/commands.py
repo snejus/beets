@@ -20,6 +20,8 @@ interface.
 import typing as t
 import os
 import re
+import operator as op
+from typing import Tuple, Dict, Any
 from datetime import datetime
 from time import ctime
 from platform import python_version
@@ -41,10 +43,12 @@ from beets.util import syspath, normpath, ancestry, displayable_path, \
 from beets import library
 from beets import config
 from beets import logging
-from rich import print_json, print
+from orderedset import OrderedSet
 
 from . import _store_dict
 from rich.console import Console
+
+JSONDict = Dict[str, Any]
 
 console = Console(force_terminal=True, force_interactive=True)
 VARIOUS_ARTISTS = u'Various Artists'
@@ -281,26 +285,38 @@ def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> Non
     skip = {"data_url", "mediums", "tracks", "artist"}
     show_item_change(old, new, keymap, skip)
 
-    fields = ["index", "track_alt", "artist", "title", "length", "disctitle"]
-    tracks_table = new_table(*fields, highlight=False)
+    fields = ["index", "artist", "title", "length", "track_alt", "bandcamp_track_id"]
+    relevant_fields = OrderedSet(["index", "artist", "title"])
 
-    def _make_track_diff(a: library.Item, b: hooks.TrackInfo) -> t.Tuple[bool, t.List[str]]:
+    def _make_track_diff(a: library.Item, b: hooks.TrackInfo):
         keymap = {"index": "track"}
-        vals_before = list(map(str, map(lambda x: a.get(keymap.get(x, x)) or "", fields)))
-        vals_after = list(map(str, map(lambda x: b.get(x) or "", fields)))
-        vals_before[4] = datetime.fromtimestamp(round(float(vals_before[4] or 0))).strftime("%M:%S")
-        vals_after[4] = datetime.fromtimestamp(round(float(vals_after[4] or 0))).strftime("%M:%S")
-        if vals_before == vals_after:
-            return False, vals_before
-        return True, list(map(make_difftext, vals_before, vals_after))
+        diff: JSONDict = dict(zip(relevant_fields, op.itemgetter(*relevant_fields)(b)))
+        for field in fields:
+            before = str(a.get(keymap.get(field, field)) or "")
+            after = str(b.get(field) or "")
+            if field == "length":
+                before = datetime.fromtimestamp(round(float(before or 0))).strftime(
+                    "%M:%S"
+                )
+                after = datetime.fromtimestamp(round(float(after or 0))).strftime("%M:%S")
 
+            if before == after:
+                continue
+
+            diff[field] = make_difftext(before, after)
+            relevant_fields.add(field)
+
+        return diff
+
+    tracks_table = new_table(*relevant_fields, highlight=False)
     for item, track_info in pairs:
-        track_info["artist"] = track_info.get("artist") or cur_artist
-        different, row = _make_track_diff(item, track_info)
-        if different:
-            tracks_table.add_row(*row)
-        else:
-            tracks_table.add_row(*row, style="dim")
+        data = _make_track_diff(item, track_info)
+        data["artist"] = track_info.get("artist") or cur_artist
+        data["index"] = str(track_info["index"])
+
+        tracks_table.add_row(*op.itemgetter(*relevant_fields)(data))
+        tracks_table.rows[-1].style = "dim"
+
     console.print(border_panel(tracks_table))
 
     # Missing and unmatched tracks.
