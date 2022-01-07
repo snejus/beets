@@ -24,7 +24,7 @@ import socket
 import time
 import traceback
 import typing as t
-from operator import itemgetter, truth, attrgetter
+from operator import truth, attrgetter
 from string import ascii_lowercase
 
 import beets
