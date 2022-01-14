@@ -52,6 +52,7 @@ types-six = "*"
 types-requests = "^2.26.0"
 
 beetcamp = { path = "../beetcamp", develop = true, python = ">=3.6.2,<3.10" }
+rich-tables = { path = "../rich-tables/", develop = true, python = ">=3.6.2,<3.10" }
 
 [tool.poetry.scripts]
 beet = "beets.ui:main"
