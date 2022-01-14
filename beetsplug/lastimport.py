@@ -37,7 +37,7 @@ class LastImportPlugin(plugins.BeetsPlugin):
             'retry_limit': 3,
         })
         self.item_types = {
-            'play_count':  types.INTEGER,
+            'lastfm_play_count':  types.INTEGER,
         }
 
     def commands(self):
@@ -227,12 +227,12 @@ def process_tracks(lib, tracks, log):
             song = lib.items(query).get()
 
         if song is not None:
-            count = int(song.get('play_count', 0))
+            count = int(song.get('lastfm_play_count', 0))
             new_count = int(tracks[num]['playcount'])
             log.debug('match: {0} - {1} ({2}) '
-                      'updating: play_count {3} => {4}',
+                      'updating: lastfm_play_count {3} => {4}',
                       song.artist, song.title, song.album, count, new_count)
-            song['play_count'] = new_count
+            song['lastfm_play_count'] = new_count
             song.store()
             total_found += 1
         else:
