@@ -301,6 +301,12 @@ class ImportSession:
                 self.tag_log("asis", paths)
             elif task.choice_flag is action.SKIP:
                 self.tag_log("skip", paths)
+            elif task.choice_flag is action.APPLY:
+                if task.is_album:
+                    tolog = ["album", task.match.info["album"]]
+                else:
+                    tolog = ["track", task.match.info["title"]]
+                self.tag_log("apply", tolog)
 
     def should_resume(self, path):
         raise NotImplementedError
