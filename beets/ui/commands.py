@@ -28,6 +28,7 @@ from platform import python_version
 from collections import namedtuple, Counter
 from itertools import chain
 from rich_tables.utils import new_table, make_difftext, border_panel, wrap
+from rich import print
 
 import beets
 from beets import ui
@@ -270,11 +271,10 @@ def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> Non
     new = match.info.copy()
     old = pairs[0][0].copy()
     old["album"] = cur_album
-    # if config['artist_credit']:
     new["albumartist"] = new["artist"]
 
     print_match_info(match)
-    keymap = {
+    album_keymap = {
         # "artist_id": "mb_albumartistid",
         "album_id": "mb_albumid",
         "va": "comp",
@@ -282,39 +282,48 @@ def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> Non
         "track_id": "mb_trackid",
         "artist_id": "mb_artistid",
     }
-    skip = {"data_url", "mediums", "tracks", "artist"}
-    show_item_change(old, new, keymap, skip)
+    skip = {"data_url", "tracks", "artist"}
+    show_item_change(old, new, album_keymap, skip)
 
-    fields = ["index", "artist", "title", "length", "track_alt", "bandcamp_track_id"]
     relevant_fields = OrderedSet(["index", "artist", "title"])
+    tracks_table = new_table(*relevant_fields, highlight=False)
 
-    def _make_track_diff(a: library.Item, b: hooks.TrackInfo):
-        keymap = {"index": "track"}
+    def _make_track_diff(a: library.Item, b: hooks.TrackInfo) -> JSONDict:
+        keymap = {
+            **album_keymap,
+            "medium_total": "tracktotal",
+            "medium_index": "track",
+            "medium": "disc"
+        }
         diff: JSONDict = dict(zip(relevant_fields, op.itemgetter(*relevant_fields)(b)))
-        for field in fields:
-            before = str(a.get(keymap.get(field, field)) or "")
-            after = str(b.get(field) or "")
+        for field in filter(lambda x: x != "data_url", b):
+            before = a.get(keymap.get(field, field))
+            after = b.get(field)
+            if after is None or field in {"bandcamp_track_id"}:
+                continue
+
             if field == "length":
                 before = datetime.fromtimestamp(round(float(before or 0))).strftime(
                     "%M:%S"
                 )
                 after = datetime.fromtimestamp(round(float(after or 0))).strftime("%M:%S")
 
-            if before == after:
+            if before == after or (not before and not after):
                 continue
 
-            diff[field] = make_difftext(before, after)
-            relevant_fields.add(field)
+            diff[field] = make_difftext(str(before), str(after))
+            if field not in relevant_fields:
+                tracks_table.add_column(field)
+                relevant_fields.add(field)
 
         return diff
 
-    tracks_table = new_table(*relevant_fields, highlight=False)
     for item, track_info in pairs:
         data = _make_track_diff(item, track_info)
-        data["artist"] = track_info.get("artist") or cur_artist
-        data["index"] = str(track_info["index"])
+        data["artist"] = data.get("artist") or cur_artist
+        data["index"] = str(data["index"])
 
-        tracks_table.add_row(*op.itemgetter(*relevant_fields)(data))
+        tracks_table.add_row(*map(str, op.itemgetter(*relevant_fields)(data)))
         tracks_table.rows[-1].style = "dim"
 
     console.print(border_panel(tracks_table))
@@ -566,7 +575,7 @@ def choose_candidate(candidates, singleton, rec, cur_artist=None,
 
         # Show what we're about to do.
         if singleton:
-            keymap = {"track_id": "mb_trackid", "artist_id": "mb_artistid"}
+            keymap = {"track_id": "mb_trackid", "artist_id": "mb_artistid", "mediums": "disctotal"}
             show_item_change(item, match.info, keymap, {"data_url", "bpm", "length"})
         else:
             show_change(cur_artist, cur_album, match)
