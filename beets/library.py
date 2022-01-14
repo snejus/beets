@@ -471,6 +471,7 @@ class Item(LibModel):
         'albumartist_sort': types.STRING,
         'albumartist_credit': types.STRING,
         'genre': types.STRING,
+        'genres': types.STRING,
         'style': types.STRING,
         'discogs_albumid': types.INTEGER,
         'discogs_artistid': types.INTEGER,
@@ -715,10 +716,15 @@ class Item(LibModel):
             raise ReadError(read_path, exc)
 
         for key in self._media_fields:
-            value = getattr(mediafile, key)
+            if key == "genre":
+                value = getattr(mediafile, "genres")
+            else:
+                value = getattr(mediafile, key)
             if isinstance(value, int):
                 if value.bit_length() > 63:
                     value = 0
+            if isinstance(value, list):
+                value = ", ".join(value)
             self[key] = value
 
         # Database's mtime should now reflect the on-disk value.
@@ -758,6 +764,7 @@ class Item(LibModel):
                      if k in self._media_fields}  # Only write media fields.
         if tags is not None:
             item_tags.update(tags)
+        item_tags["genres"] = item_tags["genre"].split(", ")
         plugins.send('write', item=self, path=path, tags=item_tags)
 
         # Open the file.
