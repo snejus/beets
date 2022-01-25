@@ -716,8 +716,13 @@ class Item(LibModel):
             raise ReadError(read_path, exc)
 
         for key in self._media_fields:
-            if key == "genre":
-                value = getattr(mediafile, "genres")
+            if key in {"genre", "genres"}:
+                if mediafile.type == "mp3":
+                    value = getattr(mediafile, "genres")
+                    if value and "/" in value[0]:
+                        value = ", ".join(value[0].split("/"))
+                else:
+                    value = getattr(mediafile, "genres")
             else:
                 value = getattr(mediafile, key)
             if isinstance(value, int):
