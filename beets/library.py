@@ -471,7 +471,6 @@ class Item(LibModel):
         'albumartist_sort': types.STRING,
         'albumartist_credit': types.STRING,
         'genre': types.STRING,
-        'genres': types.STRING,
         'style': types.STRING,
         'discogs_albumid': types.INTEGER,
         'discogs_artistid': types.INTEGER,
@@ -716,20 +715,10 @@ class Item(LibModel):
             raise ReadError(read_path, exc)
 
         for key in self._media_fields:
-            if key in {"genre", "genres"}:
-                if mediafile.type == "mp3":
-                    value = getattr(mediafile, "genres")
-                    if value and "/" in value[0]:
-                        value = ", ".join(value[0].split("/"))
-                else:
-                    value = getattr(mediafile, "genres")
-            else:
-                value = getattr(mediafile, key)
+            value = getattr(mediafile, key)
             if isinstance(value, int):
                 if value.bit_length() > 63:
                     value = 0
-            if isinstance(value, list):
-                value = ", ".join(value)
             self[key] = value
 
         # Database's mtime should now reflect the on-disk value.
@@ -769,7 +758,6 @@ class Item(LibModel):
                      if k in self._media_fields}  # Only write media fields.
         if tags is not None:
             item_tags.update(tags)
-        item_tags["genres"] = item_tags["genre"].split(", ")
         plugins.send('write', item=self, path=path, tags=item_tags)
 
         # Open the file.
@@ -1200,7 +1188,7 @@ class Album(LibModel):
         if not os.path.exists(old_art):
             log.error('removing reference to missing album art file {}',
                       util.displayable_path(old_art))
-            self.artpath = None
+            # self.artpath = None
             return
 
         new_art = self.art_destination(old_art)
