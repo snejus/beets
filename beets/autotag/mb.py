@@ -567,7 +567,7 @@ def album_for_id(releaseid):
     if not config["musicbrainz"]["enabled"].get(bool):
         return None
 
-    log.debug(u'Requesting MusicBrainz release {}', releaseid)
+    log.debug('Requesting MusicBrainz release {}', releaseid)
     albumid = _parse_id(releaseid)
     if not albumid:
         log.debug('Invalid MBID ({0}).', releaseid)
