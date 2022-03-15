@@ -18,6 +18,7 @@
 from contextlib import closing
 import os
 import re
+from os import getenv
 from tempfile import NamedTemporaryFile
 from collections import OrderedDict
 
@@ -339,6 +340,7 @@ class CoverArtArchive(RemoteArtSource):
         """Return the Cover Art Archive and Cover Art Archive release group URLs
         using album MusicBrainz release ID and release group ID.
         """
+        print(vars(album))
 
         def get_image_urls(url, size_suffix=None):
             try:
@@ -385,6 +387,19 @@ class CoverArtArchive(RemoteArtSource):
         if 'releasegroup' in self.match_by and album.mb_releasegroupid:
             for url in get_image_urls(release_group_url):
                 yield self._candidate(url=url, match=Candidate.MATCH_FALLBACK)
+
+
+class URLFetch(RemoteArtSource):
+    NAME = "URL Fetcher"
+
+    def get(self, album, plugin, paths):
+        """Generate URLs using Amazon ID (ASIN) string.
+        """
+        print(album)
+        print(album.artpath)
+        if album.artpath:
+            url=album.artpath.decode().replace(getenv("HOME") + "/https:", "https:/")
+            yield self._candidate(url=url, match=Candidate.MATCH_EXACT)
 
 
 class Amazon(RemoteArtSource):
@@ -827,16 +842,18 @@ class LastFM(RemoteArtSource):
         self.key = self._config['lastfm_key'].get(),
 
     def get(self, album, plugin, paths):
-        if not album.mb_albumid:
-            return
+        params = {
+            'method': 'album.getinfo',
+            'api_key': self.key,
+            'format': 'json',
+        }
+        if len(album.mb_albumid) == 36:
+            params.update(mbid=album.mb_albumid)
+        else:
+            params.update(album=album.album, artist=album.albumartist)
 
         try:
-            response = self.request(self.API_URL, params={
-                'method': 'album.getinfo',
-                'api_key': self.key,
-                'mbid': album.mb_albumid,
-                'format': 'json',
-            })
+            response = self.request(self.API_URL, params=params)
         except requests.RequestException:
             self._log.debug('lastfm: error receiving response')
             return
@@ -868,7 +885,7 @@ class LastFM(RemoteArtSource):
 
 # Try each source in turn.
 
-SOURCES_ALL = ['filesystem',
+SOURCES_ALL = ['urlfetch', 'filesystem',
                'coverart', 'itunes', 'amazon', 'albumart',
                'wikipedia', 'google', 'fanarttv', 'lastfm']
 
@@ -882,6 +899,7 @@ ART_SOURCES = {
     'google': GoogleImages,
     'fanarttv': FanartTV,
     'lastfm': LastFM,
+    'urlfetch': URLFetch,
 }
 SOURCE_NAMES = {v: k for k, v in ART_SOURCES.items()}
 
