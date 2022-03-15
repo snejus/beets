@@ -20,7 +20,7 @@ musicbrainzngs = ">=0.4"
 pyyaml = "*"
 six = ">=1.9"
 unidecode = "*"
-rich = "^10.6.0"
+rich = ">=10.6.0"
 jellyfish = "^0.8.2"
 munkres = "^1.1.4"
 
