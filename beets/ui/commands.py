@@ -20,15 +20,17 @@ interface.
 import typing as t
 import os
 import re
+from math import floor
 import operator as op
 from typing import Tuple, Dict, Any
 from datetime import datetime
-from time import ctime
+from time import ctime, localtime, strftime
 from platform import python_version
 from collections import namedtuple, Counter
 from itertools import chain
-from rich_tables.utils import new_table, make_difftext, border_panel, wrap
+from rich_tables.utils import new_table, make_difftext, border_panel, wrap, simple_panel
 from rich import print
+from rich import box
 
 import beets
 from beets import ui
@@ -44,10 +46,10 @@ from beets.util import syspath, normpath, ancestry, displayable_path, \
 from beets import library
 from beets import config
 from beets import logging
-from orderedset import OrderedSet
 
 from . import _store_dict
 from rich.console import Console
+from rich.layout import Layout
 
 JSONDict = Dict[str, Any]
 
@@ -238,6 +240,38 @@ def print_match_info(match: t.Union[hooks.AlbumMatch, hooks.TrackMatch]) -> None
     print_(' '.join(info))
 
 
+keymap = {
+    "album_id": "mb_albumid",
+    "artist_id": "mb_artistid",
+    "track_id": "mb_trackid",
+    "va": "comp",
+    "index": "track",
+    "mediums": "disctotal",
+    "medium_total": "tracktotal",
+    "medium_index": "track",
+    "medium": "disc",
+    "releasegroup_id": "mb_releasegroupid",
+    "release_track_id": "mb_releasetrackid",
+}
+
+
+def get_diff(overwrite_fields, field, new, old) -> str:
+    after = new.get(field)
+    if after is None and field not in overwrite_fields:
+        return ""
+
+    after = str(after or "")
+    before = old.get(keymap.get(field, field) or "")
+    if field == "va":
+        before = {1: True, 0: False}.get(before, before)
+    elif field == "length":
+        before = strftime("%M:%S", localtime(floor(float(before or 0))))
+        after = strftime("%M:%S", localtime(floor(float(after or 0))))
+    before = str(before or "")
+
+    return make_difftext(before, after) if before != after else ""
+
+
 def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> None:
     """Print out a representation of the changes that will be made if an
     album's tags are changed according to `match`, which must be an AlbumMatch
@@ -274,95 +308,54 @@ def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> Non
     new["albumartist"] = new["artist"]
 
     print_match_info(match)
-    album_keymap = {
-        # "artist_id": "mb_albumartistid",
-        "album_id": "mb_albumid",
-        "va": "comp",
-        "index": "track",
-        "track_id": "mb_trackid",
-        "artist_id": "mb_artistid",
-    }
-    skip = {"data_url", "tracks", "artist"}
-    show_item_change(old, new, album_keymap, skip)
+    show_item_change(old, new, {"tracks", "artist", "data_url"})
 
-    relevant_fields = OrderedSet(["index", "artist", "title"])
-    tracks_table = new_table(*relevant_fields, highlight=False)
+    fields = ["index", "artist", "title", "length"]
+    tracks_table = new_table(
+        *fields,
+        highlight=False,
+        box=box.HORIZONTALS,
+        border_style="white",
+    )
 
-    def _make_track_diff(a: library.Item, b: hooks.TrackInfo) -> JSONDict:
-        keymap = {
-            **album_keymap,
-            "medium_total": "tracktotal",
-            "medium_index": "track",
-            "medium": "disc"
-        }
-        diff: JSONDict = dict(zip(relevant_fields, op.itemgetter(*relevant_fields)(b)))
-        for field in filter(lambda x: x != "data_url", b):
-            before = a.get(keymap.get(field, field))
-            after = b.get(field)
-            if after is None or field in {"bandcamp_track_id"}:
-                continue
+    ow = config["overwrite_null"]["track"].as_str_seq()
+    skip = {"media", "data_source", "data_url", "artist_id", "track_id", "bandcamp_track_id"}
 
-            if field == "length":
-                before = datetime.fromtimestamp(round(float(before or 0))).strftime(
-                    "%M:%S"
-                )
-                after = datetime.fromtimestamp(round(float(after or 0))).strftime("%M:%S")
+    def _make_track_diff(old: library.Item, new: hooks.TrackInfo) -> JSONDict:
+        diffs: JSONDict = dict(zip(fields, map(lambda x: new.get(x) or "", fields)))
+        for field in sorted(set(list(new) + list(old)) - skip):
+            diff = get_diff(ow, field, new, old)
+            if diff:
+                diffs[field] = diff
+                if field not in fields:
+                    tracks_table.add_column(field)
+                    fields.append(field)
 
-            if before == after or (not before and not after):
-                continue
-
-            diff[field] = make_difftext(str(before), str(after))
-            if field not in relevant_fields:
-                tracks_table.add_column(field)
-                relevant_fields.add(field)
-
-        return diff
+        return diffs
 
     for item, track_info in pairs:
         data = _make_track_diff(item, track_info)
         data["artist"] = data.get("artist") or cur_artist
         data["index"] = str(data["index"])
 
-        tracks_table.add_row(*map(str, op.itemgetter(*relevant_fields)(data)))
+        tracks_table.add_row(*map(str, op.itemgetter(*fields)(data)))
         tracks_table.rows[-1].style = "dim"
 
-    console.print(border_panel(tracks_table))
-
     # Missing and unmatched tracks.
-    if match.extra_tracks:
-        print_('Missing tracks ({}/{} - {:.1%}):'.format(
-               len(match.extra_tracks),
-               len(match.info.tracks),
-               len(match.extra_tracks) / len(match.info.tracks)
-               ))
-        max_artist_width = max(len(track_info.get("artist") or "") for track_info in match.extra_tracks)
-        max_title_width = max(len(track_info.title) for track_info in match.extra_tracks)
-    for track in match.extra_tracks:
-        line = ' {0: <{artist_width}} - {1: <{title_width}} (#{2: >2})'.format(
-            track.get("artist") or "",
-            track.title,
-            format_index(track),
-            artist_width=max_artist_width,
-            title_width=max_title_width + 2,
-        )
-        if track_info.length:
-            line += ' (%s)' % ui.human_seconds_short(track_info.length)
-        print_(ui.colorize('text_warning', line))
-    if match.extra_items:
-        print_('Unmatched tracks ({}):'.format(len(match.extra_items)))
-        pad_width = max(len(item.title) for item in match.extra_items)
-    for item in match.extra_items:
-        parts = [" - ".join([item.artist, item.title]), format_index(item)]
-        line = " ! {0: <{width}} (#{1: >2})".format(*parts, width=pad_width)
-        if item.length:
-            line += ' (%s)' % ui.human_seconds_short(item.length)
-        print_(ui.colorize('text_warning', line))
+    for n, tracks in [("Missing", match.extra_tracks), ("Unmatched", match.extra_items)]:
+        if tracks:
+            tracks_table.add_row(end_section=True)
+            tracks_table.add_row(f"[b]{n}[/]")
+            for track in match.extra_tracks:
+                values = map(str, map(lambda x: track.get(x) or "", fields))
+                tracks_table.add_row(*values, style="b yellow")
+
+    console.print(border_panel(tracks_table, title="[b i cyan]Tracks[/]", subtitle=wrap(f"Skipped fields: {', '.join(skip)}\n", "dim")))
 
 
 def show_item_change(
     old: library.Item,
     new: t.Union[autotag.AlbumInfo, autotag.TrackInfo],
-    keymap: t.Dict[str, t.Any] = {},
     skip: t.Set[str] = set(),
 ) -> None:
     """Print out the change that would occur by tagging `item` with the
@@ -371,21 +364,12 @@ def show_item_change(
     new_meta = new_table()  # for all new metadata
     upd_meta = new_table()  # for changes only
 
+    ow = config["overwrite_null"]["album" if "album" in new else "track"].as_str_seq()
     for field in sorted(filter(lambda x: x not in skip, new.keys())):
-        after = new.get(field)
-        if after is None and field not in config["overwrite_null"]["album"].as_str_seq():
-            continue
-        after = str(after or "")
-        bold_field = wrap(field, "b")
-        new_meta.add_row(bold_field, after)
-
-        before = old.get(keymap.get(field, field) or "")
-        if field == "va":
-            before = {1: True, 0: False}.get(before, before)
-        before = str(before or "")
-
-        if before != after:
-            upd_meta.add_row(bold_field, make_difftext(before, after))
+        new_meta.add_row(wrap(field, "b"), str(new.get(field)))
+        diff = get_diff(ow, field, new, old)
+        if diff:
+            upd_meta.add_row(wrap(field, "b"), diff)
 
     new_panel = border_panel(new_meta)
 
@@ -575,8 +559,7 @@ def choose_candidate(candidates, singleton, rec, cur_artist=None,
 
         # Show what we're about to do.
         if singleton:
-            keymap = {"track_id": "mb_trackid", "artist_id": "mb_artistid", "mediums": "disctotal"}
-            show_item_change(item, match.info, keymap, {"data_url", "bpm", "length"})
+            show_item_change(item, match.info, {"data_url"})
         else:
             show_change(cur_artist, cur_album, match)
 
@@ -1541,7 +1524,7 @@ def move_items(lib, dest, query, copy, album, pretend, confirm=False,
                     [(o.path, o.destination(basedir=dest))]))
 
         for obj in objs:
-            log.debug('moving: {0}', util.displayable_path(obj.path))
+            show_path_changes([(obj.path, obj.destination(basedir=dest))])
 
             if export:
                 # Copy without affecting the database.
