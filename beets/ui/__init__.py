@@ -525,7 +525,7 @@ def colorize(color_name: str, text: str) -> str:
     if not config["ui"]["color"] or "NO_COLOR" in os.environ.keys():
         return text
 
-    return _colorize(config["ui"]["colors"][color_name].as_str(), text)
+    return _colorize(config["ui"]["colors"][color_name].as_str(), str(text))
 
 
 def _colordiff(a, b, highlight="text_highlight", minor_highlight="text_highlight_minor"):
