@@ -365,6 +365,7 @@ class DiscogsPlugin(BeetsPlugin):
                     titles = set(map(lambda x: x.get("main_title"), map(Helpers.parse_track_name, map(attrgetter("title"), tracks))))
                     if len(titles) < 2:
                         albumtype = "single"
+        albumtypes.add(albumtype)
         if result.data.get("labels"):
             label = result.data["labels"][0].get("name")
             labelid = result.data["labels"][0].get("id")
