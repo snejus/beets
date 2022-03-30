@@ -515,7 +515,13 @@ COLORS = None
 
 
 def _colorize(color: str, text: str) -> str:
-    return COLOR_ESCAPE + color + "m" + text + RESET_COLOR
+    if color in DARK_COLORS:
+        escape = COLOR_ESCAPE + "%im" % (DARK_COLORS[color] + 30)
+    elif color in LIGHT_COLORS:
+        escape = COLOR_ESCAPE + "%i;01m" % (LIGHT_COLORS[color] + 30)
+    else:
+        escape = COLOR_ESCAPE + color + "m"
+    return escape + text + RESET_COLOR
 
 
 def colorize(color_name: str, text: str) -> str:
@@ -525,7 +531,15 @@ def colorize(color_name: str, text: str) -> str:
     if not config["ui"]["color"] or "NO_COLOR" in os.environ.keys():
         return text
 
-    return _colorize(config["ui"]["colors"][color_name].as_str(), str(text))
+    global COLORS
+    if not COLORS:
+        COLORS = {name:
+                  config['ui']['colors'][name].as_str()
+                  for name in COLOR_NAMES}
+    # In case a 3rd party plugin is still passing the actual color ('red')
+    # instead of the abstract color name ('text_error')
+    color = COLORS.get(color_name) or color_name
+    return _colorize(color, str(text))
 
 
 def _colordiff(a, b, highlight="text_highlight", minor_highlight="text_highlight_minor"):
