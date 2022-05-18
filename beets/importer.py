@@ -907,7 +907,7 @@ class ImportTask(BaseImportTask):
                     list(album_fields.keys()),
                     displayable_path(self.album.path),
                 )
-
+        overwrite_props = set(config["overwrite_attributes"].as_str_seq())
         for item in self.imported_items():
             dup_items = self.replaced_items[item]
             for dup_item in dup_items:
@@ -920,7 +920,9 @@ class ImportTask(BaseImportTask):
                         displayable_path(item.path),
                     )
                 item_fields = _reduce_and_log(
-                    item, dup_item._values_flex, REIMPORT_FRESH_FIELDS_ITEM
+                    item,
+                    dup_item._values_flex,
+                    set(REIMPORT_FRESH_FIELDS_ITEM) | overwrite_props,
                 )
                 item.update(item_fields)
                 log.debug(
