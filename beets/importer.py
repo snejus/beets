@@ -837,7 +837,12 @@ class ImportTask(BaseImportTask):
                         dup_item.id,
                         displayable_path(item.path)
                     )
+                saved = {}
+                for prop in "data_source", "price", "artwork", "mastering":
+                    if prop in item:
+                        saved[prop] = item[prop]
                 item.update(dup_item._values_flex)
+                item.update(saved)
                 log.debug(
                     'Reimported item flexible attributes {0} '
                     'from item {1} for {2}',
