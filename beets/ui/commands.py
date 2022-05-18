@@ -169,6 +169,16 @@ def disambig_string(info: t.Union[hooks.AlbumInfo, hooks.TrackInfo]) -> t.Option
     disambig = [info.data_source]
 
     if isinstance(info, hooks.AlbumInfo):
+        if info.year:
+            disambig.append(str(info.year))
+        if info.country:
+            disambig.append(info.country)
+        if info.label:
+            disambig.append(info.label)
+        if info.albumtype:
+            disambig.append(info.albumtype)
+        if info.albumstatus:
+            disambig.append(info.albumstatus)
         if info.media:
             if info.mediums and info.mediums > 1:
                 disambig.append('{}x{}'.format(
@@ -176,18 +186,8 @@ def disambig_string(info: t.Union[hooks.AlbumInfo, hooks.TrackInfo]) -> t.Option
                 ))
             else:
                 disambig.append(info.media)
-        if info.year:
-            disambig.append(str(info.year))
-        if info.country:
-            disambig.append(info.country)
-        if info.label:
-            disambig.append(info.label)
         if info.catalognum:
             disambig.append(info.catalognum)
-        if info.albumtype:
-            disambig.append(info.albumtype)
-        if info.albumstatus:
-            disambig.append(info.albumstatus)
         if info.albumdisambig:
             disambig.append(info.albumdisambig)
 
@@ -231,12 +231,12 @@ def penalty_string(distance, limit=None):
 def print_match_info(match: t.Union[hooks.AlbumMatch, hooks.TrackMatch]) -> None:
     info = []
     info.append('(Similarity: {})'.format(dist_string(match.distance)))
-    penalties = penalty_string(match.distance)
-    if penalties:
-        info.append(penalties)
     disambig = disambig_string(match.info)
     if disambig:
         info.append(ui.colorize('text_highlight_minor', '(' + disambig + ')'))
+    penalties = penalty_string(match.distance)
+    if penalties:
+        info.append(penalties)
     print_(' '.join(info))
 
 
@@ -528,17 +528,16 @@ def choose_candidate(candidates, singleton, rec, cur_artist=None,
                     ),
                     '({})'.format(dist_string(match.distance)),
                 ]
-
-                # Penalties.
-                penalties = penalty_string(match.distance, 3)
-                if penalties:
-                    line.append(penalties)
-
                 # Disambiguation
                 disambig = disambig_string(match.info)
                 if disambig:
                     line.append(ui.colorize('text_highlight_minor',
                                             '(%s)' % disambig))
+
+                # Penalties.
+                penalties = penalty_string(match.distance, 6)
+                if penalties:
+                    line.append(penalties)
 
                 print_(' '.join(line))
 
