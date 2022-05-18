@@ -324,7 +324,7 @@ def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> Non
     def _make_track_diff(old: library.Item, new: hooks.TrackInfo) -> JSONDict:
         diffs: JSONDict = dict(zip(fields, map(lambda x: new.get(x) or "", fields)))
         for field in sorted(set(list(new) + list(old)) - skip):
-            diff = get_diff(ow, field, new, old)
+            diff = get_diff(ow, field, new, old) or new.get(field)
             if diff:
                 diffs[field] = diff
                 if field not in fields:
@@ -346,11 +346,17 @@ def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> Non
         if tracks:
             tracks_table.add_row(end_section=True)
             tracks_table.add_row(f"[b]{n}[/]")
-            for track in match.extra_tracks:
+            for track in tracks:
+                track = track.copy()
+                if track.length:
+                    track.length = strftime("%M:%S", localtime(floor(float(track.length))))
+
                 values = map(str, map(lambda x: track.get(x) or "", fields))
                 tracks_table.add_row(*values, style="b yellow")
 
-    console.print(border_panel(tracks_table, title="[b i cyan]Tracks[/]", subtitle=wrap(f"Skipped fields: {', '.join(skip)}\n", "dim")))
+    title = wrap("Tracks", "b i cyan")
+    subtitle = wrap(f"Skipped fields: {', '.join(skip)}\n", "dim")
+    console.print(border_panel(tracks_table, title=title, subtitle=subtitle))
 
 
 def show_item_change(
@@ -364,7 +370,7 @@ def show_item_change(
     new_meta = new_table()  # for all new metadata
     upd_meta = new_table()  # for changes only
 
-    ow = config["overwrite_null"]["album" if "album" in new else "track"].as_str_seq()
+    ow = set(config["overwrite_null"]["album" if new.get("album_id") else "track"].as_str_seq())
     for field in sorted(filter(lambda x: x not in skip, new.keys())):
         new_meta.add_row(wrap(field, "b"), str(new.get(field)))
         diff = get_diff(ow, field, new, old)
