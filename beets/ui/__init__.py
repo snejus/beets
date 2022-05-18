@@ -1312,12 +1312,12 @@ def main(args=None):
     """Run the main command-line interface for beets. Includes top-level
     exception handlers that print friendly error messages.
     """
-        try:
-            _raw_main(args)
+    try:
+        _raw_main(args)
     except UserError as exc:
         message = exc.args[0] if exc.args else None
         if "No matching" in message:
-        log.error(u"error: {0}", message)
+            log.error(u"error: {0}", message)
         else:
             console.print_exception(extra_lines=4, show_locals=True)
         sys.exit(1)
