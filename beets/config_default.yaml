@@ -59,6 +59,8 @@ import:
     fix_ext_inplace: no
     remux_mp3_in_wav: yes
 
+overwrite_attributes: []
+
 # --------------- Paths ---------------
 
 path_sep_replace: _
