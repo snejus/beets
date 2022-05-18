@@ -38,12 +38,9 @@ from beets.dbcore import query as db_query
 from beets.util import as_string
 from beets.util.functemplate import template
 from rich.console import Console
-from rich.traceback import install
 from six.moves import input
 
 JSONDict = t.Dict[str, t.Any]
-
-install(show_locals=True, extra_lines=8, width=int(os.environ.get("COLUMNS") or 150))
 
 console = Console(force_interactive=True, force_terminal=True, stderr=True)
 
@@ -774,16 +771,16 @@ def show_path_changes(path_changes):
     if max_width > col_width:
         # Print every change over two lines
         for source, dest in zip(sources, destinations):
-            log.info(u"{0} ->\n{1}", *colordiff(source, dest))
+            print_(u"{0} ->\n{1}".format(*colordiff(source, dest)))
     else:
         # Print every change on a single line, and add a header
         title_pad = max_width - len("Source ") + len(" -> ")
 
-        log.info(u"Source {0} Destination", " " * title_pad)
+        print_(u"Source {0} Destination".format(" " * title_pad))
         for source, dest in zip(sources, destinations):
             pad = max_width - len(source)
             fmted_source, fmted_dest = colordiff(source, dest)
-            log.info(u"{0} {1} -> {2}", fmted_source, " " * pad, fmted_dest)
+            print_(u"{0} {1} -> {2}".format(fmted_source, " " * pad, fmted_dest))
 
 
 # Helper functions for option parsing.
@@ -1204,10 +1201,10 @@ def _configure(options):
     config.set_args(options)
 
     # Configure the logger.
-    log.set_global_level(
-        {1: logging.INFO, 2: logging.DEBUG}.get(config["verbose"].get(int))
-        or logging.WARNING
-    )
+    if config["verbose"].get(int):
+        log.set_global_level(logging.DEBUG)
+    else:
+        log.set_global_level(logging.INFO)
 
     if overlay_path:
         log.debug(u"overlaying configuration: {0}", util.displayable_path(overlay_path))
@@ -1315,15 +1312,14 @@ def main(args=None):
     """Run the main command-line interface for beets. Includes top-level
     exception handlers that print friendly error messages.
     """
-    try:
         try:
             _raw_main(args)
-        except Exception:
-            console.print_exception(extra_lines=4, show_locals=True)
-            raise
     except UserError as exc:
         message = exc.args[0] if exc.args else None
+        if "No matching" in message:
         log.error(u"error: {0}", message)
+        else:
+            console.print_exception(extra_lines=4, show_locals=True)
         sys.exit(1)
     except util.HumanReadableException as exc:
         exc.log(log)
