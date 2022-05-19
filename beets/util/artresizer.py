@@ -466,106 +466,6 @@ class PILBackend(LocalBackend):
         im.save(file, "PNG", pnginfo=meta)
 
 
-def pil_deinterlace(path_in, path_out=None):
-    path_out = path_out or temp_file_for(path_in)
-    from PIL import Image
-
-    try:
-        im = Image.open(util.syspath(path_in))
-        im.save(util.py3_path(path_out), progressive=False)
-        return path_out
-    except IOError:
-        return path_in
-
-
-def im_deinterlace(path_in, path_out=None):
-    path_out = path_out or temp_file_for(path_in)
-
-    cmd = ArtResizer.shared.im_convert_cmd + [
-        util.syspath(path_in, prefix=False),
-        '-interlace', 'none',
-        util.syspath(path_out, prefix=False),
-    ]
-
-    try:
-        util.command_output(cmd)
-        return path_out
-    except subprocess.CalledProcessError:
-        return path_in
-
-
-DEINTERLACE_FUNCS = {
-    PIL: pil_deinterlace,
-    IMAGEMAGICK: im_deinterlace,
-}
-
-
-def im_get_format(filepath):
-    cmd = ArtResizer.shared.im_identify_cmd + [
-        '-format', '%[magick]',
-        util.syspath(filepath)
-    ]
-
-    try:
-        return util.command_output(cmd).stdout
-    except subprocess.CalledProcessError:
-        return None
-
-
-def pil_get_format(filepath):
-    from PIL import Image, UnidentifiedImageError
-
-    try:
-        with Image.open(util.syspath(filepath)) as im:
-            return im.format
-    except (ValueError, TypeError, UnidentifiedImageError, FileNotFoundError):
-        log.exception("failed to detect image format for {}", filepath)
-        return None
-
-
-BACKEND_GET_FORMAT = {
-    PIL: pil_get_format,
-    IMAGEMAGICK: im_get_format,
-}
-
-
-def im_convert_format(source, target, deinterlaced):
-    cmd = ArtResizer.shared.im_convert_cmd + [
-        util.syspath(source),
-        *(["-interlace", "none"] if deinterlaced else []),
-        util.syspath(target),
-    ]
-
-    try:
-        subprocess.check_call(
-            cmd,
-            stderr=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL
-        )
-        return target
-    except subprocess.CalledProcessError:
-        return source
-
-
-def pil_convert_format(source, target, deinterlaced):
-    from PIL import Image, UnidentifiedImageError
-
-    try:
-        with Image.open(util.syspath(source)) as im:
-            im.save(util.py3_path(target), progressive=not deinterlaced)
-            return target
-    except (ValueError, TypeError, UnidentifiedImageError, FileNotFoundError,
-            OSError):
-        log.exception("failed to convert image {} -> {}", source, target)
-        return source
-
-
-BACKEND_CONVERT_IMAGE_FORMAT = {
-    PIL: pil_convert_format,
-    IMAGEMAGICK: im_convert_format,
-}
-
-
 class Shareable(type):
     """A pseudo-singleton metaclass that allows both shared and
     non-shared instances. The ``MyClass.shared`` property holds a
@@ -643,13 +543,6 @@ class ArtResizer(metaclass=Shareable):
             return self.local_method.deinterlace(path_in, path_out)
         else:
             # FIXME: Should probably issue a warning?
-            return path_in
-
-    def deinterlace(self, path_in, path_out=None):
-        if self.local:
-            func = DEINTERLACE_FUNCS[self.method[0]]
-            return func(path_in, path_out)
-        else:
             return path_in
 
     def proxy_url(self, maxwidth, url, quality=0):
