@@ -63,13 +63,44 @@ class DeezerPlugin(MetadataSourcePlugin, BeetsPlugin):
         # if console:
             # console.print(album_data)
 
-        tracks_data = requests.get(f"{album_url}/tracks").json()
-        tracks_total = tracks_data["total"]
-        tracks_data = tracks_data["data"]
-        release_date = album_data["release_date"]
-        released = dict(zip(("year", "month", "day"), map(int, release_date.split("-"))))
-        if not tracks_data or not released:
+        release_date = album_data['release_date']
+        date_parts = [int(part) for part in release_date.split('-')]
+        num_date_parts = len(date_parts)
+
+        if num_date_parts == 3:
+            year, month, day = date_parts
+        elif num_date_parts == 2:
+            year, month = date_parts
+            day = None
+        elif num_date_parts == 1:
+            year = date_parts[0]
+            month = None
+            day = None
+        else:
+            raise ui.UserError(
+                "Invalid `release_date` returned "
+                "by {} API: '{}'".format(self.data_source, release_date)
+            )
+
+        tracks_obj = requests.get(
+            self.album_url + deezer_id + '/tracks'
+        ).json()
+        tracks_data = tracks_obj['data']
+        if not tracks_data:
             return None
+        while "next" in tracks_obj:
+            tracks_obj = requests.get(tracks_obj['next']).json()
+            tracks_data.extend(tracks_obj['data'])
+
+        tracks = []
+        medium_totals = collections.defaultdict(int)
+        for i, track_data in enumerate(tracks_data, start=1):
+            track = self._get_track(track_data)
+            track.index = i
+            medium_totals[track.medium] += 1
+            tracks.append(track)
+        for track in tracks:
+            track.medium_total = medium_totals[track.medium]
 
         get_track = partial(self._get_track, total=tracks_total)
         album = AlbumInfo(list(map(get_track, tracks_data)))
@@ -116,11 +147,17 @@ class DeezerPlugin(MetadataSourcePlugin, BeetsPlugin):
             artist=artist,
             artist_id=artist_id,
             length=track_data['duration'],
+<<<<<<< HEAD
             index=position,
             isrc=track_data.get('isrc'),
             medium=track_data.get('disk_number'),
             medium_index=position,
             medium_total=total,
+=======
+            index=track_data.get('track_position'),
+            medium=track_data.get('disk_number'),
+            medium_index=track_data.get('track_position'),
+>>>>>>> master
             data_source=self.data_source,
             data_url=track_data['link'],
         )

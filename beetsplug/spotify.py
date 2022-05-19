@@ -194,9 +194,16 @@ class SpotifyPlugin(MetadataSourcePlugin, BeetsPlugin):
                 )
             )
 
+        tracks_data = album_data['tracks']
+        tracks_items = tracks_data['items']
+        while tracks_data['next']:
+            tracks_data = self._handle_response(requests.get,
+                                                tracks_data['next'])
+            tracks_items.extend(tracks_data['items'])
+
         tracks = []
         medium_totals = collections.defaultdict(int)
-        for i, track_data in enumerate(album_data['tracks']['items'], start=1):
+        for i, track_data in enumerate(tracks_items, start=1):
             track = self._get_track(track_data)
             track.index = i
             medium_totals[track.medium] += 1
@@ -207,8 +214,10 @@ class SpotifyPlugin(MetadataSourcePlugin, BeetsPlugin):
         return AlbumInfo(
             album=album_data['name'],
             album_id=spotify_id,
+            spotify_album_id=spotify_id,
             artist=artist,
             artist_id=artist_id,
+            spotify_artist_id=artist_id,
             tracks=tracks,
             albumtype=album_data['album_type'],
             va=len(album_data['artists']) == 1
@@ -235,8 +244,10 @@ class SpotifyPlugin(MetadataSourcePlugin, BeetsPlugin):
         return TrackInfo(
             title=track_data['name'],
             track_id=track_data['id'],
+            spotify_track_id=track_data['id'],
             artist=artist,
             artist_id=artist_id,
+            spotify_artist_id=artist_id,
             length=track_data['duration_ms'] / 1000,
             index=track_data['track_number'],
             medium=track_data['disc_number'],

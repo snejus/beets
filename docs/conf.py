@@ -11,8 +11,8 @@ master_doc = 'index'
 project = 'beets'
 copyright = '2016, Adrian Sampson'
 
-version = '1.5'
-release = '1.5.1'
+version = '1.6'
+release = '1.6.1'
 
 pygments_style = 'sphinx'
 
@@ -28,6 +28,7 @@ linkcheck_ignore = [
     r'https://github.com/beetbox/beets/issues/',
     r'https://github.com/[^/]+$',  # ignore user pages
     r'.*localhost.*',
+    r'https?://127\.0\.0\.1',
     r'https://www.musixmatch.com/',  # blocks requests
     r'https://genius.com/',  # blocks requests
 ]

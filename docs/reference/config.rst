@@ -151,6 +151,25 @@ replaced as they don't match the typewriter quote (``"``). To also strip these
 special characters, you can either add them to the replacement list or use the
 :ref:`asciify-paths` configuration option below.
 
+.. _path-sep-replace:
+
+path_sep_replace
+~~~~~~~~~~~~~~~~
+
+A string that replaces the path separator (for example, the forward slash
+``/`` on Linux and MacOS, and the backward slash ``\\`` on Windows) when
+generating filenames with beets.
+This option is related to :ref:`replace`, but is distict from it for
+technical reasons.
+
+.. warning::
+   Changing this option is potentially dangerous. For example, setting
+   it to the actual path separator could create directories in unexpected
+   locations. Use caution when changing it and always try it out on a small
+   number of files before applying it to your whole library.
+
+Default: ``_``.
+
 .. _asciify-paths:
 
 asciify_paths
@@ -721,6 +740,17 @@ to one request per second.
 .. _main server: https://musicbrainz.org/
 .. _limited: https://musicbrainz.org/doc/XML_Web_Service/Rate_Limiting
 .. _Building search indexes: https://musicbrainz.org/doc/Development/Search_server_setup
+
+.. _musicbrainz.enabled:
+
+enabled
+~~~~~~~
+
+This option allows you to disable using MusicBrainz as a metadata source. This applies
+if you use plugins that fetch data from alternative sources and should make the import
+process quicker.
+
+Default: ``yes``.
 
 .. _searchlimit:
 

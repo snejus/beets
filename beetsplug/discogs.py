@@ -65,25 +65,22 @@ CONNECTION_ERRORS = (
 
 class DiscogsPlugin(BeetsPlugin):
     def __init__(self):
-        super(DiscogsPlugin, self).__init__()
-        self.config.add(
-            {
-                "apikey": API_KEY,
-                "apisecret": API_SECRET,
-                "tokenfile": "discogs_token.json",
-                "source_weight": 0.5,
-                "user_token": "",
-                "separator": u", ",
-                "index_tracks": False,
-            }
-        )
-        self.config["apikey"].redact = True
-        self.config["apisecret"].redact = True
-        self.config["user_token"].redact = True
-        self.discogs_client = None  # type: Client
-        self.register_listener("import_begin", self.setup)
-        self.rate_limit_per_minute = 25
-        self.last_request_timestamp: float = 0
+        super().__init__()
+        self.config.add({
+            'apikey': API_KEY,
+            'apisecret': API_SECRET,
+            'tokenfile': 'discogs_token.json',
+            'source_weight': 0.5,
+            'user_token': '',
+            'separator': ', ',
+            'index_tracks': False,
+            'append_style_genre': False,
+        })
+        self.config['apikey'].redact = True
+        self.config['apisecret'].redact = True
+        self.config['user_token'].redact = True
+        self.discogs_client = None
+        self.register_listener('import_begin', self.setup)
 
     def setup(self, session=None):
         """Create the `discogs_client` field. Authenticate if necessary."""
@@ -95,7 +92,6 @@ class DiscogsPlugin(BeetsPlugin):
         if user_token:
             # The rate limit for authenticated users goes up to 60
             # requests per minute.
-            self.rate_limit_per_minute = 60
             self.discogs_client = Client(USER_AGENT, user_token=user_token)
             return
 
@@ -112,25 +108,9 @@ class DiscogsPlugin(BeetsPlugin):
 
         self.discogs_client = Client(USER_AGENT, c_key, c_secret, token, secret)
 
-    def _time_to_next_request(self) -> float:
-        seconds_between_requests = 60 / self.rate_limit_per_minute
-        seconds_since_last_request = time.time() - self.last_request_timestamp
-        seconds_to_wait = seconds_between_requests - seconds_since_last_request
-        return seconds_to_wait
-
-    def request_start(self) -> None:
-        """wait for rate limit if needed"""
-        time_to_next_request = self._time_to_next_request()
-        if time_to_next_request > 0:
-            self._log.info("hit rate limit, waiting for {} seconds", time_to_next_request)
-            time.sleep(time_to_next_request)
-
-    def request_finished(self) -> None:
-        """update timestamp for rate limiting"""
-        self.last_request_timestamp = time.time()
-
-    def reset_auth(self) -> None:
-        """Delete token file & redo the auth steps."""
+    def reset_auth(self):
+        """Delete token file & redo the auth steps.
+        """
         os.remove(self._tokenfile())
         self.setup()
 
@@ -185,6 +165,11 @@ class DiscogsPlugin(BeetsPlugin):
         if not self.discogs_client:
             return
 
+        if not album and not artist:
+            self._log.debug('Skipping Discogs query. Files missing album and '
+                            'artist tags.')
+            return []
+
         if va_likely:
             query = album
         else:
@@ -202,6 +187,31 @@ class DiscogsPlugin(BeetsPlugin):
             self._log.info(u"Connection error in album search", exc_info=True)
             return []
 
+    @staticmethod
+    def extract_release_id_regex(album_id):
+        """Returns the Discogs_id or None."""
+        # Discogs-IDs are simple integers. In order to avoid confusion with
+        # other metadata plugins, we only look for very specific formats of the
+        # input string:
+        # - plain integer, optionally wrapped in brackets and prefixed by an
+        #   'r', as this is how discogs displays the release ID on its webpage.
+        # - legacy url format: discogs.com/<name of release>/release/<id>
+        # - current url format: discogs.com/release/<id>-<name of release>
+        # See #291, #4080 and #4085 for the discussions leading up to these
+        # patterns.
+        # Regex has been tested here https://regex101.com/r/wyLdB4/2
+
+        for pattern in [
+                r'^\[?r?(?P<id>\d+)\]?$',
+                r'discogs\.com/release/(?P<id>\d+)-',
+                r'discogs\.com/[^/]+/release/(?P<id>\d+)',
+        ]:
+            match = re.search(pattern, album_id)
+            if match:
+                return int(match.group('id'))
+
+        return None
+
     def album_for_id(self, album_id):
         """Fetches an album by its Discogs ID and returns an AlbumInfo object
         or None if the album is not found.
@@ -209,15 +219,14 @@ class DiscogsPlugin(BeetsPlugin):
         if not self.discogs_client:
             return
 
-        self._log.info(u"Searching for release {0}", album_id)
-        # Discogs-IDs are simple integers. We only look for those at the end
-        # of an input string as to avoid confusion with other metadata plugins.
-        # An optional bracket can follow the integer, as this is how discogs
-        # displays the release ID on its webpage.
-        match = re.search(r"(^|\[*r|discogs\.com/.+/release/)(\d+)($|\])", album_id)
-        if not match:
+        self._log.debug('Searching for release {0}', album_id)
+
+        discogs_id = self.extract_release_id_regex(album_id)
+
+        if not discogs_id:
             return None
-        result = Release(self.discogs_client, {"id": int(match.group(2))})
+
+        result = Release(self.discogs_client, {'id': discogs_id})
         # Try to obtain title to verify that we indeed have a valid Release
         try:
             getattr(result, "title")
@@ -231,7 +240,8 @@ class DiscogsPlugin(BeetsPlugin):
                     return self.album_for_id(album_id)
             return None
         except CONNECTION_ERRORS:
-            self._log.info(u"Connection error in album lookup", exc_info=True)
+            self._log.debug('Connection error in album lookup',
+                            exc_info=True)
             return None
         return self.get_album_info(result)
 
@@ -245,10 +255,9 @@ class DiscogsPlugin(BeetsPlugin):
         # can also negate an otherwise positive result.
         query = re.sub(r"(?i)\b(CD|disc)\s*\d+", "", query)
 
-        self.request_start()
         try:
-            releases = self.discogs_client.search(query, type="release").page(1)
-            self.request_finished()
+            releases = self.discogs_client.search(query,
+                                                  type='release').page(1)
 
         except CONNECTION_ERRORS:
             self._log.info(
@@ -264,10 +273,8 @@ class DiscogsPlugin(BeetsPlugin):
         self._log.info(u"Searching for master release {0}", master_id)
         result = Master(self.discogs_client, {"id": master_id})
 
-        self.request_start()
         try:
-            year = result.fetch("year")
-            self.request_finished()
+            year = result.fetch('year')
             return year
         except DiscogsAPIError as e:
             self._log.info(u"API Error: {0} (query: {1})", e, result.data["resource_url"])
@@ -336,7 +343,9 @@ class DiscogsPlugin(BeetsPlugin):
         data_url = result.data.get("uri")
         genre = self.format(result.data.get("styles"))
         style = self.format(result.data.get("genres"))
-        discogs_albumid = self.extract_release_id(result.data.get("uri"))
+        if self.config['append_style_genre'] and style:
+            genre = self.config['separator'].as_str().join([genre, style])
+        discogs_albumid = self.extract_release_id_regex(result.data.get("uri"))
 
         # Extract information for the optional AlbumInfo fields that are
         # contained on nested discogs fields.
@@ -437,12 +446,6 @@ class DiscogsPlugin(BeetsPlugin):
     def format(self, classification: str) -> t.Optional[str]:
         if classification:
             return self.config["separator"].as_str().join(sorted(classification))
-        else:
-            return None
-
-    def extract_release_id(self, uri):
-        if uri:
-            return uri.split("/")[-1]
         else:
             return None
 
