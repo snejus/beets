@@ -617,7 +617,7 @@ def album_candidates(items, artist, album, va_likely, extra_tags):
     constrain the search.
     """
 
-    if config["musicbrainz"]["enabled"]:
+    if config["musicbrainz"]["enabled"] and not items[0].mb_artistid.startswith("http"):
         # Base candidates if we have album and artist to match.
         if artist and album:
             yield from invoke_mb(mb.match_album, artist, album, len(items),
@@ -640,7 +640,7 @@ def item_candidates(item, artist, title):
     """
 
     # MusicBrainz candidates.
-    if config["musicbrainz"]["enabled"] and artist and title:
+    if config["musicbrainz"]["enabled"] and not item.mb_artistid.startswith("http") and artist and title:
         yield from invoke_mb(mb.match_track, artist, title)
 
     # Plugin candidates.
