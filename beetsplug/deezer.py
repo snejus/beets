@@ -15,6 +15,7 @@
 """Adds Deezer release and track search support to the autotagger
 """
 
+import collections
 from functools import partial
 import typing as t
 
@@ -147,17 +148,11 @@ class DeezerPlugin(MetadataSourcePlugin, BeetsPlugin):
             artist=artist,
             artist_id=artist_id,
             length=track_data['duration'],
-<<<<<<< HEAD
             index=position,
             isrc=track_data.get('isrc'),
             medium=track_data.get('disk_number'),
             medium_index=position,
             medium_total=total,
-=======
-            index=track_data.get('track_position'),
-            medium=track_data.get('disk_number'),
-            medium_index=track_data.get('track_position'),
->>>>>>> master
             data_source=self.data_source,
             data_url=track_data['link'],
         )
