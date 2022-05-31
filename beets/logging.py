@@ -25,6 +25,7 @@ from copy import copy
 from logging import *  # noqa
 import subprocess
 import threading
+from rich.logging import RichHandler
 
 
 def logsafe(val):
@@ -96,6 +97,7 @@ class ThreadLocalLevelLogger(Logger):
         self._thread_level = threading.local()
         self.default_level = NOTSET
         super().__init__(name, level)
+        self.addHandler(RichHandler())
 
     @property
     def level(self):
