@@ -97,7 +97,6 @@ class ThreadLocalLevelLogger(Logger):
         self._thread_level = threading.local()
         self.default_level = NOTSET
         super().__init__(name, level)
-        self.addHandler(RichHandler())
 
     @property
     def level(self):
