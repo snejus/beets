@@ -22,13 +22,12 @@ import os
 import re
 from math import floor
 import operator as op
-from typing import Tuple, Dict, Any
-from datetime import datetime
-from time import ctime, localtime, strftime
+from typing import Dict, Any
+from time import localtime, strftime
 from platform import python_version
 from collections import namedtuple, Counter
 from itertools import chain
-from rich_tables.utils import new_table, make_difftext, border_panel, wrap, simple_panel
+from rich_tables.utils import new_table, make_difftext, border_panel, wrap
 from rich import print
 from rich import box
 
@@ -49,7 +48,6 @@ from beets import logging
 
 from . import _store_dict
 from rich.console import Console
-from rich.layout import Layout
 
 JSONDict = Dict[str, Any]
 
@@ -1076,20 +1074,16 @@ def update_items(lib, query, album, move, pretend, fields):
                 continue
 
             # Did the item change since last checked?
-            file_mtime = item.current_mtime()
-            last_updated = ctime(item.mtime)
-            file_path = displayable_path(item.path)
-            if file_mtime == last_updated:
-                log.debug("skipping {}: no changes since {}", file_path, last_updated)
+            if item.current_mtime() <= item.mtime:
+                log.debug('skipping {0} because mtime is up to date ({1})',
+                          displayable_path(item.path), item.mtime)
                 continue
-            else:
-                log.debug("updating {}: modified on {}", file_path, ctime(file_mtime))
 
             # Read new data.
             try:
                 item.read()
             except library.ReadError as exc:
-                log.error(u'error reading {0}: {1}', file_path, exc)
+                log.error(u'error reading {0}: {1}', item.path, exc)
                 continue
 
             # Special-case album artist when it matches track artist. (Hacky
