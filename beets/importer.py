@@ -752,7 +752,7 @@ class ImportTask(BaseImportTask):
                 # copied/moved as usual).
                 old_path = item.path
                 if (operation != MoveOperation.MOVE
-                        and self.replaced_items[item]
+                        and self.replaced_items[item.path]
                         and session.lib.directory in util.ancestry(old_path)):
                     item.move()
                     # We moved the item, so remove the
@@ -791,19 +791,20 @@ class ImportTask(BaseImportTask):
         self.replaced_items = defaultdict(list)
         self.replaced_albums = defaultdict(list)
         replaced_album_ids = set()
-        for item in self.imported_items():
-            dup_items = list(lib.items(
-                dbcore.query.BytesQuery('path', item.path)
-            ))
-            self.replaced_items[item] = dup_items
-            for dup_item in dup_items:
-                if (not dup_item.album_id or
-                        dup_item.album_id in replaced_album_ids):
-                    continue
-                replaced_album = dup_item._cached_album
-                if replaced_album:
-                    replaced_album_ids.add(dup_item.album_id)
-                    self.replaced_albums[replaced_album.path] = replaced_album
+        for dup_item in lib.items(
+            dbcore.query.OrQuery([
+                dbcore.query.BytesQuery('path', i.path)
+                for i in self.imported_items()
+            ])
+        ):
+            self.replaced_items[dup_item.path].append(dup_item)
+            if (not dup_item.album_id or
+                    dup_item.album_id in replaced_album_ids):
+                continue
+            replaced_album = dup_item._cached_album
+            if replaced_album:
+                replaced_album_ids.add(dup_item.album_id)
+                self.replaced_albums[replaced_album.path] = replaced_album
 
     def reimport_metadata(self, lib):
         """For reimports, preserves metadata for reimported items and
@@ -826,7 +827,7 @@ class ImportTask(BaseImportTask):
                 )
 
         for item in self.imported_items():
-            dup_items = self.replaced_items[item]
+            dup_items = self.replaced_items[item.path]
             for dup_item in dup_items:
                 if dup_item.added and dup_item.added != item.added:
                     item.added = dup_item.added
@@ -857,7 +858,7 @@ class ImportTask(BaseImportTask):
         path as an item from this task.
         """
         for item in self.imported_items():
-            for dup_item in self.replaced_items[item]:
+            for dup_item in self.replaced_items[item.path]:
                 log.debug('Replacing item {0}: {1}',
                           dup_item.id, displayable_path(item.path))
                 dup_item.remove()
