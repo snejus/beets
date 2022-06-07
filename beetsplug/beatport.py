@@ -54,7 +54,7 @@ class BeatportObject:
 
 
 class BeatportClient:
-    _api_base = 'https://api.beatport.com/v4'
+    _api_base = 'https://oauth-api.beatport.com'
 
     def __init__(self, c_key, c_secret, auth_key=None, auth_secret=None):
         """ Initiate the client with OAuth information.
@@ -90,8 +90,10 @@ class BeatportClient:
         :returns:   Authorization URL for the user to visit
         :rtype:     unicode
         """
-        self.api.fetch_request_token(self._make_url('/auth/o/token/'))
-        return self.api.authorization_url(self._make_url('auth/o/authorize/'))
+        self.api.fetch_request_token(
+            self._make_url('/identity/1/oauth/request-token'))
+        return self.api.authorization_url(
+            self._make_url('/identity/1/oauth/authorize'))
 
     def get_access_token(self, auth_data):
         """ Obtain the final access token and secret for the API.
@@ -106,7 +108,7 @@ class BeatportClient:
         self.api.parse_authorization_response(
             "https://beets.io/auth?" + auth_data)
         access_data = self.api.fetch_access_token(
-            self._make_url('/auth/o/token/'))
+            self._make_url('/identity/1/oauth/access-token'))
         return access_data['oauth_token'], access_data['oauth_token_secret']
 
     def search(self, query, release_type='release', details=True):
@@ -287,7 +289,7 @@ class BeatportPlugin(BeetsPlugin):
         try:
             with open(self._tokenfile()) as f:
                 tokendata = json.load(f)
-        except (OSError, FileNotFoundError):
+        except OSError:
             # No token yet. Generate one.
             token, secret = self.authenticate(c_key, c_secret)
         else:
@@ -302,9 +304,6 @@ class BeatportPlugin(BeetsPlugin):
         try:
             url = auth_client.get_authorize_url()
         except AUTH_ERRORS as e:
-            from pprint import pprint
-            pprint(vars(auth_client))
-
             self._log.debug('authentication error: {0}', e)
             raise beets.ui.UserError('communication with Beatport failed')
 

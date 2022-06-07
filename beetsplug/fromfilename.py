@@ -130,8 +130,8 @@ def apply_matches(d):
 
 class FromFilenamePlugin(plugins.BeetsPlugin):
     def __init__(self):
-        super(FromFilenamePlugin, self).__init__()
-        self.register_listener('before_choose_candidate', filename_task)
+        super().__init__()
+        self.register_listener('import_task_start', filename_task)
 
 
 def filename_task(task, session):

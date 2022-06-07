@@ -25,7 +25,6 @@ from copy import copy
 from logging import *  # noqa
 import subprocess
 import threading
-from rich.logging import RichHandler
 
 
 def logsafe(val):

@@ -564,7 +564,8 @@ def album_for_id(releaseid):
         log.debug('Invalid MBID ({0}).', releaseid)
         return
     try:
-        res = musicbrainzngs.get_release_by_id(albumid, RELEASE_INCLUDES)
+        res = musicbrainzngs.get_release_by_id(albumid,
+                                               RELEASE_INCLUDES)
     except musicbrainzngs.ResponseError:
         log.debug('Album ID match failed.')
         return None
