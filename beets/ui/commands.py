@@ -532,16 +532,17 @@ def choose_candidate(candidates, singleton, rec, cur_artist=None,
                     ),
                     '({})'.format(dist_string(match.distance)),
                 ]
-                # Disambiguation
-                disambig = disambig_string(match.info)
-                if disambig:
-                    line.append(ui.colorize('text_highlight_minor',
-                                            '(%s)' % disambig))
 
                 # Penalties.
                 penalties = penalty_string(match.distance, 6)
                 if penalties:
                     line.append(penalties)
+
+                # Disambiguation
+                disambig = disambig_string(match.info)
+                if disambig:
+                    line.append(ui.colorize('text_highlight_minor',
+                                            '(%s)' % disambig))
 
                 print_(' '.join(line))
 
@@ -1083,7 +1084,7 @@ def update_items(lib, query, album, move, pretend, fields):
             try:
                 item.read()
             except library.ReadError as exc:
-                log.error(u'error reading {0}: {1}', item.path, exc)
+                log.error('error reading {0}: {1}', item.path, exc)
                 continue
 
             # Special-case album artist when it matches track artist. (Hacky
