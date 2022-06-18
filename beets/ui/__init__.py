@@ -16,28 +16,27 @@
 interface. To invoke the CLI, just call beets.ui.main(). The actual
 CLI commands are implemented in the ui.commands module.
 """
-import optparse
-import textwrap
-import sys
-from difflib import SequenceMatcher
-import sqlite3
 import errno
-import re
-import struct
-import traceback
+import logging
+import optparse
 import os
+import re
+import sqlite3
+import struct
+import sys
+import textwrap
+import traceback
+from difflib import SequenceMatcher
 
-from beets import logging
-from beets import library
-from beets import plugins
-from beets import util
-from beets.util.functemplate import template
-from beets import config
-from beets.util import as_string
-from beets.autotag import mb
-from beets.dbcore import query as db_query
-from beets.dbcore import db
 import confuse
+from rich.logging import RichHandler
+
+from beets import config, library, plugins, util
+from beets.autotag import mb
+from beets.dbcore import db
+from beets.dbcore import query as db_query
+from beets.util import as_string
+from beets.util.functemplate import template
 
 # On Windows platforms, use colorama to support "ANSI" terminal colors.
 if sys.platform == 'win32':
@@ -51,7 +50,9 @@ if sys.platform == 'win32':
 
 log = logging.getLogger('beets')
 if not log.handlers:
-    log.addHandler(logging.StreamHandler())
+    handler = RichHandler(show_path=False, rich_tracebacks=True, keywords=["Sending event", "import"], markup=True)
+    handler.setFormatter(logging.Formatter("[b grey42]{name:<20}[/] {message}", datefmt="%T", style="{"))
+    log.addHandler(handler)
 log.propagate = False  # Don't propagate to root handler.
 
 
@@ -542,7 +543,8 @@ def _colordiff(a, b, highlight='text_highlight',
         a = util.displayable_path(a)
         b = util.displayable_path(b)
 
-    a_out, b_out = []
+    a_out = []
+    b_out = []
     matcher = SequenceMatcher(lambda x: x not in '|\n', a=a, b=b, autojunk=False)
     for op, a_start, a_end, b_start, b_end in matcher.get_opcodes():
         old_chunk = a[a_start:a_end]
@@ -552,8 +554,8 @@ def _colordiff(a, b, highlight='text_highlight',
         if op in {'insert', 'replace'}:
             new_chunk = colorize('text_success', new_chunk)
 
-        a_out += old_chunk
-        b_out += new_chunk
+        a_out.append(old_chunk)
+        b_out.append(new_chunk)
 
     return ''.join(a_out), ''.join(b_out)
 

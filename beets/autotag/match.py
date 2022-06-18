@@ -36,7 +36,7 @@ from beets.util.enumeration import OrderedEnum
 VA_ARTISTS = ('', 'various artists', 'various', 'va', 'unknown')
 
 # Global logger.
-log = logging.getLogger('beets')
+log = logging.getLogger(__name__)
 
 
 # Recommendation enumeration.

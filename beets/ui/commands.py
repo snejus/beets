@@ -44,7 +44,7 @@ from beets.util import syspath, normpath, ancestry, displayable_path, \
     MoveOperation
 from beets import library
 from beets import config
-from beets import logging
+import logging
 
 from . import _store_dict
 from rich.console import Console
@@ -52,11 +52,11 @@ from rich.console import Console
 JSONDict = Dict[str, Any]
 
 console = Console(force_terminal=True, force_interactive=True)
-VARIOUS_ARTISTS = u'Various Artists'
+VARIOUS_ARTISTS = 'Various Artists'
 PromptChoice = namedtuple('PromptChoice', ['short', 'long', 'callback'])
 
 # Global logger.
-log = logging.getLogger('beets')
+log = logging.getLogger(__name__)
 
 # The list of default subcommands. This is populated with Subcommand
 # objects that can be fed to a SubcommandsOptionParser.

@@ -39,7 +39,7 @@ import beets
 # `memoryview` tells it that we actually mean non-text data.
 BLOB_TYPE = memoryview
 
-log = logging.getLogger('beets')
+log = logging.getLogger(__name__)
 
 
 # Library-specific query types.

@@ -39,7 +39,6 @@ from beets.util import pipeline, sorted_walk, ancestry, MoveOperation
 from beets.util import syspath, normpath, displayable_path
 from enum import Enum
 import mediafile
-from rich import print
 
 action = Enum('action',
               ['SKIP', 'ASIS', 'TRACKS', 'APPLY', 'ALBUMS', 'RETAG'])
@@ -53,7 +52,7 @@ PROGRESS_KEY = 'tagprogress'
 HISTORY_KEY = 'taghistory'
 
 # Global logger.
-log = logging.getLogger('beets')
+log = logging.getLogger(__name__)
 
 
 class ImportAbort(Exception):

@@ -26,7 +26,7 @@ from beets.autotag import mb
 from jellyfish import levenshtein_distance
 from unidecode import unidecode
 
-log = logging.getLogger('beets')
+log = logging.getLogger(__name__)
 
 # The name of the type for patterns in re changed in Python 3.7.
 try:

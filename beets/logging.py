@@ -21,8 +21,7 @@ that when getLogger(name) instantiates a logger that logger uses
 """
 
 
-from copy import copy
-from logging import *  # noqa
+import logging
 import subprocess
 import threading
 
@@ -66,35 +65,23 @@ def logsafe(val):
         return val
 
 
-class StrFormatLogger(Logger):
+class StrFormatLogRecord(logging.LogRecord):
     """A version of `Logger` that uses `str.format`-style formatting
     instead of %-style formatting.
     """
 
-    class _LogMessage:
-        def __init__(self, msg, args, kwargs):
-            self.msg = msg
-            self.args = args
-            self.kwargs = kwargs
-
-        def __str__(self):
-            args = [logsafe(a) for a in self.args]
-            kwargs = {k: logsafe(v) for (k, v) in self.kwargs.items()}
-            return self.msg.format(*args, **kwargs)
-
-    def _log(self, level, msg, args, exc_info=None, extra=None, **kwargs):
-        """Log msg.format(*args, **kwargs)"""
-        m = self._LogMessage(msg, args, kwargs)
-        return super()._log(level, m, (), exc_info, extra)
+    def getMessage(self):
+        args = [logsafe(a) for a in self.args]
+        return self.msg.format(*args)
 
 
-class ThreadLocalLevelLogger(Logger):
+class ThreadLocalLevelLogger(logging.Logger):
     """A version of `Logger` whose level is thread-local instead of shared.
     """
 
-    def __init__(self, name, level=NOTSET):
+    def __init__(self, name, level=logging.NOTSET):
         self._thread_level = threading.local()
-        self.default_level = NOTSET
+        self.default_level = logging.NOTSET
         super().__init__(name, level)
 
     @property
@@ -117,16 +104,15 @@ class ThreadLocalLevelLogger(Logger):
         self.setLevel(level)
 
 
-class BeetsLogger(ThreadLocalLevelLogger, StrFormatLogger):
+class BeetsLogger(ThreadLocalLevelLogger):
     pass
 
 
-my_manager = copy(Logger.manager)
-my_manager.loggerClass = BeetsLogger
-
+logging.setLoggerClass(BeetsLogger)
+logging.setLogRecordFactory(StrFormatLogRecord)
 
 def getLogger(name=None):  # noqa
     if name:
-        return my_manager.getLogger(name)
+        return logging.getLogger(name)
     else:
-        return Logger.root
+        return logging.Logger.root

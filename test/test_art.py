@@ -35,7 +35,7 @@ from beets.util.artresizer import ArtResizer
 import confuse
 
 
-logger = logging.getLogger('beets.test_art')
+logger = logging.getLogger(__name__)
 
 
 class Settings():
