@@ -8,6 +8,10 @@ Changelog goes here!
 
 New features:
 
+* :doc:`/plugins/spotify`: The plugin now provides an additional command
+  `spotifysync` that allows getting track popularity and audio features
+  information from Spotify.
+  :bug:`4094`
 * :doc:`/plugins/spotify`: The plugin now records Spotify-specific IDs in the
   `spotify_album_id`, `spotify_artist_id`, and `spotify_track_id` fields.
   :bug:`4348`
@@ -28,6 +32,11 @@ New features:
 
 Bug fixes:
 
+* We now respect the Spotify API's rate limiting, which avoids crashing when the API reports code 429 (too many requests).
+  :bug:`4370`
+* Fix implicit paths OR queries (e.g. ``beet list /path/ , /other-path/``)
+  which have previously been returning the entire library.
+  :bug:`1865`
 * The Discogs release ID is now populated correctly to the discogs_albumid
   field again (it was no longer working after Discogs changed their release URL
   format).
