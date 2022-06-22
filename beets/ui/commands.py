@@ -238,6 +238,23 @@ def print_match_info(match: t.Union[hooks.AlbumMatch, hooks.TrackMatch]) -> None
     print_(' '.join(info))
 
 
+def get_diff(overwrite_fields, field, item_field, new, old) -> str:
+    after = new.get(field)
+    if after is None and field not in overwrite_fields:
+        return ""
+
+    after = str(after or "")
+    before = old.get(item_field)
+    if field == "va":
+        before = {1: True, 0: False}.get(before, before)
+    elif field == "length":
+        before = strftime("%M:%S", localtime(floor(float(before or 0))))
+        after = strftime("%M:%S", localtime(floor(float(after or 0))))
+    before = str(before or "")
+
+    return make_difftext(before, after) if before != after else ""
+
+
 keymap = {
     "album_id": "mb_albumid",
     "artist_id": "mb_artistid",
@@ -251,23 +268,6 @@ keymap = {
     "releasegroup_id": "mb_releasegroupid",
     "release_track_id": "mb_releasetrackid",
 }
-
-
-def get_diff(overwrite_fields, field, new, old) -> str:
-    after = new.get(field)
-    if after is None and field not in overwrite_fields:
-        return ""
-
-    after = str(after or "")
-    before = old.get(keymap.get(field, field) or "")
-    if field == "va":
-        before = {1: True, 0: False}.get(before, before)
-    elif field == "length":
-        before = strftime("%M:%S", localtime(floor(float(before or 0))))
-        after = strftime("%M:%S", localtime(floor(float(after or 0))))
-    before = str(before or "")
-
-    return make_difftext(before, after) if before != after else ""
 
 
 def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> None:
@@ -306,7 +306,7 @@ def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> Non
     new["albumartist"] = new["artist"]
 
     print_match_info(match)
-    show_item_change(old, new, {"tracks", "artist", "data_url"})
+    show_item_change(old, new, {"tracks", "data_url"})
 
     fields = ["index", "artist", "title", "length"]
     tracks_table = new_table(
@@ -322,7 +322,7 @@ def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> Non
     def _make_track_diff(old: library.Item, new: hooks.TrackInfo) -> JSONDict:
         diffs: JSONDict = dict(zip(fields, map(lambda x: new.get(x) or "", fields)))
         for field in sorted(set(list(new) + list(old)) - skip):
-            diff = get_diff(ow, field, new, old) or new.get(field)
+            diff = get_diff(ow, field, keymap.get(field, field), new, old) or new.get(field)
             if diff:
                 diffs[field] = diff
                 if field not in fields:
@@ -368,10 +368,21 @@ def show_item_change(
     new_meta = new_table()  # for all new metadata
     upd_meta = new_table()  # for changes only
 
-    ow = set(config["overwrite_null"]["album" if new.get("album_id") else "track"].as_str_seq())
+    item_type = "album" if new.get("album_id") else "track"
+    ow = set(config["overwrite_null"][item_type].as_str_seq())
+    this_keymap = {**keymap}
+    console.print("In old but not new", sorted(set(old) - set(new)))
+    console.print("In new but not old", sorted(set(new) - set(old)))
+    if item_type == "album":
+        this_keymap.update(
+            artist="albumartist",
+            artist_id="mb_albumartistid",
+            artist_sort="albumartist_sort",
+            artist_credit="albumartist_credit",
+        )
     for field in sorted(filter(lambda x: x not in skip, new.keys())):
         new_meta.add_row(wrap(field, "b"), str(new.get(field)))
-        diff = get_diff(ow, field, new, old)
+        diff = get_diff(ow, field, this_keymap.get(field, field), new, old)
         if diff:
             upd_meta.add_row(wrap(field, "b"), diff)
 
