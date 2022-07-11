@@ -371,8 +371,8 @@ def show_item_change(
     item_type = "album" if new.get("album_id") else "track"
     ow = set(config["overwrite_null"][item_type].as_str_seq())
     this_keymap = {**keymap}
-    console.print("In old but not new", sorted(set(old) - set(new)))
-    console.print("In new but not old", sorted(set(new) - set(old)))
+    # console.print("In old but not new", sorted(set(old) - set(new)))
+    # console.print("In new but not old", sorted(set(new) - set(old)))
     if item_type == "album":
         this_keymap.update(
             artist="albumartist",
