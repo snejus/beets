@@ -354,7 +354,6 @@ class DiscogsPlugin(BeetsPlugin):
         formats = result.data.get("formats") or []
         albumstatus = "Official"
         albumtype = "album"
-        # print(f"{artist} - {album}")
         if formats:
             _format = formats[0]
             media = (_format.get("name") or "").replace("File", "Digital Media")
@@ -414,6 +413,7 @@ class DiscogsPlugin(BeetsPlugin):
             album_id=album_id,
             artist=artist,
             artist_id=artist_id,
+            artist_sort=result.data.get("artists_sort"),
             tracks=tracks,
             albumstatus=albumstatus,
             albumtype=albumtype,
