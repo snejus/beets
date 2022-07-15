@@ -170,10 +170,7 @@ class DiscogsPlugin(BeetsPlugin):
                             'artist tags.')
             return ()
 
-        if va_likely:
-            query = album
-        else:
-            query = "%s %s" % (artist, album)
+        query = "%s %s" % (artist, album)
         albums = ()
         try:
             self._log.debug("Searching for '{}'", query)
@@ -236,7 +233,7 @@ class DiscogsPlugin(BeetsPlugin):
         except DiscogsAPIError as e:
             if e.status_code != 404:
                 self._log.info(
-                    u"API Error: {0} (query: {1})", e, result.data["resource_url"]
+                    "API Error: {0} (query: {1})", e, result.data["resource_url"]
                 )
                 if e.status_code == 401:
                     self.reset_auth()
