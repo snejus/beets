@@ -50,7 +50,7 @@ if sys.platform == 'win32':
 
 log = logging.getLogger('beets')
 if not log.handlers:
-    handler = RichHandler(show_path=False, rich_tracebacks=True, keywords=["Sending event", "import"], markup=True)
+    handler = RichHandler(show_path=False, show_level=False, omit_repeated_times=False, rich_tracebacks=True, keywords=["Sending event", "import"], markup=True)
     handler.setFormatter(logging.Formatter("[b grey42]{name:<20}[/] {message}", datefmt="%T", style="{"))
     log.addHandler(handler)
 log.propagate = False  # Don't propagate to root handler.
