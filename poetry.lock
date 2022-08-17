@@ -668,7 +668,7 @@ sqlparse = "^0.4.2"
 [package.source]
 type = "git"
 url = "https://github.com/snejus/rich-tables.git"
-reference = "dev"
+reference = "main"
 resolved_reference = "ecd7e7b10da0546f416533a4a56f52faf8a0fc65"
 
 [[package]]
@@ -820,7 +820,7 @@ testing = ["pytest (>=4.6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytes
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.6.3"
-content-hash = "db2272ed548c4a2dc002e232ba0964870f03b2f7a663ecbf6502239b58d3a886"
+content-hash = "98670fb3807087fc22f1e45b2196bbf56169eb64d16f072ecc5ad5cbd19533db"
 
 [metadata.files]
 atomicwrites = [

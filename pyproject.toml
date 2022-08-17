@@ -24,7 +24,7 @@ unidecode = "*"
 rich = ">=10.6.0"
 jellyfish = "^0.8.2"
 munkres = "^1.1.4"
-rich-tables = { git = "https://github.com/snejus/rich-tables.git", branch = "dev" }
+rich-tables = { git = "https://github.com/snejus/rich-tables.git", branch = "main" }
 
 [tool.poetry.dev-dependencies]
 flake8 = "*"
