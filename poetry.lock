@@ -359,7 +359,7 @@ signedtoken = ["cryptography (>=3.0.0)", "pyjwt (>=2.0.0,<3)"]
 name = "ordered-set"
 version = "4.0.2"
 description = "A set that remembers its order, and allows looking up its items by their index in that order."
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">=3.5"
 
@@ -421,7 +421,7 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 name = "pycountry"
 version = "22.3.5"
 description = "ISO country, subdivision, language, currency and script definitions and their translations"
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">=3.6, <4"
 
@@ -529,7 +529,7 @@ termcolor = ">=1.1.0"
 name = "python-dateutil"
 version = "2.8.2"
 description = "Extensions to the standard Python datetime module"
-category = "dev"
+category = "main"
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
 
@@ -627,23 +627,23 @@ tests = ["coverage (>=3.7.1,<6.0.0)", "pytest-cov", "pytest-localserver", "flake
 name = "rgbxy"
 version = "0.5"
 description = "RGB conversion tool written in Python for Philips Hue."
-category = "dev"
+category = "main"
 optional = false
 python-versions = "*"
 
 [[package]]
 name = "rich"
-version = "12.1.0"
+version = "12.5.1"
 description = "Render rich text, tables, progress bars, syntax highlighting, markdown and more to the terminal"
 category = "main"
 optional = false
-python-versions = ">=3.6.2,<4.0.0"
+python-versions = ">=3.6.3,<4.0.0"
 
 [package.dependencies]
 commonmark = ">=0.9.0,<0.10.0"
 dataclasses = {version = ">=0.7,<0.9", markers = "python_version < \"3.7\""}
 pygments = ">=2.6.0,<3.0.0"
-typing-extensions = {version = ">=3.7.4,<5.0", markers = "python_version < \"3.9\""}
+typing-extensions = {version = ">=4.0.0,<5.0", markers = "python_version < \"3.9\""}
 
 [package.extras]
 jupyter = ["ipywidgets (>=7.5.1,<8.0.0)"]
@@ -652,21 +652,24 @@ jupyter = ["ipywidgets (>=7.5.1,<8.0.0)"]
 name = "rich-tables"
 version = "0.1.0"
 description = "Ready-made rich tables for various purposes"
-category = "dev"
+category = "main"
 optional = false
-python-versions = ">=3.6.2,<4"
-develop = true
+python-versions = ">=3.6.3,<4"
+develop = false
 
 [package.dependencies]
 ordered-set = ">=4.0.2"
 pycountry = ">=20.7.3"
 python-dateutil = ">=2.8.2"
 rgbxy = ">=0.5"
-rich = ">=11.0.0"
+rich = ">=12.3.0"
+sqlparse = "^0.4.2"
 
 [package.source]
-type = "directory"
-url = "../rich-tables"
+type = "git"
+url = "https://github.com/snejus/rich-tables.git"
+reference = "dev"
+resolved_reference = "ecd7e7b10da0546f416533a4a56f52faf8a0fc65"
 
 [[package]]
 name = "six"
@@ -683,6 +686,14 @@ description = "A modern CSS selector implementation for Beautiful Soup."
 category = "dev"
 optional = false
 python-versions = ">=3.6"
+
+[[package]]
+name = "sqlparse"
+version = "0.4.2"
+description = "A non-validating SQL parser."
+category = "main"
+optional = false
+python-versions = ">=3.5"
 
 [[package]]
 name = "termcolor"
@@ -808,8 +819,8 @@ testing = ["pytest (>=4.6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytes
 
 [metadata]
 lock-version = "1.1"
-python-versions = "^3.6.2"
-content-hash = "b4ea0db3b08472b07554ece2284e601b00eb52d38bb5b62a09352bff97b142b4"
+python-versions = "^3.6.3"
+content-hash = "db2272ed548c4a2dc002e232ba0964870f03b2f7a663ecbf6502239b58d3a886"
 
 [metadata.files]
 atomicwrites = [
@@ -1261,8 +1272,8 @@ rgbxy = [
     {file = "rgbxy-0.5.tar.gz", hash = "sha256:78a099f5f8d30c82e95f1941850bc49e42649d6beac8f96e3a301e97437d6d30"},
 ]
 rich = [
-    {file = "rich-12.1.0-py3-none-any.whl", hash = "sha256:b60ff99f4ff7e3d1d37444dee2b22fdd941c622dbc37841823ec1ce7f058b263"},
-    {file = "rich-12.1.0.tar.gz", hash = "sha256:198ae15807a7c1bf84ceabf662e902731bf8f874f9e775e2289cab02bb6a4e30"},
+    {file = "rich-12.5.1-py3-none-any.whl", hash = "sha256:2eb4e6894cde1e017976d2975ac210ef515d7548bc595ba20e195fb9628acdeb"},
+    {file = "rich-12.5.1.tar.gz", hash = "sha256:63a5c5ce3673d3d5fbbf23cd87e11ab84b6b451436f1b7f19ec54b6bc36ed7ca"},
 ]
 rich-tables = []
 six = [
@@ -1272,6 +1283,10 @@ six = [
 soupsieve = [
     {file = "soupsieve-2.3.2.post1-py3-none-any.whl", hash = "sha256:3b2503d3c7084a42b1ebd08116e5f81aadfaea95863628c80a3b774a11b7c759"},
     {file = "soupsieve-2.3.2.post1.tar.gz", hash = "sha256:fc53893b3da2c33de295667a0e19f078c14bf86544af307354de5fcf12a3f30d"},
+]
+sqlparse = [
+    {file = "sqlparse-0.4.2-py3-none-any.whl", hash = "sha256:48719e356bb8b42991bdbb1e8b83223757b93789c00910a616a071910ca4a64d"},
+    {file = "sqlparse-0.4.2.tar.gz", hash = "sha256:0c00730c74263a94e5a9919ade150dfc3b19c574389985446148402998287dae"},
 ]
 termcolor = [
     {file = "termcolor-1.1.0.tar.gz", hash = "sha256:1d6d69ce66211143803fbc56652b41d73b4a400a2891d7bf7a1cdf4c02de613b"},
