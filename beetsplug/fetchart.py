@@ -366,8 +366,6 @@ class CoverArtArchive(RemoteArtSource):
         """Return the Cover Art Archive and Cover Art Archive release group URLs
         using album MusicBrainz release ID and release group ID.
         """
-        print(vars(album))
-
         def get_image_urls(url, size_suffix=None):
             try:
                 response = self.request(url)
@@ -421,8 +419,6 @@ class URLFetch(RemoteArtSource):
     def get(self, album, plugin, paths):
         """Generate URLs using Amazon ID (ASIN) string.
         """
-        print(album)
-        print(album.artpath)
         if album.artpath:
             url=album.artpath.decode().replace(getenv("HOME") + "/https:", "https:/")
             yield self._candidate(url=url, match=Candidate.MATCH_EXACT)
