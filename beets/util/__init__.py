@@ -24,11 +24,13 @@ import shutil
 import fnmatch
 import functools
 from collections import Counter, namedtuple
+from functools import reduce
 from multiprocessing.pool import ThreadPool
 import traceback
 import subprocess
 import platform
 import shlex
+from beets import config
 from beets.util import hidden
 from unidecode import unidecode
 from enum import Enum
@@ -1110,3 +1112,17 @@ def decode_commandline_path(path):
         return path.decode(_fsencoding())
     else:
         return path.decode(arg_encoding(), 'surrogateescape')
+
+
+def colorize(color_name, text):
+    """Colorize text if colored output is enabled. (Like _colorize but
+    conditional.)
+    """
+    if not config['ui']['color'] or 'NO_COLOR' in os.environ.keys():
+        return text
+
+    colors = config['ui']['colors']
+    color = reduce(lambda color, name: color[name], color_name.split("."), colors)
+    return f"[{color.as_str()}]{text}[/]"
+
+

@@ -14,15 +14,14 @@
 
 """Glue between metadata sources and the matching logic."""
 
-from collections import namedtuple
 from functools import total_ordering
 import re
+import typing as t
+from dataclasses import dataclass
 
-from beets import logging
-from beets import plugins
-from beets import config
-from beets.util import as_string
+from beets import config, logging, plugins
 from beets.autotag import mb
+from beets.util import as_string, colorize
 from jellyfish import levenshtein_distance
 from unidecode import unidecode
 
@@ -115,6 +114,10 @@ class AlbumInfo(AttrDict):
         self.discogs_artistid = discogs_artistid
         self.update(kwargs)
 
+    @property
+    def name(self):
+        return self.album
+
     # Work around a bug in python-musicbrainz-ngs that causes some
     # strings to be bytes rather than Unicode.
     # https://github.com/alastair/python-musicbrainz-ngs/issues/85
@@ -202,6 +205,10 @@ class TrackInfo(AttrDict):
             value = getattr(self, fld)
             if isinstance(value, bytes):
                 setattr(self, fld, value.decode(codec, 'ignore'))
+
+    @property
+    def name(self):
+        return self.title
 
     def copy(self):
         dupe = TrackInfo()
@@ -340,6 +347,13 @@ class Distance:
         for key in weights_view.keys():
             weights[key] = weights_view[key].as_number()
         return weights
+
+    @property
+    def penalties(self) -> t.List[str]:
+        return [
+            k.replace("album_", "").replace("track_", "").replace("_", " ")
+            for k in self._penalties
+        ]
 
     # Access the components and their aggregates.
 
@@ -541,14 +555,49 @@ class Distance:
 
 
 # Structures that compose all the information for a candidate match.
+@dataclass
+class Match:
+    distance: Distance
+    info: AttrDict
 
-AlbumMatch = namedtuple('AlbumMatch', ['distance', 'info', 'mapping',
-                                       'extra_items', 'extra_tracks'])
+    @property
+    def dist(self):
+        if self.distance <= config["match"]["strong_rec_thresh"].as_number():
+            color = "text_success"
+        elif self.distance <= config["match"]["medium_rec_thresh"].as_number():
+            color = "text_warning"
+        else:
+            color = "text_error"
+        return colorize(color, "%.1f%%" % ((1 - self.distance) * 100))
 
-TrackMatch = namedtuple('TrackMatch', ['distance', 'info'])
+    @property
+    def name(self):
+        return f"{self.info.artist} - {self.info.name}"
+
+    @property
+    def penalty(self, limit: int = 0) -> t.Optional[str]:
+        """Returns a colorized string that indicates all the penalties
+        applied to a distance object.
+        """
+        penalties = self.distance.penalties
+        if penalties:
+            if limit and len(penalties) > limit:
+                penalties = penalties[:limit] + ["..."]
+            return colorize("text_warning", f"({', '.join(penalties)})")
+        return None
 
 
-# Aggregation of sources.
+@dataclass
+class TrackMatch(Match):
+    pass
+
+
+@dataclass
+class AlbumMatch(Match):
+    mapping: dict
+    extra_items: set
+    extra_tracks: set
+
 
 def album_for_mbid(release_id):
     """Get an AlbumInfo object for a MusicBrainz release ID. Return None

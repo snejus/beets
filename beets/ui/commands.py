@@ -155,87 +155,21 @@ class HelpCommand(ui.Subcommand):
 default_commands.append(HelpCommand())
 
 
-# import: Autotagger and importer.
-
-# Importer utilities and support.
-
-def disambig_string(info: t.Union[hooks.AlbumInfo, hooks.TrackInfo]) -> t.Optional[str]:
+def disambig_data(match: hooks.Match) -> t.Optional[str]:
     """Generate a string for an AlbumInfo or TrackInfo object that
     provides context that helps disambiguate similar-looking albums and
     tracks.
     """
-    disambig = [info.data_source]
-
-    if isinstance(info, hooks.AlbumInfo):
-        if info.year:
-            disambig.append(str(info.year))
-        if info.country:
-            disambig.append(info.country)
-        if info.label:
-            disambig.append(info.label)
-        if info.albumtype:
-            disambig.append(info.albumtype)
-        if info.albumstatus:
-            disambig.append(info.albumstatus)
-        if info.media:
-            if info.mediums and info.mediums > 1:
-                disambig.append('{}x{}'.format(
-                    info.mediums, info.media
-                ))
-            else:
-                disambig.append(info.media)
-        if info.catalognum:
-            disambig.append(info.catalognum)
-        if info.albumdisambig:
-            disambig.append(info.albumdisambig)
-
-    if disambig:
-        return ', '.join(disambig)
-    return None
-
-
-def dist_string(dist: hooks.Distance) -> str:
-    """Formats a distance (a float) as a colorized similarity percentage
-    string.
-    """
-    out = '%.1f%%' % ((1 - dist) * 100)
-    if dist <= config['match']['strong_rec_thresh'].as_number():
-        out = ui.colorize('text_success', out)
-    elif dist <= config['match']['medium_rec_thresh'].as_number():
-        out = ui.colorize('text_warning', out)
-    else:
-        out = ui.colorize('text_error', out)
-    return out
-
-
-def penalty_string(distance, limit=None):
-    # type: (hooks.Distance, t.Optional[int]) -> t.Optional[str]
-    """Returns a colorized string that indicates all the penalties
-    applied to a distance object.
-    """
-    penalties = []
-    for key in distance.keys():
-        key = key.replace('album_', '')
-        key = key.replace('track_', '')
-        key = key.replace('_', ' ')
-        penalties.append(key)
-    if penalties:
-        if limit and len(penalties) > limit:
-            penalties = penalties[:limit] + ['...']
-        return ui.colorize('text_warning', "(" + ', '.join(penalties) + ")")
-    return None
-
-
-def print_match_info(match: t.Union[hooks.AlbumMatch, hooks.TrackMatch]) -> None:
-    info = []
-    info.append('(Similarity: {})'.format(dist_string(match.distance)))
-    disambig = disambig_string(match.info)
-    if disambig:
-        info.append(ui.colorize('text_highlight_minor', '(' + disambig + ')'))
-    penalties = penalty_string(match.distance)
-    if penalties:
-        info.append(penalties)
-    print_(' '.join(info))
+    disambig_fields = config["disambig_fields"].as_str_seq()
+    attrs_map = {
+        "name": match.name,
+        "distance": match.dist,
+        "penalty": match.penalty,
+        "dist_count": round(float(1 - match.distance), 2),
+        "dist": round(float(1 - match.distance), 2),
+        **{k: str(v) for k, v in match.info.items()},
+    }
+    return {k: attrs_map.get(k) for k in disambig_fields}
 
 
 def get_diff(overwrite_fields, field, item_field, new, old) -> str:
@@ -532,30 +466,12 @@ def choose_candidate(candidates, singleton, rec, cur_artist=None,
                 item.title if singleton else cur_album,
             ))
 
-            print_('Candidates:')
-            for i, match in enumerate(candidates):
-                # Index, metadata, and distance.
-                line = [
-                    '{}.'.format(i + 1),
-                    '{} - {}'.format(
-                        match.info.artist,
-                        match.info.title if singleton else match.info.album,
-                    ),
-                    '({})'.format(dist_string(match.distance)),
-                ]
-
-                # Penalties.
-                penalties = penalty_string(match.distance, 6)
-                if penalties:
-                    line.append(penalties)
-
-                # Disambiguation
-                disambig = disambig_string(match.info)
-                if disambig:
-                    line.append(ui.colorize('text_highlight_minor',
-                                            '(%s)' % disambig))
-
-                print_(' '.join(line))
+            candidata = [
+                {"id": str(i), **disambig_data(m)} for i, m in enumerate(candidates, 1)
+            ]
+            console.print("Candidates")
+            console.print(flexitable(candidata))
+            console.print("")
 
             # Ask the user for a choice.
             sel = ui.input_options(choice_opts,
