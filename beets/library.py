@@ -553,14 +553,13 @@ class Item(LibModel):
     # Any kind of field (fixed, flexible, and computed) may be a media
     # field. Only these fields are read from disk in `read` and written in
     # `write`.
-    _media_fields = set(MediaFile.readable_fields()) \
-        .intersection(_fields.keys())
+    _media_fields = set(MediaFile.readable_fields()) & _fields.keys()
 
     # Set of item fields that are backed by *writable* `MediaFile` tag
     # fields.
     # This excludes fields that represent audio data, such as `bitrate` or
     # `length`.
-    _media_tag_fields = set(MediaFile.fields()).intersection(_fields.keys())
+    _media_tag_fields = set(MediaFile.fields()) & _fields.keys()
 
     _formatter = FormattedItemMapping
 

@@ -572,7 +572,7 @@ class Match:
 
     @property
     def name(self):
-        return f"{self.info.artist} - {self.info.name}"
+        return self.info.name
 
     @property
     def penalty(self, limit: int = 0) -> t.Optional[str]:
