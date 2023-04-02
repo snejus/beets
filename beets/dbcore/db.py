@@ -15,20 +15,26 @@
 """The central Model and Database constructs for DBCore.
 """
 
-import time
+import contextlib
 import os
 import re
-from collections import defaultdict
-import threading
 import sqlite3
-import contextlib
+import threading
+import time
+from collections import defaultdict
+from collections.abc import Mapping
+from itertools import chain
+
+from rich import print
+from rich_tables.sql import sql_table
+from unidecode import unidecode
 
 import beets
-from beets.util import functemplate
-from beets.util import py3_path
 from beets.dbcore import types
 from .query import MatchQuery, NullSort, TrueQuery
-from collections.abc import Mapping
+from beets.util import functemplate, py3_path
+
+DEBUG = 0
 
 
 class DBAccessError(Exception):
@@ -649,8 +655,7 @@ class Results:
     constructs LibModel objects that reflect database rows.
     """
 
-    def __init__(self, model_class, rows, db, flex_rows,
-                 query=None, sort=None):
+    def __init__(self, model_class, rows, db, flex_rows, sort=None):
         """Create a result set that will construct objects of type
         `model_class`.
 
@@ -658,9 +663,7 @@ class Results:
         constructed. `rows` is a query result: a list of mappings. The
         new objects will be associated with the database `db`.
 
-        If `query` is provided, it is used as a predicate to filter the
-        results for a "slow query" that cannot be evaluated by the
-        database directly. If `sort` is provided, it is used to sort the
+        If `sort` is provided, it is used to sort the
         full list of results before returning. This means it is a "slow
         sort" and all objects must be built before returning the first
         one.
@@ -668,7 +671,6 @@ class Results:
         self.model_class = model_class
         self.rows = rows
         self.db = db
-        self.query = query
         self.sort = sort
         self.flex_rows = flex_rows
 
@@ -711,11 +713,10 @@ class Results:
                     obj = self._make_model(row, flex_attrs.get(row['id'], {}))
                     # If there is a slow-query predicate, ensurer that the
                     # object passes it.
-                    if not self.query or self.query.match(obj):
-                        self._objects.append(obj)
-                        index += 1
-                        yield obj
-                        break
+                    self._objects.append(obj)
+                    index += 1
+                    yield obj
+                    break
 
     def __iter__(self):
         """Construct and generate Model objects for all matching
@@ -759,16 +760,8 @@ class Results:
         if not self._rows:
             # Fully materialized. Just count the objects.
             return len(self._objects)
-
-        elif self.query:
-            # A slow query. Fall back to testing every object.
-            count = 0
-            for obj in self:
-                count += 1
-            return count
-
         else:
-            # A fast query. Just count the rows.
+            # Just count the rows.
             return self._row_count
 
     def __nonzero__(self):
@@ -957,6 +950,7 @@ class Database:
             py3_path(self.path), timeout=self.timeout
         )
 
+        self.add_functions(conn)
         if self.supports_extensions:
             conn.enable_load_extension(True)
 
@@ -975,6 +969,15 @@ class Database:
         """
         with self._shared_map_lock:
             self._connections.clear()
+
+    def add_functions(self, conn):
+        def regexp(value, pattern):
+            if isinstance(value, bytes):
+                value = value.decode()
+            return re.search(pattern, str(value)) is not None
+
+        conn.create_function("regexp", 2, regexp)
+        conn.create_function("unidecode", 1, unidecode)
 
     @contextlib.contextmanager
     def _tx_stack(self):
@@ -1058,6 +1061,44 @@ class Database:
                 """.format(flex_table))
 
     # Querying.
+    @staticmethod
+    def print_query(sql, subvals):
+        """If debugging, replace placeholders and print the query."""
+        if not DEBUG:
+            return
+        topr = sql
+        for val in subvals:
+            topr = topr.replace("?", str(val), 1)
+        print(sql_table([{"sql": topr, "exclusive_time": 0}]))
+
+    def _get_matching_ids(self, model, where, subvals):
+        """Return ids of entities which match the given filter (`where` clause).
+        This function is called only if we filter by at least one flexible
+        attribute field.
+
+        Since we cannot tell which entity the flexible attributes belong to
+        (or even whether they exist), we must join the related entity and query
+        both flexible attribute tables.
+
+        Since these queries only returns IDs of entities _matching_ the filter,
+        they are quick regardless of whether the field is a model or a flexible
+        attribute, and how big is music library.
+        """
+        table = model._table
+        id_field = f"{table}.id"
+        join_tmpl = "LEFT JOIN {} ON {} = entity_id"
+        joins = [join_tmpl.format(model._flex_table, id_field)]
+        if table == "items":
+            joins.append(join_tmpl.format("album_attributes", "items.album_id"))
+
+        ids = set()
+        with self.transaction() as tx:
+            for join in joins:
+                sql = f"SELECT {id_field} FROM {table} {join} WHERE {where}"
+                self.print_query(sql, subvals)
+                ids.update(chain.from_iterable(tx.query(sql, subvals)))
+
+        return ids
 
     def _fetch(self, model_cls, query=None, sort=None):
         """Fetch the objects of type `model_cls` matching the given
@@ -1070,32 +1111,55 @@ class Database:
         where, subvals = query.clause()
         order_by = sort.order_clause()
 
-        sql = ("SELECT * FROM {} WHERE {} {}").format(
-            model_cls._table,
-            where or '1',
-            f"ORDER BY {order_by}" if order_by else '',
-        )
+        # self.print_query(where, subvals)
 
-        # Fetch flexible attributes for items matching the main query.
-        # Doing the per-item filtering in python is faster than issuing
-        # one query per item to sqlite.
-        flex_sql = ("""
-            SELECT * FROM {} WHERE entity_id IN
-                (SELECT id FROM {} WHERE {});
-            """.format(
-            model_cls._flex_table,
-            model_cls._table,
-            where or '1',
-        )
-        )
+        table = model_cls._table
+        _from = table
+
+        select_fields = [f"{table}.*"]
+        relation_fields = query.model_fields - set(model_cls._fields)
+        if relation_fields:
+            _from = "items LEFT JOIN albums ON items.album_id = albums.id"
+            select_fields += relation_fields
+
+        if query.flex_fields:
+            # prefetch IDs of entities that match a query which includes
+            # at least one flexible attribute
+            ids = self._get_matching_ids(model_cls, where, subvals)
+            where = f"{table}.id IN ({', '.join(map(str, ids))})"
+            subvals = []
+
+        sql = f"""
+        SELECT {', '.join(select_fields)}
+        FROM {_from}
+        WHERE {where}
+        """
+
+        if order_by:
+            # the sort field may exist in both 'items' and 'albums' tables
+            # (when they are joined), causing ambiguous column OperationalError
+            # if we try to order directly.
+            # Since the join is required only for filtering, we can filter in
+            # a subquery and order the result, which returns unique fields.
+            sql = f"SELECT * FROM ({sql}) ORDER BY {order_by}"
+
+        self.print_query(sql, subvals)
 
         with self.transaction() as tx:
             rows = tx.query(sql, subvals)
-            flex_rows = tx.query(flex_sql, subvals)
+        # Fetch flexible attributes for items matching the main query.
+        # Doing the per-item filtering in python is faster than issuing
+        # one query per item to sqlite.
+        flex_sql = "SELECT * FROM {} WHERE entity_id IN ({})".format(
+            model_cls._flex_table,
+            ", ".join((str(id) for id, *_ in rows))
+        )
+
+        with self.transaction() as tx:
+            flex_rows = tx.query(flex_sql)
 
         return Results(
             model_cls, rows, self, flex_rows,
-            None if where else query,  # Slow query component.
             sort if sort.is_slow() else None,  # Slow sort component.
         )
 

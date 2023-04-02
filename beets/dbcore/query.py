@@ -21,6 +21,8 @@ from beets import util
 from datetime import datetime, timedelta
 import unicodedata
 from functools import reduce
+from operator import or_
+from typing import Set
 
 
 class ParsingError(ValueError):
@@ -60,6 +62,14 @@ class Query:
     """An abstract class representing a query into the item database.
     """
 
+    @property
+    def model_fields(self) -> Set[str]:
+        return set()
+
+    @property
+    def flex_fields(self) -> Set[str]:
+        return set()
+
     def clause(self):
         """Generate an SQLite expression implementing the query.
 
@@ -98,6 +108,14 @@ class FieldQuery(Query):
         self.pattern = pattern
         self.fast = fast
 
+    @property
+    def model_fields(self) -> Set[str]:
+        return {self.field} if self.fast else set()
+
+    @property
+    def flex_fields(self) -> Set[str]:
+        return set() if self.fast else {self.field}
+
     def col_clause(self):
         return None, ()
 
@@ -105,8 +123,12 @@ class FieldQuery(Query):
         if self.fast:
             return self.col_clause()
         else:
-            # Matching a flexattr. This is a slow query.
-            return None, ()
+            actual_field = self.field
+            self.field = "value"
+            clause, pattern = self.col_clause()
+            clause = f"(key = ? AND {clause})"
+            self.field = actual_field
+            return clause, (actual_field, *pattern),
 
     @classmethod
     def value_match(cls, pattern, value):
@@ -230,6 +252,9 @@ class RegexpQuery(StringFieldQuery):
             raise InvalidQueryArgumentValueError(pattern,
                                                  "a regular expression",
                                                  format(exc))
+
+    def col_clause(self):
+        return f" regexp({self.field}, ?)", [self.pattern.pattern]
 
     @staticmethod
     def _normalize(s):
@@ -360,6 +385,14 @@ class CollectionQuery(Query):
     def __init__(self, subqueries=()):
         self.subqueries = subqueries
 
+    @property
+    def model_fields(self) -> Set[str]:
+        return reduce(or_, (q.model_fields for q in self.subqueries))
+
+    @property
+    def flex_fields(self) -> Set[str]:
+        return reduce(or_, (q.flex_fields for q in self.subqueries))
+
     # Act like a sequence.
 
     def __len__(self):
@@ -480,6 +513,14 @@ class NotQuery(Query):
 
     def __init__(self, subquery):
         self.subquery = subquery
+
+    @property
+    def model_fields(self) -> Set[str]:
+        return self.subquery.model_fields
+
+    @property
+    def flex_fields(self) -> Set[str]:
+        return self.subquery.model_fields
 
     def clause(self):
         clause, subvals = self.subquery.clause()
