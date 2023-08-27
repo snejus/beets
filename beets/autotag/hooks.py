@@ -13,6 +13,7 @@
 # included in all copies or substantial portions of the Software.
 
 """Glue between metadata sources and the matching logic."""
+from __future__ import annotations
 
 from functools import total_ordering
 import re
@@ -138,7 +139,7 @@ class AlbumInfo(AttrDict):
         for track in self.tracks:
             track.decode(codec)
 
-    def copy(self):
+    def copy(self) -> AlbumInfo:
         dupe = AlbumInfo([])
         dupe.update(self)
         dupe.tracks = [track.copy() for track in self.tracks]
@@ -210,7 +211,7 @@ class TrackInfo(AttrDict):
     def name(self):
         return self.title
 
-    def copy(self):
+    def copy(self) -> TrackInfo:
         dupe = TrackInfo()
         dupe.update(self)
         return dupe

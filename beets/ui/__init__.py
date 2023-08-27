@@ -27,6 +27,7 @@ import sys
 import textwrap
 import traceback
 from difflib import SequenceMatcher
+from typing import Iterable, Optional
 
 import confuse
 from beets import config, library, plugins, util
@@ -584,7 +585,12 @@ def _field_diff(field, old, old_fmt, new, new_fmt):
     # return '{0}{1}'.format(oldstr, newstr)
 
 
-def show_model_changes(new, old=None, fields=None, always=False):
+def show_model_changes(
+    new: db.Model,
+    old: Optional[db.Model] = None,
+    fields: Optional[Iterable[str]] = None,
+    always: bool = False,
+) -> bool:
     """Given a Model object, print a list of changes from its pristine
     version stored in the database. Return a boolean indicating whether
     any changes were found.

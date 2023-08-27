@@ -14,6 +14,7 @@
 
 """The central Model and Database constructs for DBCore.
 """
+from __future__ import annotations
 
 import contextlib
 import os
@@ -24,6 +25,7 @@ import time
 from collections import defaultdict
 from collections.abc import Mapping
 from itertools import chain
+from typing import Optional, Set, Type
 
 from rich import print
 from rich_tables.sql import sql_table
@@ -31,7 +33,7 @@ from unidecode import unidecode
 
 import beets
 from beets.dbcore import types
-from .query import MatchQuery, NullSort, TrueQuery
+from .query import MatchQuery, NullSort, TrueQuery, Query, Sort
 from beets.util import functemplate, py3_path
 
 DEBUG = 0
@@ -272,6 +274,11 @@ class Model:
     to the database.
     """
 
+    _db: Optional[Database]
+    _dirty: Set[str]
+    _values_fixed: LazyConvertDict
+    _values_flex: LazyConvertDict
+
     @classmethod
     def _getters(cls):
         """Return a mapping from field names to getter functions.
@@ -289,7 +296,7 @@ class Model:
 
     # Basic operation.
 
-    def __init__(self, db=None, **values):
+    def __init__(self, db: Optional[Database]=None, **values):
         """Create a new object with an optional Database association and
         initial field values.
         """
@@ -303,7 +310,7 @@ class Model:
         self.clear_dirty()
 
     @classmethod
-    def _awaken(cls, db=None, fixed_values={}, flex_values={}):
+    def _awaken(cls, db: Optional[Database]=None, fixed_values={}, flex_values={}):
         """Create an object with values drawn from the database.
 
         This is a performance optimization: the checks involved with
@@ -585,7 +592,7 @@ class Model:
                 (self.id,)
             )
 
-    def add(self, db=None):
+    def add(self, db: Database=None):
         """Add the object to the library database. This object must be
         associated with a database; you can provide one via the `db`
         parameter or use the currently associated database.
@@ -791,7 +798,7 @@ class Results:
         except StopIteration:
             raise IndexError(f'result index {n} out of range')
 
-    def get(self):
+    def get(self) -> Model:
         """Return the first matching object, or None if no objects
         match.
         """
@@ -1100,7 +1107,7 @@ class Database:
 
         return ids
 
-    def _fetch(self, model_cls, query=None, sort=None):
+    def _fetch(self, model_cls: Type[Model], query: Query=None, sort: Sort=None) -> Results:
         """Fetch the objects of type `model_cls` matching the given
         query. The query may be given as a string, string sequence, a
         Query object, or None (to fetch everything). `sort` is an
@@ -1163,7 +1170,7 @@ class Database:
             sort if sort.is_slow() else None,  # Slow sort component.
         )
 
-    def _get(self, model_cls, id):
+    def _get(self, model_cls: Type[Model], id: int) -> Model:
         """Get a Model object by its id or None if the id does not
         exist.
         """
