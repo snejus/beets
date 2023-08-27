@@ -23,7 +23,9 @@ New features:
   :bug:`4101`
 * Add the item fields ``bitrate_mode``, ``encoder_info`` and ``encoder_settings``.
 * Add query prefixes ``=`` and ``~``.
-* :doc:`/plugins/discogs`: Permit appending style to genre
+* A new configuration option, :ref:`duplicate_keys`, lets you change which
+  fields the beets importer uses to identify duplicates.
+  :bug:`1133` :bug:`4199`
 * :doc:`/plugins/convert`: Add a new `auto_keep` option that automatically
   converts files but keeps the *originals* in the library.
   :bug:`1840` :bug:`4302`
