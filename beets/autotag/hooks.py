@@ -13,18 +13,21 @@
 # included in all copies or substantial portions of the Software.
 
 """Glue between metadata sources and the matching logic."""
-from __future__ import annotations
-
 from functools import total_ordering
 import re
-import typing as t
+from copy import deepcopy
 from dataclasses import dataclass
+from typing import ClassVar, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 
 from beets import config, logging, plugins
 from beets.autotag import mb
 from beets.util import as_string, colorize
 from jellyfish import levenshtein_distance
 from unidecode import unidecode
+from typing_extensions import Self
+
+if TYPE_CHECKING:
+    from beets.library import Item
 
 log = logging.getLogger(__name__)
 
@@ -54,7 +57,33 @@ class AttrDict(dict):
         return id(self)
 
 
-class AlbumInfo(AttrDict):
+
+class Info(AttrDict):
+    name_attribute: ClassVar[str]
+    string_attributes: ClassVar[Tuple[str, ...]]
+    
+    @property
+    def name(self) -> str:
+        return getattr(self, self.name_attribute)
+
+
+    # Work around a bug in python-musicbrainz-ngs that causes some
+    # strings to be bytes rather than Unicode.
+    # https://github.com/alastair/python-musicbrainz-ngs/issues/85
+    def decode(self, codec='utf-8') -> None:
+        """Ensure that all string attributes on this object are decoded
+        to Unicode.
+        """
+        for fld in self.string_attributes:
+            value = getattr(self, fld)
+            if isinstance(value, bytes):
+                setattr(self, fld, value.decode(codec, 'ignore'))
+
+    def copy(self) -> Self:
+        return deepcopy(self)
+
+
+class AlbumInfo(Info):
     """Describes a canonical release that may be used to match a release
     in the library. Consists of these data members:
 
@@ -67,6 +96,13 @@ class AlbumInfo(AttrDict):
     ``mediums`` along with the fields up through ``tracks`` are required.
     The others are optional and may be None.
     """
+    name_attribute = 'album'
+    string_attributes = ('album', 'artist', 'albumtype', 'label', 'artist_sort',
+                         'catalognum', 'script', 'language', 'country', 'style',
+                         'genre', 'albumstatus', 'albumdisambig',
+                         'releasegroupdisambig', 'artist_credit',
+                         'media', 'discogs_albumid', 'discogs_labelid',
+                         'discogs_artistid')
 
     def __init__(self, tracks, album=None, album_id=None, artist=None,
                  artist_id=None, asin=None, albumtype=None, va=False,
@@ -115,38 +151,17 @@ class AlbumInfo(AttrDict):
         self.discogs_artistid = discogs_artistid
         self.update(kwargs)
 
-    @property
-    def name(self):
-        return self.album
-
-    # Work around a bug in python-musicbrainz-ngs that causes some
-    # strings to be bytes rather than Unicode.
-    # https://github.com/alastair/python-musicbrainz-ngs/issues/85
     def decode(self, codec='utf-8'):
         """Ensure that all string attributes on this object, and the
         constituent `TrackInfo` objects, are decoded to Unicode.
         """
-        for fld in ['album', 'artist', 'albumtype', 'label', 'artist_sort',
-                    'catalognum', 'script', 'language', 'country', 'style',
-                    'genre', 'albumstatus', 'albumdisambig',
-                    'releasegroupdisambig', 'artist_credit',
-                    'media', 'discogs_albumid', 'discogs_labelid',
-                    'discogs_artistid']:
-            value = getattr(self, fld)
-            if isinstance(value, bytes):
-                setattr(self, fld, value.decode(codec, 'ignore'))
+        super().decode(codec)
 
         for track in self.tracks:
             track.decode(codec)
 
-    def copy(self) -> AlbumInfo:
-        dupe = AlbumInfo([])
-        dupe.update(self)
-        dupe.tracks = [track.copy() for track in self.tracks]
-        return dupe
 
-
-class TrackInfo(AttrDict):
+class TrackInfo(Info):
     """Describes a canonical track present on a release. Appears as part
     of an AlbumInfo's ``tracks`` list. Consists of these data members:
 
@@ -157,6 +172,9 @@ class TrackInfo(AttrDict):
     may be None. The indices ``index``, ``medium``, and ``medium_index``
     are all 1-based.
     """
+    name_attribute = 'title'
+    string_attributes = ('title', 'artist', 'medium', 'artist_sort', 'disctitle',
+                         'artist_credit', 'media')
 
     def __init__(self, title=None, track_id=None, release_track_id=None,
                  artist=None, artist_id=None, length=None, index=None,
@@ -195,26 +213,6 @@ class TrackInfo(AttrDict):
         self.initial_key = initial_key
         self.genre = genre
         self.update(kwargs)
-
-    # As above, work around a bug in python-musicbrainz-ngs.
-    def decode(self, codec='utf-8'):
-        """Ensure that all string attributes on this object are decoded
-        to Unicode.
-        """
-        for fld in ['title', 'artist', 'medium', 'artist_sort', 'disctitle',
-                    'artist_credit', 'media']:
-            value = getattr(self, fld)
-            if isinstance(value, bytes):
-                setattr(self, fld, value.decode(codec, 'ignore'))
-
-    @property
-    def name(self):
-        return self.title
-
-    def copy(self) -> TrackInfo:
-        dupe = TrackInfo()
-        dupe.update(self)
-        return dupe
 
 
 # Candidate distance scoring.
@@ -350,7 +348,7 @@ class Distance:
         return weights
 
     @property
-    def penalties(self) -> t.List[str]:
+    def penalties(self) -> List[str]:
         return [
             k.replace("album_", "").replace("track_", "").replace("_", " ")
             for k in self._penalties
@@ -559,7 +557,7 @@ class Distance:
 @dataclass
 class Match:
     distance: Distance
-    info: AttrDict
+    info: Info
 
     @property
     def dist(self):
@@ -576,7 +574,7 @@ class Match:
         return self.info.name
 
     @property
-    def penalty(self, limit: int = 0) -> t.Optional[str]:
+    def penalty(self, limit: int = 0) -> Optional[str]:
         """Returns a colorized string that indicates all the penalties
         applied to a distance object.
         """
@@ -595,9 +593,9 @@ class TrackMatch(Match):
 
 @dataclass
 class AlbumMatch(Match):
-    mapping: dict
-    extra_items: set
-    extra_tracks: set
+    mapping: Dict["Item", TrackInfo]
+    extra_items: Set["Item"]
+    extra_tracks: Set[TrackInfo]
 
 
 def album_for_mbid(release_id):

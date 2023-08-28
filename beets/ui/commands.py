@@ -299,7 +299,7 @@ def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> Non
 
 def show_item_change(
     old: library.Item,
-    new: t.Union[autotag.AlbumInfo, autotag.TrackInfo],
+    new: hooks.Info,
     skip: t.Set[str] = set(),
 ) -> None:
     """Print out the change that would occur by tagging `item` with the
