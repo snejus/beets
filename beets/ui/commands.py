@@ -186,28 +186,6 @@ def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> Non
     album's tags are changed according to `match`, which must be an AlbumMatch
     object.
     """
-
-    def format_index(track_info):
-        """Return a string representing the track index of the given
-        TrackInfo or Item object.
-        """
-        if isinstance(track_info, hooks.TrackInfo):
-            index = track_info.index
-            medium_index = track_info.medium_index
-            medium = track_info.medium
-            mediums = match.info.mediums
-        else:
-            index = medium_index = track_info.track
-            medium = track_info.disc
-            mediums = track_info.disctotal
-        if config["per_disc_numbering"]:
-            if mediums and mediums > 1:
-                return f"{medium}-{medium_index}"
-            else:
-                return str(medium_index if medium_index is not None else index)
-        else:
-            return str(index)
-
     pairs = list(match.mapping.items())
     pairs.sort(key=lambda item_and_track_info: item_and_track_info[1].index)
 
