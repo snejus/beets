@@ -17,7 +17,7 @@ from functools import total_ordering
 import re
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import ClassVar, Dict, List, Optional, Set, Tuple, TYPE_CHECKING
+from typing import Any, ClassVar, Dict, Iterable, List, Optional, Set, Tuple, TYPE_CHECKING
 
 from beets import config, logging, plugins
 from beets.autotag import mb
@@ -28,6 +28,8 @@ from typing_extensions import Self
 
 if TYPE_CHECKING:
     from beets.library import Item
+
+JSONDict = Dict[str, Any]
 
 log = logging.getLogger(__name__)
 
@@ -585,10 +587,39 @@ class Match:
             return colorize("text_warning", f"({', '.join(penalties)})")
         return None
 
+    @property
+    def disambig_fields(self) -> Iterable[str]:
+        return config["disambig_fields"].as_str_seq()
+
+    @property
+    def dist_data(self) -> JSONDict:
+        return {
+            "name": self.name,
+            "distance": self.dist,
+            "penalty": self.penalty,
+            "dist_count": round(float(1 - self.distance), 2),
+            "dist": round(float(1 - self.distance), 2),
+        }
+
+    @property
+    def disambig_data(self) -> JSONDict:
+        """Return data for an AlbumInfo or TrackInfo object that
+        provides context that helps disambiguate similar-looking albums and
+        tracks.
+        """
+        match_fields = [k for k in self.disambig_fields if k not in self.dist_data]
+        data = {
+            **self.dist_data,
+            **{k: self.info.get(k, None) for k in match_fields}
+        }
+        return {k: v for k, v in data.items() if k in self.disambig_fields}
+
 
 @dataclass
 class TrackMatch(Match):
-    pass
+    @property
+    def disambig_fields(self) -> Iterable[str]:
+        return [f for f in super().disambig_fields if f != "tracks_diff"]
 
 
 @dataclass

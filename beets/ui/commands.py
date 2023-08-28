@@ -150,23 +150,6 @@ class HelpCommand(ui.Subcommand):
 default_commands.append(HelpCommand())
 
 
-def disambig_data(match: hooks.Match) -> t.Optional[str]:
-    """Generate a string for an AlbumInfo or TrackInfo object that
-    provides context that helps disambiguate similar-looking albums and
-    tracks.
-    """
-    disambig_fields = config["disambig_fields"].as_str_seq()
-    attrs_map = {
-        "name": match.name,
-        "distance": match.dist,
-        "penalty": match.penalty,
-        "dist_count": round(float(1 - match.distance), 2),
-        "dist": round(float(1 - match.distance), 2),
-        **{k: str(v or "") for k, v in match.info.items()},
-    }
-    return {k: attrs_map.get(k) for k in disambig_fields}
-
-
 def get_diff(overwrite_fields, field, item_field, new, old) -> str:
     after = new.get(field)
     if after is None and field not in overwrite_fields:
@@ -497,7 +480,7 @@ def choose_candidate(
             )
 
             candidata = [
-                {"id": str(i), **disambig_data(m)} for i, m in enumerate(candidates, 1)
+                {"id": str(i), **m.disambig_data(m)} for i, m in enumerate(candidates, 1)
             ]
             console.print("Candidates")
             console.print(flexitable(candidata))
