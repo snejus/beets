@@ -27,7 +27,7 @@ from itertools import chain
 from math import floor
 from platform import python_version
 from time import localtime, strftime
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import beets
 from beets import autotag, config, importer, library, plugins, ui, util
@@ -150,24 +150,17 @@ class HelpCommand(ui.Subcommand):
 default_commands.append(HelpCommand())
 
 
-def get_diff(overwrite_fields, field, item_field, new, old) -> str:
-    after = new.get(field)
-    if after is None and field not in overwrite_fields:
-        return ""
-
-    before = old.get(item_field)
-    if field == "va":
-        before = {1: True, 0: False}.get(before, before)
-    elif field == "length":
+def get_diff(field_name: str, before: Any, after: Any) -> str:
+    if field_name == "va":
+        before = bool(before)
+    elif field_name == "length":
         before = FIELDS_MAP["length"](int(float(before or 0)))
         after = FIELDS_MAP["length"](int(float(after or 0)))
-    before, after = str(before or ""), str(after or "")
 
-    return make_difftext(before, after) if before != after else ""
+    return make_difftext(str(before or ""), str(after or ""))
 
 
-keymap = {
-    # "album_id": "mb_albumid",
+track_info_to_item_field: Dict[str, str] = {
     "artist_id": "mb_artistid",
     "track_id": "mb_trackid",
     "va": "comp",
@@ -179,9 +172,40 @@ keymap = {
     "releasegroup_id": "mb_releasegroupid",
     "release_track_id": "mb_releasetrackid",
 }
+album_info_to_item_field = {
+    **track_info_to_item_field,
+    "artist": "albumartist",
+    "album_id": "mb_albumid",
+    "artist_sort": "albumartist_sort",
+    "artist_credit": "albumartist_credit",
+}
+track_overwrite_fields = set(config["overwrite_null"]["track"].as_str_seq())
+album_overwrite_fields = set(config["overwrite_null"]["album"].as_str_seq())
 
 
-def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> None:
+def get_track_diff(
+    old: library.Item, new: hooks.TrackInfo, fields: List[str]
+) -> hooks.AttrDict:
+    skip = {
+        "media",
+        "data_source",
+        "data_url",
+        "artist_id",
+        "track_id",
+        "bandcamp_track_id",
+    }
+    fields = [f for f in fields if f not in skip]
+    diffs = hooks.AttrDict({f: new.get(f, "") for f in fields})
+    for field in fields:
+        new_value = new.get(field)
+        old_value = old.get(track_info_to_item_field.get(field, field))
+        if not (new_value is None and field in track_overwrite_fields):
+            diffs[field] = get_diff(field, old_value, new_value)
+
+    return diffs
+
+
+def show_album_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> None:
     """Print out a representation of the changes that will be made if an
     album's tags are changed according to `match`, which must be an AlbumMatch
     object.
@@ -195,40 +219,15 @@ def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> Non
 
     show_item_change(old, new, {"tracks", "data_url"})
 
-    fields = ["index", "artist", "title", "length"]
+    fields = track_fields
     tracks_table = new_table(
         *fields,
         highlight=False,
         box=box.HORIZONTALS,
         border_style="white",
     )
-
-    ow = config["overwrite_null"]["track"].as_str_seq()
-    skip = {
-        "media",
-        "data_source",
-        "data_url",
-        "artist_id",
-        "track_id",
-        "bandcamp_track_id",
-    }
-
-    def _make_track_diff(old: library.Item, new: hooks.TrackInfo) -> JSONDict:
-        diffs: JSONDict = {f: new.get(f, "") for f in fields}
-        for field in sorted({*new, *old} - skip):
-            diff = get_diff(ow, field, keymap.get(field, field), new, old) or new.get(
-                field
-            )
-            if diff:
-                diffs[field] = diff
-                if field not in fields:
-                    tracks_table.add_column(field)
-                    fields.append(field)
-
-        return diffs
-
     for item, track_info in pairs:
-        data = _make_track_diff(item, track_info)
+        data = get_track_diff(item, track_info, fields)
         data["artist"] = data.get("artist") or cur_artist
         data["index"] = str(data["index"])
 
@@ -250,12 +249,13 @@ def show_change(cur_artist: str, cur_album: str, match: hooks.AlbumMatch) -> Non
                         "%M:%S", localtime(floor(float(track.length)))
                     )
 
-                values = map(str, map(lambda x: track.get(x) or "", fields))
+                values = map(str, (track.get(f) or "" for f in fields))
                 tracks_table.add_row(*values, style="b yellow")
 
     title = wrap("Tracks", "b i cyan")
-    subtitle = wrap(f"Skipped fields: {', '.join(skip)}\n", "dim")
-    console.print(border_panel(tracks_table, title=title, subtitle=subtitle))
+    # subtitle = wrap(f"Skipped fields: {', '.join(skip)}\n", "dim")
+    # console.print(border_panel(tracks_table, title=title, subtitle=subtitle))
+    console.print(border_panel(tracks_table, title=title))
 
 
 def show_item_change(
@@ -269,40 +269,36 @@ def show_item_change(
     new_meta = new_table()  # for all new metadata
     upd_meta = new_table()  # for changes only
 
-    overwrite = set(config["overwrite_attributes"].as_str_seq())
-    this_keymap = {**keymap}
-    if "album" in new:
-        # if isinstance(new, autotag.AlbumInfo):
-        this_keymap.update(
-            artist="albumartist",
-            # artist_id="mb_albumartistid",
-            album_id="mb_albumid",
-            # index="track",
-            artist_sort="albumartist_sort",
-            artist_credit="albumartist_credit",
-        )
-    for field in sorted({*new, *old._values_flex} - skip):
-        new_meta.add_row(wrap(field, "b"), str(new.get(field)))
-        diff = get_diff(overwrite, field, this_keymap.get(field, field), new, old)
-        if diff:
-            upd_meta.add_row(wrap(field, "b"), diff)
+    if isinstance(new, hooks.AlbumInfo):
+        info_to_item_field = album_info_to_item_field
+        overwrite_fields = album_overwrite_fields
+    else:
+        info_to_item_field = track_info_to_item_field
+        overwrite_fields = track_overwrite_fields
+
+    fields = sorted(new.keys() - skip)
+    for field in fields:
+        old_value = old.get(info_to_item_field.get(field, field), "")
+        new_value = new.get(field)
+        if not (new_value is None and field in overwrite_fields) and (
+            old_value or new_value
+        ):
+            new_meta.add_row(wrap(field, "b"), str(new_value))
+            if str(old_value) != str(new_value):
+                diff = get_diff(field, old_value, new_value)
+                upd_meta.add_row(wrap(field, "b"), diff)
 
     if "tracklist" in old:
         old["comments"] += "\n\nTracklist\n\n" + old["tracklist"]
 
     if upd_meta.row_count:
-        console.print(
-            new_table(
-                rows=[
-                    [
-                        Align.center(
-                            border_panel(upd_meta, title="Updates"), vertical="bottom"
-                        ),
-                        border_panel(new_meta),
-                    ]
-                ]
-            )
-        )
+        _type = "Album" if isinstance(new, hooks.AlbumInfo) else "Singleton"
+        color = "magenta" if _type == "Album" else "cyan"
+        updates_panel = border_panel(upd_meta, title="Updates", border_style="yellow")
+        info_panel = border_panel(new_meta, title=_type, border_style=color)
+        row = [Align.center(updates_panel, vertical="bottom"), info_panel]
+        console.print(new_table(rows=[row]))
+
     console.print(wrap(new.data_url, "b grey35"))
 
 
@@ -482,7 +478,7 @@ def choose_candidate(
         if singleton:
             show_item_change(item, match.info, {"data_url"})
         else:
-            show_change(cur_artist, cur_album, match)
+            show_album_change(cur_artist, cur_album, match)
 
         # Exact match => tag automatically if we're not in timid mode.
         if rec == Recommendation.strong and not config["import"]["timid"]:
@@ -578,7 +574,7 @@ class TerminalImportSession(importer.ImportSession):
         action = _summary_judgment(task.rec)
         if action == importer.action.APPLY:
             match = task.candidates[0]
-            show_change(task.cur_artist, task.cur_album, match)
+            show_album_change(task.cur_artist, task.cur_album, match)
             return match
         elif action is not None:
             return action
