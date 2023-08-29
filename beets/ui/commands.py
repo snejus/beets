@@ -27,7 +27,7 @@ from itertools import chain
 from math import floor
 from platform import python_version
 from time import localtime, strftime
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterable, List
 
 import beets
 from beets import autotag, config, importer, library, plugins, ui, util
@@ -382,6 +382,30 @@ def _summary_judgment(rec):
     return action
 
 
+def print_singleton_candidates(candidates: Iterable[hooks.TrackMatch]) -> None:
+    candidata = [{"id": str(i), **m.disambig_data} for i, m in enumerate(candidates, 1)]
+    console.print(border_panel(flexitable(candidata), title="Singleton candidates"))
+    console.print("")
+
+
+track_fields = config["disambig_track_fields"].as_str_seq()
+
+
+def print_album_candidates(candidates: Iterable[hooks.AlbumMatch]) -> None:
+    candidata = []
+    track_diffs_table = new_table("id", *track_fields)
+    for idx, candidate in enumerate(candidates, 1):
+        i = str(idx)
+        candidata.append({"id": i, **candidate.disambig_data})
+        for old, new in candidate.mapping.items():
+            track_diffs_table.add_row(*{"id": i, **get_track_diff(old, new, track_fields)}.values())
+        track_diffs_table.add_row("")
+
+    console.print(border_panel(flexitable(candidata), title="Album candidates"))
+    console.print(border_panel(track_diffs_table, title="Album tracks"))
+    console.print("")
+
+
 def choose_candidate(
     candidates,
     singleton,
@@ -445,20 +469,13 @@ def choose_candidate(
 
         if not bypass_candidates:
             # Display list of candidates.
-            print_(
-                'Finding tags for {} "{} - {}".'.format(
-                    "track" if singleton else "album",
-                    item.artist if singleton else cur_artist,
-                    item.title if singleton else cur_album,
-                )
-            )
-
-            candidata = [
-                {"id": str(i), **m.disambig_data(m)} for i, m in enumerate(candidates, 1)
-            ]
-            console.print("Candidates")
-            console.print(flexitable(candidata))
-            console.print("")
+            template = 'Finding tags for {} "{} - {}".'
+            if singleton:
+                log.info(template, "track", item.artist, item.title)
+                print_singleton_candidates(candidates)
+            else:
+                log.info(template, "album", cur_artist, cur_album)
+                print_album_candidates(candidates)
 
             # Ask the user for a choice.
             sel = ui.input_options(choice_opts, numrange=(1, len(candidates)))
@@ -552,8 +569,7 @@ class TerminalImportSession(importer.ImportSession):
         AlbumMatch object, ASIS, or SKIP.
         """
         # Show what we're tagging.
-        print_()
-        print_(
+        log.info(
             displayable_path(task.paths, "\n") + " ({} items)".format(len(task.items))
         )
 
@@ -623,8 +639,7 @@ class TerminalImportSession(importer.ImportSession):
         """Ask the user for a choice about tagging a single item. Returns
         either an action constant or a TrackMatch object.
         """
-        print_()
-        print_(displayable_path(task.item.path))
+        log.info(displayable_path(task.item.path))
         candidates, rec = task.candidates, task.rec
 
         # Take immediate action if appropriate.
