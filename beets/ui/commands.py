@@ -284,6 +284,8 @@ def show_item_change(
         new_value = new.get(field)
         if field == "va":
             old_value = bool(old_value)
+        elif field == "releasegroup_id" and old_value == "0":
+            old_value = ""
         if field in saved_fields or (
             new_value is not None or field in overwrite_fields
         ):
