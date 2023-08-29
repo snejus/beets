@@ -833,7 +833,7 @@ class ImportTask(BaseImportTask):
                     replaced_album.id,
                     displayable_path(self.album.path)
                 )
-        overwrite_props = set(config["overwrite_attributes"].as_str_seq())
+        overwrite_props = set(config["overwrite_null"]["track"].as_str_seq())
         for item in self.imported_items():
             dup_items = self.replaced_items[item.path]
             for dup_item in dup_items:

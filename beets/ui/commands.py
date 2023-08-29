@@ -151,9 +151,7 @@ default_commands.append(HelpCommand())
 
 
 def get_diff(field_name: str, before: Any, after: Any) -> str:
-    if field_name == "va":
-        before = bool(before)
-    elif field_name == "length":
+    if field_name == "length":
         before = FIELDS_MAP["length"](int(float(before or 0)))
         after = FIELDS_MAP["length"](int(float(after or 0)))
 
@@ -194,12 +192,15 @@ def get_track_diff(
         "track_id",
         "bandcamp_track_id",
     }
+    saved_fields = new.keys()
     fields = [f for f in fields if f not in skip]
     diffs = hooks.AttrDict({f: new.get(f, "") for f in fields})
     for field in fields:
         new_value = new.get(field)
         old_value = old.get(track_info_to_item_field.get(field, field))
-        if not (new_value is None and field in track_overwrite_fields):
+        if field in saved_fields or (
+            new_value is not None or field in track_overwrite_fields
+        ):
             diffs[field] = get_diff(field, old_value, new_value)
 
     return diffs
@@ -277,14 +278,17 @@ def show_item_change(
         overwrite_fields = track_overwrite_fields
 
     fields = sorted(new.keys() - skip)
+    saved_fields = new.keys()
     for field in fields:
         old_value = old.get(info_to_item_field.get(field, field), "")
         new_value = new.get(field)
-        if not (new_value is None and field in overwrite_fields) and (
-            old_value or new_value
+        if field == "va":
+            old_value = bool(old_value)
+        if field in saved_fields or (
+            new_value is not None or field in overwrite_fields
         ):
             new_meta.add_row(wrap(field, "b"), str(new_value))
-            if str(old_value) != str(new_value):
+            if str(old_value or "") != str(new_value or ""):
                 diff = get_diff(field, old_value, new_value)
                 upd_meta.add_row(wrap(field, "b"), diff)
 
@@ -398,7 +402,8 @@ def print_album_candidates(candidates: Iterable[hooks.AlbumMatch]) -> None:
         i = str(idx)
         candidata.append({"id": i, **candidate.disambig_data})
         for old, new in candidate.mapping.items():
-            track_diffs_table.add_row(*{"id": i, **get_track_diff(old, new, track_fields)}.values())
+            track_diff = {"id": i, **get_track_diff(old, new, track_fields)}
+            track_diffs_table.add_row(*track_diff.values())
         track_diffs_table.add_row("")
 
     console.print(border_panel(flexitable(candidata), title="Album candidates"))
