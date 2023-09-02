@@ -27,7 +27,7 @@ from itertools import chain
 from math import floor
 from platform import python_version
 from time import localtime, strftime
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, TYPE_CHECKING, Tuple
 
 import beets
 from beets import autotag, config, importer, library, plugins, ui, util
@@ -41,6 +41,9 @@ from rich_tables.generic import flexitable
 from rich_tables.utils import FIELDS_MAP, border_panel, make_difftext, new_table, wrap
 
 from . import _store_dict
+
+if TYPE_CHECKING:
+    from beets.dbcore.query import Query
 
 JSONDict = Dict[str, Any]
 
@@ -59,7 +62,9 @@ default_commands = []
 # Utilities.
 
 
-def _do_query(lib, query, album, also_items=True):
+def _do_query(
+    lib: library.Library, query: "Query", album: bool, also_items: bool = True
+) -> Tuple[List[library.Item], List[library.Album]]:
     """For commands that operate on matched items, performs a query
     and returns a list of matching items and a list of matching
     albums. (The latter is only nonempty when album is True.) Raises
