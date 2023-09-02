@@ -1123,11 +1123,14 @@ class Database:
         """
         table = model._table
         id_field = f"{table}.id"
-        join_tmpl = "LEFT JOIN {} ON {} = entity_id"
-        joins = [join_tmpl.format(model._flex_table, id_field)]
+        joins = [f"LEFT JOIN {model._flex_table} ON {id_field} = entity_id"]
         if table == "items":
-            joins.append(join_tmpl.format("album_attributes", "items.album_id"))
-
+            joins.append("LEFT JOIN album_attributes ON items.album_id = entity_id")
+        else:
+            joins.append(
+                "INNER JOIN items ON albums.id == items.album_id "
+                "INNER JOIN item_attributes ON items.id == entity_id"
+            )
         ids = set()
         with self.transaction() as tx:
             for join in joins:
