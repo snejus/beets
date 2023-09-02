@@ -36,8 +36,17 @@ from beets.dbcore import types
 from .query import MatchQuery, NullSort, TrueQuery, Query, Sort, AndQuery, FieldQuery
 from beets.util import functemplate, py3_path
 
-DEBUG = 0
+DEBUG = 1
 
+
+def print_query(sql, subvals=None):
+    """If debugging, replace placeholders and print the query."""
+    if not DEBUG:
+        return
+    topr = sql
+    for val in subvals or []:
+        topr = topr.replace("?", str(val), 1)
+    print(sql_table([{"sql": topr, "exclusive_time": 0}]))
 
 class DBAccessError(Exception):
     """The SQLite database became inaccessible.
@@ -883,6 +892,7 @@ class Transaction:
         """Execute an SQL statement with substitution values and return
         a list of rows from the database.
         """
+        print_query(statement, subvals)
         cursor = self.db._connection().execute(statement, subvals)
         return cursor.fetchall()
 
@@ -890,6 +900,7 @@ class Transaction:
         """Execute an SQL statement with substitution values and return
         the row ID of the last affected row.
         """
+        print_query(statement, subvals)
         try:
             cursor = self.db._connection().execute(statement, subvals)
         except sqlite3.OperationalError as e:
@@ -908,6 +919,8 @@ class Transaction:
     def script(self, statements):
         """Execute a string containing multiple SQL statements."""
         # We don't know whether this mutates, but quite likely it does.
+        print_query(statements)
+
         self._mutated = True
         self.db._connection().executescript(statements)
 
@@ -1095,17 +1108,6 @@ class Database:
                     ON {0} (entity_id);
                 """.format(flex_table))
 
-    # Querying.
-    @staticmethod
-    def print_query(sql, subvals):
-        """If debugging, replace placeholders and print the query."""
-        if not DEBUG:
-            return
-        topr = sql
-        for val in subvals:
-            topr = topr.replace("?", str(val), 1)
-        print(sql_table([{"sql": topr, "exclusive_time": 0}]))
-
     def _get_matching_ids(self, model, where, subvals):
         """Return ids of entities which match the given filter (`where` clause).
         This function is called only if we filter by at least one flexible
@@ -1130,7 +1132,6 @@ class Database:
         with self.transaction() as tx:
             for join in joins:
                 sql = f"SELECT {id_field} FROM {table} {join} WHERE {where}"
-                self.print_query(sql, subvals)
                 ids.update(chain.from_iterable(tx.query(sql, subvals)))
 
         return ids
@@ -1145,8 +1146,6 @@ class Database:
         sort = sort or NullSort()  # Unsorted.
         where, subvals = query.clause()
         order_by = sort.order_clause()
-
-        # self.print_query(where, subvals)
 
         table = model_cls._table
         _from = table
@@ -1177,8 +1176,6 @@ class Database:
             # Since the join is required only for filtering, we can filter in
             # a subquery and order the result, which returns unique fields.
             sql = f"SELECT * FROM ({sql}) ORDER BY {order_by}"
-
-        self.print_query(sql, subvals)
 
         with self.transaction() as tx:
             rows = tx.query(sql, subvals)
