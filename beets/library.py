@@ -22,6 +22,7 @@ import time
 import re
 import string
 import shlex
+from typing import Type
 
 from beets import logging
 from mediafile import MediaFile, UnreadableFileError
@@ -362,6 +363,9 @@ class LibModel(dbcore.Model):
     def add(self, lib=None):
         super().add(lib)
         plugins.send('database_change', lib=self._db, model=self)
+
+    def try_sync(self, *_) -> None:
+        self.store()
 
     def __format__(self, spec):
         if not spec:
@@ -800,7 +804,7 @@ class Item(LibModel):
             log.error("{0}", exc)
             return False
 
-    def try_sync(self, write, move, with_album=True):
+    def try_sync(self, write: bool, move: bool, with_album: bool=True) -> None:
         """Synchronize the item with the database and, possibly, update its
         tags on disk and its path (by moving the file).
 
@@ -820,7 +824,8 @@ class Item(LibModel):
                 log.debug('moving {0} to synchronize path',
                           util.displayable_path(self.path))
                 self.move(with_album=with_album)
-        self.store()
+
+        super().try_sync(write, move)
 
     # Files themselves.
 
@@ -1370,7 +1375,7 @@ class Album(LibModel):
                         item[key] = value
                     item.store()
 
-    def try_sync(self, write, move):
+    def try_sync(self, write: bool, move: bool) -> None:
         """Synchronize the album and its items with the database.
         Optionally, also write any new tags into the files and update
         their paths.
@@ -1379,7 +1384,7 @@ class Album(LibModel):
         `move` controls whether files (both audio and album art) are
         moved.
         """
-        self.store()
+        super().try_sync(write, move)
         for item in self.items():
             item.try_sync(write, move)
 
@@ -1504,7 +1509,12 @@ class Library(dbcore.Database):
 
     # Querying.
 
-    def _fetch(self, model_cls, query, sort=None):
+    def _fetch(
+        self, 
+        model_cls: Type[dbcore.db.Model],
+        query: dbcore.Query,
+        sort: dbcore.query.Sort=None
+    ) -> dbcore.db.Results:
         """Parse a query and fetch.
 
         If an order specification is present in the query string
@@ -1541,11 +1551,19 @@ class Library(dbcore.Database):
         return dbcore.sort_from_strings(
             Item, beets.config['sort_item'].as_str_seq())
 
-    def albums(self, query=None, sort=None):
+    def albums(
+        self, 
+        query: dbcore.Query=None,
+        sort: dbcore.query.Sort=None,
+    ) -> dbcore.db.Results:
         """Get :class:`Album` objects matching the query."""
         return self._fetch(Album, query, sort or self.get_default_album_sort())
 
-    def items(self, query=None, sort=None):
+    def items(
+        self, 
+        query: dbcore.Query=None,
+        sort: dbcore.query.Sort=None,
+    ) -> dbcore.db.Results:
         """Get :class:`Item` objects matching the query."""
         return self._fetch(Item, query, sort or self.get_default_item_sort())
 
