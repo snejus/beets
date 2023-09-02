@@ -1158,6 +1158,7 @@ class Database:
         if relation_fields:
             _from = "items LEFT JOIN albums ON items.album_id = albums.id"
             select_fields += relation_fields
+            where += f" AND {table}.id IS NOT NULL"
 
         if query.flex_fields:
             # prefetch IDs of entities that match a query which includes
@@ -1187,7 +1188,7 @@ class Database:
         # one query per item to sqlite.
         flex_sql = "SELECT * FROM {} WHERE entity_id IN ({})".format(
             model_cls._flex_table,
-            ", ".join((str(id) for id, *_ in rows))
+            ", ".join((str(id) for id, *_ in rows if id))
         )
 
         with self.transaction() as tx:
