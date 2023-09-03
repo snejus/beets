@@ -11,7 +11,6 @@ import requests
 from beets import config, ui
 from beets.autotag import AlbumInfo, TrackInfo
 from beets.dbcore import types
-from beets.exceptions import UserError
 from beets.metadata_plugins import IDResponse, SearchApiMetadataSourcePlugin
 
 VARIOUS_ARTISTS_ID = 5080
@@ -70,42 +69,37 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
         else:
             artist, artist_id = None, None
 
-        release_date = album_data["release_date"]
-        date_parts = [int(part) for part in release_date.split("-")]
-        num_date_parts = len(date_parts)
+        album_url = f"{self.album_url}{deezer_id}"
+        album_data = requests.get(album_url, timeout=10).json()
 
-        if num_date_parts == 3:
-            year, month, day = date_parts
-        elif num_date_parts == 2:
-            year, month = date_parts
-            day = None
-        elif num_date_parts == 1:
-            year = date_parts[0]
-            month = None
-            day = None
-        else:
-            raise UserError(
-                f"Invalid `release_date` returned by {self.data_source} API: "
-                f"{release_date!r}"
+        tracks_data = requests.get(f"{album_url}/tracks", timeout=10).json()
+        tracks_total = tracks_data.get("total")
+        tracks_data = tracks_data.get("data")
+        released = {}
+        if release_date := album_data.get("release_date"):
+            released = dict(
+                zip(("year", "month", "day"), map(int, release_date.split("-")))
             )
-        tracks_obj = self.fetch_data(f"{self.album_url}{deezer_id}/tracks")
-        if tracks_obj is None:
+        if not tracks_data or not released:
             return None
-        try:
-            tracks_data = tracks_obj["data"]
-        except KeyError:
-            self._log.debug("Error fetching album tracks for {}", deezer_id)
-            tracks_data = None
-        if not tracks_data:
-            return None
-        while "next" in tracks_obj:
-            tracks_obj = requests.get(tracks_obj["next"], timeout=10).json()
-            tracks_data.extend(tracks_obj["data"])
 
+        album = album_data["title"]
+        albumtype = album_data["record_type"]
+
+        va = False
+        if " VA" in album:
+            artist = "Various Artists"
+            albumtype = "compilation"
+            va = True
+        else:
+            artist = self.get_artist([album_data["artist"]])[0]
+        genres = album_data["genres"]["data"]
+        style = ", ".join(g.get("name") or "" for g in genres)
+        style = style.replace("Electro", "electronic")
         tracks = []
         medium_totals: dict[int | None, int] = collections.defaultdict(int)
         for i, track_data in enumerate(tracks_data, start=1):
-            track = self._get_track(track_data)
+            track = self._get_track(track_data, tracks_total)
             track.index = i
             medium_totals[track.medium] += 1
             tracks.append(track)
@@ -118,25 +112,28 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             artist = va_name
 
         return AlbumInfo(
-            album=album_data["title"],
-            album_id=deezer_id,
-            deezer_album_id=deezer_id,
+            album=album,
+            albumtype=albumtype,
             artist=artist,
+            artists=[artist],
+            artist_id=str(artist_id),
+            albumstatus="Official",
+            album_id=deezer_id,
             artist_credit=(
                 artist if is_va else self.get_artist([album_data["artist"]])[0]
             ),
-            artist_id=str(artist_id),
             tracks=tracks,
-            albumtype=album_data["record_type"],
-            va=is_va,
-            year=year,
-            month=month,
-            day=day,
-            label=album_data["label"],
             mediums=max(filter(None, medium_totals.keys())),
             data_source=self.data_source,
             data_url=album_data["link"],
-            cover_art_url=album_data.get("cover_xl"),
+            label=album_data["label"],
+            media="Digital Media",
+            style=style,
+            upc=album_data.get("upc"),
+            va=va,
+            year=released.get("year"),
+            month=released.get("month"),
+            day=released.get("day"),
         )
 
     def track_for_id(self, track_id: str) -> TrackInfo | None:
@@ -183,7 +180,7 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
         track.medium_total = medium_total
         return track
 
-    def _get_track(self, track_data: JSONDict) -> TrackInfo:
+    def _get_track(self, track_data: JSONDict, total: int = 0) -> TrackInfo:
         """Convert a Deezer track object dict to a TrackInfo object.
 
         :param track_data: Deezer Track object dict
@@ -195,6 +192,7 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             artist, artist_id = self.get_artist(contributors)
         else:
             artist, artist_id = None, None
+        position = track_data.get("track_position")
         return TrackInfo(
             title=track_data["title"],
             track_id=track_data["id"],
@@ -203,10 +201,11 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             artist=artist,
             artist_id=str(artist_id) if artist_id is not None else None,
             length=track_data["duration"],
-            index=track_data.get("track_position"),
+            index=position,
             medium=track_data.get("disk_number"),
             deezer_track_rank=track_data.get("rank"),
-            medium_index=track_data.get("track_position"),
+            medium_index=position,
+            medium_total=total,
             data_source=self.data_source,
             data_url=track_data["link"],
             deezer_updated=time.time(),
