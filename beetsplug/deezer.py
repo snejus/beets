@@ -12,11 +12,11 @@
 # The above copyright notice and this permission notice shall be
 # included in all copies or substantial portions of the Software.
 
-"""Adds Deezer release and track search support to the autotagger
-"""
+"""Adds Deezer release and track search support to the autotagger"""
 
-import collections
 import time
+from functools import partial
+from typing import Any, Dict
 
 import requests
 import unidecode
@@ -97,73 +97,54 @@ class DeezerPlugin(MetadataSourcePlugin, BeetsPlugin):
         else:
             artist, artist_id = None, None
 
+        album_url = self.album_url + deezer_id
+        album_data = requests.get(album_url, timeout=10).json()
+
+        tracks_data = requests.get(f"{album_url}/tracks", timeout=10).json()
+        tracks_total = tracks_data["total"]
+        tracks_data = tracks_data["data"]
         release_date = album_data["release_date"]
-        date_parts = [int(part) for part in release_date.split("-")]
-        num_date_parts = len(date_parts)
+        released = dict(
+            zip(("year", "month", "day"), map(int, release_date.split("-")))
+        )
+        if not tracks_data or not released:
+            return None
 
-        if num_date_parts == 3:
-            year, month, day = date_parts
-        elif num_date_parts == 2:
-            year, month = date_parts
-            day = None
-        elif num_date_parts == 1:
-            year = date_parts[0]
-            month = None
-            day = None
+        get_track = partial(self._get_track, total=tracks_total)
+        album = AlbumInfo(list(map(get_track, tracks_data)))
+        album.update(released)
+        album.artist, album.artist_id = self.get_artist(
+            album_data["contributors"]
+        )
+        album.album, album.albumtype = (
+            album_data["title"],
+            album_data["record_type"],
+        )
+        album.va = False
+        if " VA" in album.album:
+            album.artist = "Various Artists"
+            album.albumtype = "compilation"
+            album.va = True
         else:
-            raise ui.UserError(
-                "Invalid `release_date` returned "
-                "by {} API: '{}'".format(self.data_source, release_date)
-            )
-        tracks_obj = self.fetch_data(self.album_url + deezer_id + "/tracks")
-        if tracks_obj is None:
-            return None
-        try:
-            tracks_data = tracks_obj["data"]
-        except KeyError:
-            self._log.debug("Error fetching album tracks for {}", deezer_id)
-            tracks_data = None
-        if not tracks_data:
-            return None
-        while "next" in tracks_obj:
-            tracks_obj = requests.get(
-                tracks_obj["next"],
-                timeout=10,
-            ).json()
-            tracks_data.extend(tracks_obj["data"])
-
-        tracks = []
-        medium_totals = collections.defaultdict(int)
-        for i, track_data in enumerate(tracks_data, start=1):
-            track = self._get_track(track_data)
-            track.index = i
-            medium_totals[track.medium] += 1
-            tracks.append(track)
-        for track in tracks:
-            track.medium_total = medium_totals[track.medium]
-
-        return AlbumInfo(
-            album=album_data["title"],
+            album.artist_credit = self.get_artist([album_data["artist"]])[0]
+        genres = album_data["genres"]["data"]
+        album.style = ", ".join((g.get("name") or "" for g in genres))
+        album.style = album.style.replace("Electro", "electronic")
+        album.update(
+            albumstatus="Official",
             album_id=deezer_id,
-            deezer_album_id=deezer_id,
-            artist=artist,
-            artist_credit=self.get_artist([album_data["artist"]])[0],
-            artist_id=artist_id,
-            tracks=tracks,
-            albumtype=album_data["record_type"],
-            va=len(album_data["contributors"]) == 1
-            and artist.lower() == "various artists",
-            year=year,
-            month=month,
-            day=day,
-            label=album_data["label"],
-            mediums=max(medium_totals.keys()),
             data_source=self.data_source,
             data_url=album_data["link"],
-            cover_art_url=album_data.get("cover_xl"),
+            label=album_data["label"],
+            media="Digital Media",
+            mediums=1,
+            upc=album_data.get("upc"),
         )
+        return album
 
-    def _get_track(self, track_data):
+    def _get_track(
+        self, track_data: Dict[str, Any], total: int = 0
+    ) -> TrackInfo:
         """Convert a Deezer track object dict to a TrackInfo object.
 
         :param track_data: Deezer Track object dict
@@ -172,8 +153,9 @@ class DeezerPlugin(MetadataSourcePlugin, BeetsPlugin):
         :rtype: beets.autotag.hooks.TrackInfo
         """
         artist, artist_id = self.get_artist(
-            track_data.get("contributors", [track_data["artist"]])
+            track_data.get("contributors", [track_data.get("artist") or ""])
         )
+        position = track_data.get("track_position")
         return TrackInfo(
             title=track_data["title"],
             track_id=track_data["id"],
@@ -182,10 +164,10 @@ class DeezerPlugin(MetadataSourcePlugin, BeetsPlugin):
             artist=artist,
             artist_id=artist_id,
             length=track_data["duration"],
-            index=track_data.get("track_position"),
+            index=position,
             medium=track_data.get("disk_number"),
-            deezer_track_rank=track_data.get("rank"),
-            medium_index=track_data.get("track_position"),
+            medium_index=position,
+            medium_total=total,
             data_source=self.data_source,
             data_url=track_data["link"],
             deezer_updated=time.time(),
@@ -250,13 +232,9 @@ class DeezerPlugin(MetadataSourcePlugin, BeetsPlugin):
         :return: Query string to be provided to the Search API.
         :rtype: str
         """
-        query_components = [
-            keywords,
-            " ".join(f'{k}:"{v}"' for k, v in filters.items()),
-        ]
-        query = " ".join([q for q in query_components if q])
-        if not isinstance(query, str):
-            query = query.decode("utf8")
+        query = (
+            keywords + " " + " ".join(f'{k}:"{v}"' for k, v in filters.items())
+        )
         return unidecode.unidecode(query)
 
     def _search_api(self, query_type, filters=None, keywords=""):
@@ -287,7 +265,7 @@ class DeezerPlugin(MetadataSourcePlugin, BeetsPlugin):
         response.raise_for_status()
         response_data = response.json().get("data", [])
         self._log.debug(
-            "Found {} result(s) from {} for '{}'",
+            "Found {} result(s) from {} for '{}', returning first 5",
             len(response_data),
             self.data_source,
             query,
