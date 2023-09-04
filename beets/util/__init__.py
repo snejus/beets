@@ -48,6 +48,7 @@ from typing import (
     cast,
 )
 
+from rich_tables.utils import make_console
 from unidecode import unidecode
 
 import beets
@@ -1210,3 +1211,6 @@ def chunks(lst: Sequence[T], n: int) -> Iterator[list[T]]:
     """Yield successive n-sized chunks from lst."""
     for i in range(0, len(lst), n):
         yield list(lst[i : i + n])
+
+
+console = make_console(highlight=False, stderr=True)
