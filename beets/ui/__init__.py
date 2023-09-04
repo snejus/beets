@@ -27,17 +27,19 @@ import struct
 import sys
 import textwrap
 import traceback
-from difflib import SequenceMatcher
 from typing import Any, Callable, List
 
 import confuse
+from rich_tables.utils import diff, make_console
 
 from beets import config, library, logging, plugins, util
 from beets.autotag import mb
 from beets.dbcore import db
 from beets.dbcore import query as db_query
-from beets.util import as_string
+from beets.util import as_string, colorize
 from beets.util.functemplate import template
+
+console = make_console()
 
 # On Windows platforms, use colorama to support "ANSI" terminal colors.
 if sys.platform == "win32":
@@ -120,25 +122,16 @@ def print_(*strings, **kwargs):
     (it defaults to a newline).
     """
     if not strings:
-        strings = [""]
-    assert isinstance(strings[0], str)
+        strings = ['']
 
-    txt = " ".join(strings)
-    txt += kwargs.get("end", "\n")
-
-    # Encode the string and write it to stdout.
-    # On Python 3, sys.stdout expects text strings and uses the
-    # exception-throwing encoding error policy. To avoid throwing
-    # errors and use our configurable encoding override, we use the
-    # underlying bytes buffer instead.
-    if hasattr(sys.stdout, "buffer"):
-        out = txt.encode(_out_encoding(), "replace")
-        sys.stdout.buffer.write(out)
-        sys.stdout.buffer.flush()
-    else:
-        # In our test harnesses (e.g., DummyOut), sys.stdout.buffer
-        # does not exist. We instead just record the text string.
-        sys.stdout.write(txt)
+    try:
+        for string in strings:
+            if isinstance(string, str):
+                console.print(string)
+            else:
+                console.print(string, end='\n')
+    except:
+        console.print_exception(show_locals=True)
 
 
 # Configuration wrappers.
@@ -480,278 +473,6 @@ def human_seconds_short(interval):
     """
     interval = int(interval)
     return "%i:%02i" % (interval // 60, interval % 60)
-
-
-# Colorization.
-
-# ANSI terminal colorization code heavily inspired by pygments:
-# https://bitbucket.org/birkenfeld/pygments-main/src/default/pygments/console.py
-# (pygments is by Tim Hatch, Armin Ronacher, et al.)
-COLOR_ESCAPE = "\x1b["
-LEGACY_COLORS = {
-    "black": ["black"],
-    "darkred": ["red"],
-    "darkgreen": ["green"],
-    "brown": ["yellow"],
-    "darkyellow": ["yellow"],
-    "darkblue": ["blue"],
-    "purple": ["magenta"],
-    "darkmagenta": ["magenta"],
-    "teal": ["cyan"],
-    "darkcyan": ["cyan"],
-    "lightgray": ["white"],
-    "darkgray": ["bold", "black"],
-    "red": ["bold", "red"],
-    "green": ["bold", "green"],
-    "yellow": ["bold", "yellow"],
-    "blue": ["bold", "blue"],
-    "fuchsia": ["bold", "magenta"],
-    "magenta": ["bold", "magenta"],
-    "turquoise": ["bold", "cyan"],
-    "cyan": ["bold", "cyan"],
-    "white": ["bold", "white"],
-}
-# All ANSI Colors.
-ANSI_CODES = {
-    # Styles.
-    "normal": 0,
-    "bold": 1,
-    "faint": 2,
-    # "italic":       3,
-    "underline": 4,
-    # "blink_slow":   5,
-    # "blink_rapid":  6,
-    "inverse": 7,
-    # "conceal":      8,
-    # "crossed_out":  9
-    # Text colors.
-    "black": 30,
-    "red": 31,
-    "green": 32,
-    "yellow": 33,
-    "blue": 34,
-    "magenta": 35,
-    "cyan": 36,
-    "white": 37,
-    # Background colors.
-    "bg_black": 40,
-    "bg_red": 41,
-    "bg_green": 42,
-    "bg_yellow": 43,
-    "bg_blue": 44,
-    "bg_magenta": 45,
-    "bg_cyan": 46,
-    "bg_white": 47,
-}
-RESET_COLOR = COLOR_ESCAPE + "39;49;00m"
-
-# These abstract COLOR_NAMES are lazily mapped on to the actual color in COLORS
-# as they are defined in the configuration files, see function: colorize
-COLOR_NAMES = [
-    "text_success",
-    "text_warning",
-    "text_error",
-    "text_highlight",
-    "text_highlight_minor",
-    "action_default",
-    "action",
-    # New Colors
-    "text",
-    "text_faint",
-    "import_path",
-    "import_path_items",
-    "action_description",
-    "added",
-    "removed",
-    "changed",
-    "added_highlight",
-    "removed_highlight",
-    "changed_highlight",
-    "text_diff_added",
-    "text_diff_removed",
-    "text_diff_changed",
-]
-COLORS = None
-
-
-def _colorize(color, text):
-    """Returns a string that prints the given text in the given color
-    in a terminal that is ANSI color-aware. The color must be a list of strings
-    from ANSI_CODES.
-    """
-    # Construct escape sequence to be put before the text by iterating
-    # over all "ANSI codes" in `color`.
-    escape = ""
-    for code in color:
-        escape = escape + COLOR_ESCAPE + "%im" % ANSI_CODES[code]
-    return escape + text + RESET_COLOR
-
-
-def colorize(color_name, text):
-    """Colorize text if colored output is enabled. (Like _colorize but
-    conditional.)
-    """
-    if config["ui"]["color"] and "NO_COLOR" not in os.environ:
-        global COLORS
-        if not COLORS:
-            # Read all color configurations and set global variable COLORS.
-            COLORS = dict()
-            for name in COLOR_NAMES:
-                # Convert legacy color definitions (strings) into the new
-                # list-based color definitions. Do this by trying to read the
-                # color definition from the configuration as unicode - if this
-                # is successful, the color definition is a legacy definition
-                # and has to be converted.
-                try:
-                    color_def = config["ui"]["colors"][name].get(str)
-                except (confuse.ConfigTypeError, NameError):
-                    # Normal color definition (type: list of unicode).
-                    color_def = config["ui"]["colors"][name].get(list)
-                else:
-                    # Legacy color definition (type: unicode). Convert.
-                    if color_def in LEGACY_COLORS:
-                        color_def = LEGACY_COLORS[color_def]
-                    else:
-                        raise UserError("no such color %s", color_def)
-                for code in color_def:
-                    if code not in ANSI_CODES.keys():
-                        raise ValueError("no such ANSI code %s", code)
-                COLORS[name] = color_def
-        # In case a 3rd party plugin is still passing the actual color ('red')
-        # instead of the abstract color name ('text_error')
-        color = COLORS.get(color_name)
-        if not color:
-            log.debug("Invalid color_name: {0}", color_name)
-            color = color_name
-        return _colorize(color, text)
-    else:
-        return text
-
-
-def uncolorize(colored_text):
-    """Remove colors from a string."""
-    # Define a regular expression to match ANSI codes.
-    # See: http://stackoverflow.com/a/2187024/1382707
-    # Explanation of regular expression:
-    #     \x1b     - matches ESC character
-    #     \[       - matches opening square bracket
-    #     [;\d]*   - matches a sequence consisting of one or more digits or
-    #                semicola
-    #     [A-Za-z] - matches a letter
-    ansi_code_regex = re.compile(r"\x1b\[[;\d]*[A-Za-z]", re.VERBOSE)
-    # Strip ANSI codes from `colored_text` using the regular expression.
-    text = ansi_code_regex.sub("", colored_text)
-    return text
-
-
-def color_split(colored_text, index):
-    ansi_code_regex = re.compile(r"(\x1b\[[;\d]*[A-Za-z])", re.VERBOSE)
-    length = 0
-    pre_split = ""
-    post_split = ""
-    found_color_code = None
-    found_split = False
-    for part in ansi_code_regex.split(colored_text):
-        # Count how many real letters we have passed
-        length += color_len(part)
-        if found_split:
-            post_split += part
-        else:
-            if ansi_code_regex.match(part):
-                # This is a color code
-                if part == RESET_COLOR:
-                    found_color_code = None
-                else:
-                    found_color_code = part
-                pre_split += part
-            else:
-                if index < length:
-                    # Found part with our split in.
-                    split_index = index - (length - color_len(part))
-                    found_split = True
-                    if found_color_code:
-                        pre_split += part[:split_index] + RESET_COLOR
-                        post_split += found_color_code + part[split_index:]
-                    else:
-                        pre_split += part[:split_index]
-                        post_split += part[split_index:]
-                else:
-                    # Not found, add this part to the pre split
-                    pre_split += part
-    return pre_split, post_split
-
-
-def color_len(colored_text):
-    """Measure the length of a string while excluding ANSI codes from the
-    measurement. The standard `len(my_string)` method also counts ANSI codes
-    to the string length, which is counterproductive when layouting a
-    Terminal interface.
-    """
-    # Return the length of the uncolored string.
-    return len(uncolorize(colored_text))
-
-
-def _colordiff(a, b):
-    """Given two values, return the same pair of strings except with
-    their differences highlighted in the specified color. Strings are
-    highlighted intelligently to show differences; other values are
-    stringified and highlighted in their entirety.
-    """
-    # First, convert paths to readable format
-    if isinstance(a, bytes) or isinstance(b, bytes):
-        # A path field.
-        a = util.displayable_path(a)
-        b = util.displayable_path(b)
-
-    if not isinstance(a, str) or not isinstance(b, str):
-        # Non-strings: use ordinary equality.
-        if a == b:
-            return str(a), str(b)
-        else:
-            return (
-                colorize("text_diff_removed", str(a)),
-                colorize("text_diff_added", str(b)),
-            )
-
-    a_out = []
-    b_out = []
-
-    matcher = SequenceMatcher(lambda x: False, a, b)
-    for op, a_start, a_end, b_start, b_end in matcher.get_opcodes():
-        if op == "equal":
-            # In both strings.
-            a_out.append(a[a_start:a_end])
-            b_out.append(b[b_start:b_end])
-        elif op == "insert":
-            # Right only.
-            b_out.append(colorize("text_diff_added", b[b_start:b_end]))
-        elif op == "delete":
-            # Left only.
-            a_out.append(colorize("text_diff_removed", a[a_start:a_end]))
-        elif op == "replace":
-            # Right and left differ. Colorise with second highlight if
-            # it's just a case change.
-            if a[a_start:a_end].lower() != b[b_start:b_end].lower():
-                a_color = "text_diff_removed"
-                b_color = "text_diff_added"
-            else:
-                a_color = b_color = "text_highlight_minor"
-            a_out.append(colorize(a_color, a[a_start:a_end]))
-            b_out.append(colorize(b_color, b[b_start:b_end]))
-        else:
-            assert False
-
-    return "".join(a_out), "".join(b_out)
-
-
-def colordiff(a, b):
-    """Colorize differences between two values if color is enabled.
-    (Like _colordiff but conditional.)
-    """
-    if config["ui"]["color"]:
-        return _colordiff(a, b)
-    else:
-        return str(a), str(b)
 
 
 def get_path_formats(subview=None):
@@ -1163,18 +884,10 @@ def _field_diff(field, old, old_fmt, new, new_fmt):
         return None
 
     # Get formatted values for output.
-    oldstr = old_fmt.get(field, "")
-    newstr = new_fmt.get(field, "")
+    oldval = old_fmt.get(field, "")
+    newval = new_fmt.get(field, "")
 
-    # For strings, highlight changes. For others, colorize the whole
-    # thing.
-    if isinstance(oldval, str):
-        oldstr, newstr = colordiff(oldval, newstr)
-    else:
-        oldstr = colorize("text_error", oldstr)
-        newstr = colorize("text_error", newstr)
-
-    return f"{oldstr} -> {newstr}"
+    return diff(str(oldval), str(newval))
 
 
 def show_model_changes(new, old=None, fields=None, always=False):
@@ -1219,7 +932,7 @@ def show_model_changes(new, old=None, fields=None, always=False):
     if changes or always:
         print_(format(old))
     if changes:
-        print_("\n".join(changes))
+        print_(*changes)
 
     return bool(changes)
 
@@ -1236,8 +949,8 @@ def show_path_changes(path_changes):
 
     vs.
 
-    Source
-      -> Destination
+    Source ->
+    Destination
     """
     sources, destinations = zip(*path_changes)
 
@@ -1245,30 +958,8 @@ def show_path_changes(path_changes):
     sources = list(map(util.displayable_path, sources))
     destinations = list(map(util.displayable_path, destinations))
 
-    # Calculate widths for terminal split
-    col_width = (term_width() - len(" -> ")) // 2
-    max_width = len(max(sources + destinations, key=len))
-
-    if max_width > col_width:
-        # Print every change over two lines
-        for source, dest in zip(sources, destinations):
-            color_source, color_dest = colordiff(source, dest)
-            print_("{0} \n  -> {1}".format(color_source, color_dest))
-    else:
-        # Print every change on a single line, and add a header
-        title_pad = max_width - len("Source ") + len(" -> ")
-
-        print_("Source {0} Destination".format(" " * title_pad))
-        for source, dest in zip(sources, destinations):
-            pad = max_width - len(source)
-            color_source, color_dest = colordiff(source, dest)
-            print_(
-                "{0} {1} -> {2}".format(
-                    color_source,
-                    " " * pad,
-                    color_dest,
-                )
-            )
+    for source, dest in zip(sources, destinations):
+        console.print(diff(source, dest), highlight=False)
 
 
 # Helper functions for option parsing.
