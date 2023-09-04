@@ -126,8 +126,8 @@ ui:
         action_default: ['bold', 'cyan']
         action: ['bold', 'cyan']
         # New Colors
-        text: ['normal']
-        text_faint: ['faint']
+        text: ['default']
+        text_faint: ['dim']
         import_path: ['bold', 'blue']
         import_path_items: ['bold', 'blue']
         added:   ['green']
