@@ -48,6 +48,7 @@ from typing import (
     cast,
 )
 
+from rich.text import Text
 from unidecode import unidecode
 
 import beets
@@ -1200,3 +1201,28 @@ def get_temp_filename(
 def unique_list(elements: Iterable[T]) -> list[T]:
     """Return a list with unique elements in the original order."""
     return list(dict.fromkeys(elements))
+
+
+def colorize(color_name: str, text: str) -> str:
+    """Colorize text if colored output is enabled. (Like _colorize but
+    conditional.)
+    """
+    if not beets.config["ui"]["color"] or "NO_COLOR" in os.environ:
+        return text
+
+    color = " ".join(beets.config["ui"]["colors"][color_name].as_str_seq())
+    return f"[{color}]{text}[/{color}]"
+
+
+def uncolorize(text: str) -> str:
+    return Text(text).plain
+
+
+def color_split(colored_text: str, index: int) -> tuple[str, str]:
+    pre, post = [ln.markup for ln in Text(colored_text).divide((index,))]
+    return pre, post
+
+
+def color_len(colored_text: str) -> int:
+    """Return the length of a string without color codes."""
+    return len(uncolorize(colored_text))

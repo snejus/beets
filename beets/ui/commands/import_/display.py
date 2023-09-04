@@ -10,7 +10,7 @@ from typing_extensions import NotRequired
 
 from beets import autotag, config, ui
 from beets.autotag import hooks
-from beets.util import displayable_path
+from beets.util import color_len, displayable_path
 from beets.util.units import human_seconds_short
 
 if TYPE_CHECKING:
@@ -131,10 +131,10 @@ class ChangeRepresentation:
         left: Side
         right: Side
         if artist_l != artist_r:
-            artist_l, artist_r = ui.colordiff(artist_l, artist_r)
+            artist_r = ui.colordiff(artist_l, artist_r)
             left = {
                 "prefix": f"{self.changed_prefix} Artist: ",
-                "contents": artist_l,
+                "contents": "",
                 "suffix": "",
             }
             right = {"prefix": "", "contents": artist_r, "suffix": ""}
@@ -147,10 +147,10 @@ class ChangeRepresentation:
             type_ = self.match.type
             name_l, name_r = self.cur_name or "", self.match.info.name
             if self.cur_name != self.match.info.name != VARIOUS_ARTISTS:
-                name_l, name_r = ui.colordiff(name_l, name_r)
+                name_r = ui.colordiff(name_l, name_r)
                 left = {
                     "prefix": f"{self.changed_prefix} {type_}: ",
-                    "contents": name_l,
+                    "contents": "",
                     "suffix": "",
                 }
                 right = {"prefix": "", "contents": name_r, "suffix": ""}
@@ -229,8 +229,8 @@ class ChangeRepresentation:
         else:
             # If there is a title, highlight differences.
             cur_title = item.title.strip()
-            cur_col, new_col = ui.colordiff(cur_title, new_title)
-            return cur_col, new_col, cur_title != new_title
+            new_col = ui.colordiff(cur_title, new_title)
+            return "", new_col, cur_title != new_title
 
     @staticmethod
     def make_track_lengths(
@@ -317,12 +317,8 @@ class ChangeRepresentation:
         def get_width(side: Side) -> int:
             """Return the width of left or right in uncolorized characters."""
             try:
-                return len(
-                    ui.uncolorize(
-                        " ".join(
-                            [side["prefix"], side["contents"], side["suffix"]]
-                        )
-                    )
+                return color_len(
+                    " ".join([side["prefix"], side["contents"], side["suffix"]])
                 )
             except KeyError:
                 # An empty dictionary -> Nothing to report
