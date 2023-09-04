@@ -46,8 +46,10 @@ from typing import (
     Union,
 )
 
+from rich.text import Text
 from unidecode import unidecode
 
+from beets import config
 from beets.util import hidden
 
 if TYPE_CHECKING:
@@ -57,7 +59,6 @@ if sys.version_info >= (3, 10):
     from typing import TypeAlias
 else:
     from typing_extensions import TypeAlias
-
 
 MAX_FILENAME_LENGTH = 200
 WINDOWS_MAGIC_PREFIX = "\\\\?\\"
@@ -1127,3 +1128,23 @@ def get_temp_filename(
 
     _, filename = tempfile.mkstemp(dir=tempdir, prefix=prefix, suffix=suffix)
     return bytestring_path(filename)
+
+
+def colorize(color_name: str, text: str) -> str:
+    """Colorize text if colored output is enabled. (Like _colorize but
+    conditional.)
+    """
+    if not config["ui"]["color"] or "NO_COLOR" in os.environ.keys():
+        return text
+
+    color = " ".join(config["ui"]["colors"][color_name].as_str_seq())
+    return f"[{color}]{text}[/{color}]"
+
+
+def uncolorize(text: str) -> str:
+    return Text(text).plain
+
+
+def color_len(colored_text: str) -> int:
+    """Return the length of a string without color codes."""
+    return len(uncolorize(colored_text))
