@@ -105,7 +105,7 @@ class ChangeRepresentation:
             artist_l, artist_r = "", ""
         if artist_l != artist_r:
             artist_l, artist_r = colordiff(artist_l, artist_r)
-            left = Side(f"{self.changed_prefix} Artist: ", artist_l, "")
+            left = Side(f"{self.changed_prefix} Artist: ", "", "")
             right = Side("", artist_r, "")
             self.print_layout(self.indent_detail, left, right)
 
@@ -117,7 +117,7 @@ class ChangeRepresentation:
             name_l, name_r = self.cur_name or "", self.match.info.name
             if self.cur_name != self.match.info.name != VARIOUS_ARTISTS:
                 name_l, name_r = colordiff(name_l, name_r)
-                left = Side(f"{self.changed_prefix} {type_}: ", name_l, "")
+                left = Side(f"{self.changed_prefix} {type_}: ", "", "")
                 right = Side("", name_r, "")
                 self.print_layout(self.indent_detail, left, right)
             else:
@@ -194,8 +194,8 @@ class ChangeRepresentation:
         else:
             # If there is a title, highlight differences.
             cur_title = item.title.strip()
-            cur_col, new_col = colordiff(cur_title, new_title)
-            return cur_col, new_col, cur_title != new_title
+            new_col = colordiff(cur_title, new_title)
+            return "", new_col, cur_title != new_title
 
     @staticmethod
     def make_track_lengths(

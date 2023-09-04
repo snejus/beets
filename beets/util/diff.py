@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from difflib import SequenceMatcher
 from typing import TYPE_CHECKING
+
+from rich_tables.diff import diff
+
+from beets import config
 
 from .color import colorize
 
@@ -12,23 +15,12 @@ if TYPE_CHECKING:
     from beets.library.models import LibModel
 
 
-def colordiff(a: str, b: str) -> tuple[str, str]:
+def colordiff(a: str, b: str) -> str | tuple[str, str]:
     """Intelligently highlight the differences between two strings."""
-    before = ""
-    after = ""
+    if config["ui"]["color"]:
+        return diff(a, b)
 
-    matcher = SequenceMatcher(lambda _: False, a, b)
-    for op, a_start, a_end, b_start, b_end in matcher.get_opcodes():
-        before_part, after_part = a[a_start:a_end], b[b_start:b_end]
-        if op in {"delete", "replace"}:
-            before_part = colorize("text_diff_removed", before_part)
-        if op in {"insert", "replace"}:
-            after_part = colorize("text_diff_added", after_part)
-
-        before += before_part
-        after += after_part
-
-    return before, after
+    return str(a), str(b)
 
 
 FLOAT_EPSILON = 0.01
@@ -76,12 +68,20 @@ def _field_diff(
 
     # For strings, highlight changes. For others, colorize the whole thing.
     if isinstance(oldval, str):
-        oldstr, newstr = colordiff(oldstr, newstr)
+        out = colordiff(oldstr, newstr)
+        if isinstance(out, str):
+            oldstr, newstr = "", out
+        else:
+            oldstr, newstr = out
     else:
         oldstr = colorize("text_diff_removed", oldstr)
         newstr = colorize("text_diff_added", newstr)
 
-    return f"{field}: {oldstr} -> {newstr}"
+    out = f"{field}: "
+    if oldstr:
+        out += f"{oldstr} -> "
+    out += newstr
+    return out
 
 
 def get_model_changes(

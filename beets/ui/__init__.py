@@ -32,6 +32,7 @@ from functools import cache
 from typing import TYPE_CHECKING, Any
 
 import confuse
+from rich_tables.utils import make_console
 
 from beets import config, library, logging, plugins, util
 from beets.dbcore import db
@@ -45,6 +46,8 @@ from beets.util.functemplate import template
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
+
+console = make_console(highlight=False)
 
 # On Windows platforms, use colorama to support "ANSI" terminal colors.
 if sys.platform == "win32":
@@ -127,21 +130,7 @@ def print_(*strings: str, end: str = "\n") -> None:
     The `end` keyword argument behaves similarly to the built-in `print`
     (it defaults to a newline).
     """
-    txt = f"{' '.join(strings or ('',))}{end}"
-
-    # Encode the string and write it to stdout.
-    # On Python 3, sys.stdout expects text strings and uses the
-    # exception-throwing encoding error policy. To avoid throwing
-    # errors and use our configurable encoding override, we use the
-    # underlying bytes buffer instead.
-    if hasattr(sys.stdout, "buffer"):
-        out = txt.encode(_out_encoding(), "replace")
-        sys.stdout.buffer.write(out)
-        sys.stdout.buffer.flush()
-    else:
-        # In our test harnesses (e.g., DummyOut), sys.stdout.buffer
-        # does not exist. We instead just record the text string.
-        sys.stdout.write(txt)
+    console.print(" ".join(strings or []), end=end)
 
 
 # Configuration wrappers.
