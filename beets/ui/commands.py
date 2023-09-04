@@ -402,11 +402,11 @@ class ChangeRepresentation:
             # Hide artists for VA releases.
             artist_l, artist_r = "", ""
         if artist_l != artist_r:
-            artist_l, artist_r = ui.colordiff(artist_l, artist_r)
+            artist_r = ui.colordiff(artist_l, artist_r)
             # Prefix with U+2260: Not Equal To
             left = {
-                "prefix": ui.colorize("changed", "\u2260") + " Artist: ",
-                "contents": artist_l,
+                "prefix": ui.colorize("changed", "≠") + " Artist: ",
+                "contents": "",
                 "suffix": "",
             }
             right = {"prefix": "", "contents": artist_r, "suffix": ""}
@@ -422,11 +422,11 @@ class ChangeRepresentation:
                 self.cur_album != self.match.info.album
                 and self.match.info.album != VARIOUS_ARTISTS
             ):
-                album_l, album_r = ui.colordiff(album_l, album_r)
+                album_r = ui.colordiff(album_l, album_r)
                 # Prefix with U+2260: Not Equal To
                 left = {
                     "prefix": ui.colorize("changed", "\u2260") + " Album: ",
-                    "contents": album_l,
+                    "contents": "",
                     "suffix": "",
                 }
                 right = {"prefix": "", "contents": album_r, "suffix": ""}
@@ -437,11 +437,11 @@ class ChangeRepresentation:
             # Title - for singletons
             title_l, title_r = self.cur_title or "", self.match.info.title
             if self.cur_title != self.match.info.title:
-                title_l, title_r = ui.colordiff(title_l, title_r)
+                title_r = ui.colordiff(title_l, title_r)
                 # Prefix with U+2260: Not Equal To
                 left = {
                     "prefix": ui.colorize("changed", "\u2260") + " Title: ",
-                    "contents": title_l,
+                    "contents": "",
                     "suffix": "",
                 }
                 right = {"prefix": "", "contents": title_r, "suffix": ""}
@@ -518,8 +518,8 @@ class ChangeRepresentation:
         else:
             # If there is a title, highlight differences.
             cur_title = item.title.strip()
-            cur_col, new_col = ui.colordiff(cur_title, new_title)
-            return cur_col, new_col, cur_title != new_title
+            new_col = ui.colordiff(cur_title, new_title)
+            return "", new_col, cur_title != new_title
 
     @staticmethod
     def make_track_lengths(item, track_info):
@@ -602,12 +602,8 @@ class ChangeRepresentation:
         def get_width(side):
             """Return the width of left or right in uncolorized characters."""
             try:
-                return len(
-                    ui.uncolorize(
-                        " ".join(
-                            [side["prefix"], side["contents"], side["suffix"]]
-                        )
-                    )
+                return util.color_len(
+                    " ".join([side["prefix"], side["contents"], side["suffix"]])
                 )
             except KeyError:
                 # An empty dictionary -> Nothing to report
