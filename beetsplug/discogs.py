@@ -16,19 +16,23 @@
 python3-discogs-client library.
 """
 
-import http.client
+import http
 import json
 import os
 import re
 import socket
 import time
 import traceback
+from functools import lru_cache
+from itertools import islice
 from string import ascii_lowercase
+from unicodedata import normalize
 
 import confuse
 from discogs_client import Client, Master, Release
 from discogs_client import __version__ as dc_string
 from discogs_client.exceptions import DiscogsAPIError
+from pycountry import countries, subdivisions
 from requests.exceptions import ConnectionError
 
 import beets
@@ -66,6 +70,7 @@ class DiscogsPlugin(BeetsPlugin):
                 "separator": ", ",
                 "index_tracks": False,
                 "append_style_genre": False,
+                "results_count": 5,
             }
         )
         self.config["apikey"].redact = True
@@ -101,6 +106,7 @@ class DiscogsPlugin(BeetsPlugin):
             # The rate limit for authenticated users goes up to 60
             # requests per minute.
             self.discogs_client = Client(USER_AGENT, user_token=user_token)
+            # self.discogs_client.verbose = True
             return
 
         # Get the OAuth token from a file or log in.
@@ -115,6 +121,7 @@ class DiscogsPlugin(BeetsPlugin):
             secret = tokendata["secret"]
 
         self.discogs_client = Client(USER_AGENT, c_key, c_secret, token, secret)
+        # self.discogs_client.verbose = True
 
     def reset_auth(self):
         """Delete token file & redo the auth steps."""
@@ -171,31 +178,28 @@ class DiscogsPlugin(BeetsPlugin):
         matching an album and artist (if not various).
         """
         if not self.discogs_client:
-            return
+            return ()
 
-        if not album and not artist:
-            self._log.debug(
-                "Skipping Discogs query. Files missing album and "
-                "artist tags."
-            )
-            return []
+        if album:
+            album = re.sub(r" *\([^)]*\)", "", album)
+        query = f"{artist} {album.split(' - ')[-1]}"
 
-        if va_likely:
-            query = album
-        else:
-            query = f"{artist} {album}"
         try:
-            return self.get_albums(query)
+            results = self.get_albums(query)
+            if not results and items and (item := items[0]) and item.label:
+                query = f"{item.label} {item.album}"
+                results = self.get_albums(query)
         except DiscogsAPIError as e:
             self._log.debug("API Error: {0} (query: {1})", e, query)
             if e.status_code == 401:
                 self.reset_auth()
                 return self.candidates(items, artist, album, va_likely)
-            else:
-                return []
         except CONNECTION_ERRORS:
             self._log.debug("Connection error in album search", exc_info=True)
-            return []
+        else:
+            return results
+
+        return ()
 
     def get_track_from_album_by_title(
         self, album_info, title, dist_threshold=0.3
@@ -266,6 +270,8 @@ class DiscogsPlugin(BeetsPlugin):
                 return []
         except CONNECTION_ERRORS:
             self._log.debug("Connection error in track search", exc_info=True)
+            return ()
+
         candidates = []
         for album_cur in albums:
             self._log.debug("searching within album {0}", album_cur.album)
@@ -311,20 +317,23 @@ class DiscogsPlugin(BeetsPlugin):
             return None
         return self.get_album_info(result)
 
+    @lru_cache
     def get_albums(self, query):
         """Returns a list of AlbumInfo objects for a discogs search query."""
         # Strip non-word characters from query. Things like "!" and "-" can
         # cause a query to return no results, even if they match the artist or
         # album title. Use `re.UNICODE` flag to avoid stripping non-english
         # word characters.
-        query = re.sub(r"(?u)\W+", " ", query)
+        self._log.debug("Searching for '{}'", query)
+        query = re.sub(r"(?u)\W+", " ", query, re.UNICODE)
         # Strip medium information from query, Things like "CD1" and "disk 1"
         # can also negate an otherwise positive result.
         query = re.sub(r"(?i)\b(CD|disc|vinyl)\s*\d+", "", query)
 
+        results = self.discogs_client.search(query, type="release")
+        max_count = self.config["results_count"].as_number()
         try:
-            releases = self.discogs_client.search(query, type="release").page(1)
-
+            releases = islice(iter(results), max_count)
         except CONNECTION_ERRORS:
             self._log.debug(
                 "Communication error while searching for {0!r}",
@@ -332,10 +341,9 @@ class DiscogsPlugin(BeetsPlugin):
                 exc_info=True,
             )
             return []
-        return [
-            album for album in map(self.get_album_info, releases[:5]) if album
-        ]
+        return list(filter(None, map(self.get_album_info, releases)))
 
+    @lru_cache
     def get_master_year(self, master_id):
         """Fetches a master release given its Discogs ID and returns its year
         or None if the master release is not found.
@@ -400,38 +408,88 @@ class DiscogsPlugin(BeetsPlugin):
         year = result.data.get("year")
         mediums = [t.medium for t in tracks]
         country = result.data.get("country")
+        if not re.match(r"[A-Z][A-Z]", country):
+            COUNTRY_OVERRIDES = {
+                "Russia": "RU",  # pycountry: Russian Federation
+                "The Netherlands": "NL",  # pycountry: Netherlands
+                "UK": "GB",  # pycountry: Great Britain
+                "D.C.": "US",
+                "South Korea": "KR",  # pycountry: Korea, Republic of
+            }
+            try:
+                name = (
+                    normalize("NFKD", country)
+                    .encode("ascii", "ignore")
+                    .decode()
+                )
+                country = (
+                    COUNTRY_OVERRIDES.get(name)
+                    or getattr(
+                        countries.get(name=name, default=object),
+                        "alpha_2",
+                        None,
+                    )
+                    or subdivisions.lookup(name).country_code
+                )
+            except (ValueError, LookupError):
+                country = "XW"
+
+        country = country.replace("UK", "GB")
+
         data_url = result.data.get("uri")
         style = self.format(result.data.get("styles"))
         base_genre = self.format(result.data.get("genres"))
-
         if self.config["append_style_genre"] and style:
             genre = self.config["separator"].as_str().join([base_genre, style])
         else:
             genre = base_genre
 
-        discogs_albumid = extract_discogs_id_regex(result.data.get("uri"))
+        discogs_albumid = extract_discogs_id_regex(data_url)
 
         # Extract information for the optional AlbumInfo fields that are
         # contained on nested discogs fields.
-        albumtype = media = label = catalogno = labelid = None
-        if result.data.get("formats"):
-            albumtype = (
-                ", ".join(result.data["formats"][0].get("descriptions", []))
-                or None
-            )
-            media = result.data["formats"][0]["name"]
+        albumtypes = set()
+        albumtype = media = label = catalognum = labelid = None
+        formats = result.data.get("formats") or []
+        albumstatus = "Official"
+        albumtype = "album"
+        if formats:
+            _format = formats[0]
+            descs = set(_format.get("descriptions") or [])
+            media = (_format.get("name") or "").replace("File", "Digital Media")
+            for desc in descs:
+                if desc == "Promo":
+                    albumstatus = "Promotional"
+                elif desc in {"Album", "EP"}:
+                    albumtype = desc.lower()
+                    albumtypes.add(albumtype)
+                elif desc == "Compilation":
+                    albumtype = "album"
+                    albumtypes.add("compilation")
+                elif albumtype == "Single":
+                    albumtypes.add("single")
+                    albumtype = "album"
+                    # titles = (
+                    #     {
+                    #         Helpers.parse_track_name(t).get("main_title")
+                    #         for t in tracks
+                    #     },
+                    # )
+                    # if len(titles) < 2:
+                    #     albumtype = "single"
+        albumtypes.add(albumtype)
         if result.data.get("labels"):
             label = result.data["labels"][0].get("name")
-            catalogno = result.data["labels"][0].get("catno")
             labelid = result.data["labels"][0].get("id")
-
-        cover_art_url = self.select_cover_art(result)
-
-        # Additional cleanups (various artists name, catalog number, media).
+            catalognum = result.data["labels"][0].get("catno")
+            if catalognum == "none":
+                catalognum = None
+            elif catalognum:
+                catalognum = catalognum.upper()
         if va:
             artist = config["va_name"].as_str()
-        if catalogno == "none":
-            catalogno = None
+
+        cover_art_url = self.select_cover_art(result)
         # Explicitly set the `media` for the tracks, since it is expected by
         # `autotag.apply_metadata`, and set `medium_total`.
         for track in tracks:
@@ -441,9 +499,10 @@ class DiscogsPlugin(BeetsPlugin):
                 track.artist = artist
             if not track.artist_id:
                 track.artist_id = artist_id
-            # Discogs does not have track IDs. Invent our own IDs as proposed
-            # in #2336.
-            track.track_id = str(album_id) + "-" + track.track_alt
+            # Discogs does not have track IDs. Invent our own IDs as proposed in #2336.
+            track.track_id = (
+                str(album_id) + "-" + (track.track_alt or str(track.index))
+            )
             track.data_url = data_url
             track.data_source = "Discogs"
 
@@ -451,32 +510,63 @@ class DiscogsPlugin(BeetsPlugin):
         master_id = result.data.get("master_id")
         # Assume `original_year` is equal to `year` for releases without
         # a master release, otherwise fetch the master release.
-        original_year = self.get_master_year(master_id) if master_id else year
+        # original_year = result.master.year if master_id else year
+        released = (result.data.get("released") or "").split("-")
+        year = int(released[0]) if len(released[0]) else None
+        month = int(released[1]) if len(released) > 1 else None
+        day = int(released[2]) if len(released) > 2 else None
+        label = re.sub(r" \([0-9]+\)", "", label)
+        comments = result.data.get("notes") or None
 
-        return AlbumInfo(
-            album=album,
-            album_id=album_id,
-            artist=artist,
-            artist_id=artist_id,
-            tracks=tracks,
+        data = dict(
             albumtype=albumtype,
-            va=va,
             year=year,
             label=label,
-            mediums=len(set(mediums)),
-            releasegroup_id=master_id,
-            catalognum=catalogno,
+            artist_sort=result.data.get("artists_sort"),
+            comments=comments,
+            albumtypes=sorted(albumtypes),
+            month=month,
+            day=day,
+            catalognum=catalognum,
             country=country,
-            style=style,
-            genre=genre,
-            media=media,
-            original_year=original_year,
-            data_source="Discogs",
+            style=genre,
+            genre=style,
+            original_year=year,
+            data_source="discogs",
             data_url=data_url,
-            discogs_albumid=discogs_albumid,
             discogs_labelid=labelid,
             discogs_artistid=artist_id,
             cover_art_url=cover_art_url,
+        )
+        if len(tracks) == 1:
+            t = tracks[0]
+            data.update(albumtype="single", albumtypes=["single"])
+            album = artist + " - " + t.title
+            album_id = t.track_id
+            for track in tracks:
+                track.index = None
+                track.medium_index = None
+                track.medium = None
+                track.medium_total = None
+                track.track_alt = None
+                track.update(data)
+        else:
+            data.update(
+                discogs_albumid=discogs_albumid,
+                album=album,
+                album_id=album_id,
+            )
+
+        return AlbumInfo(
+            artist=artist,
+            artist_id=artist_id,
+            tracks=tracks,
+            va=va,
+            albumstatus=albumstatus,
+            mediums=len(set(mediums)),
+            releasegroup_id=master_id,
+            media=media,
+            **data,
         )
 
     def select_cover_art(self, result):
@@ -584,16 +674,7 @@ class DiscogsPlugin(BeetsPlugin):
             index_count += 1
             medium_count = 1 if medium_count == 0 else medium_count
             track.medium, track.medium_index = medium_count, index_count
-
-        # Get `disctitle` from Discogs index tracks. Assume that an index track
-        # before the first track of each medium is a disc title.
-        for track in tracks:
-            if track.medium_index == 1:
-                if track.index in index_tracks:
-                    disctitle = index_tracks[track.index]
-                else:
-                    disctitle = None
-            track.disctitle = disctitle
+            track.data_source = "discogs"
 
         return tracks
 
@@ -637,10 +718,11 @@ class DiscogsPlugin(BeetsPlugin):
                             )
                     tracklist.extend(subtracks)
             else:
-                # Merge the subtracks, pick a title, and append the new track.
-                track = subtracks[0].copy()
-                track["title"] = " / ".join([t["title"] for t in subtracks])
-                tracklist.append(track)
+                tracklist.extend(subtracks)
+                # # Merge the subtracks, pick a title, and append the new track.
+                # track = subtracks[0].copy()
+                # track["title"] = " / ".join([t["title"] for t in subtracks])
+                # tracklist.append(track)
 
         # Pre-process the tracklist, trying to identify subtracks.
         subtracks = []
