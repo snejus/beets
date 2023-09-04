@@ -402,8 +402,8 @@ class DGAlbumInfoTest(BeetsTestCase):
         release = self._make_release_from_positions(["1", "2"])
 
         d = DiscogsPlugin().get_album_info(release)
-        assert d.genre == "GENRE1, GENRE2"
-        assert d.style == "STYLE1, STYLE2"
+        assert d.style == "GENRE1, GENRE2"
+        assert d.genre == "STYLE1, STYLE2"
 
     def test_append_style_to_genre(self):
         """Test appending style to genre if config enabled"""
@@ -411,8 +411,8 @@ class DGAlbumInfoTest(BeetsTestCase):
         release = self._make_release_from_positions(["1", "2"])
 
         d = DiscogsPlugin().get_album_info(release)
-        assert d.genre == "GENRE1, GENRE2, STYLE1, STYLE2"
-        assert d.style == "STYLE1, STYLE2"
+        assert d.genre == "STYLE1, STYLE2"
+        assert d.style == "GENRE1, GENRE2, STYLE1, STYLE2"
 
     def test_append_style_to_genre_no_style(self):
         """Test nothing appended to genre if style is empty"""
@@ -421,8 +421,8 @@ class DGAlbumInfoTest(BeetsTestCase):
         release.data["styles"] = []
 
         d = DiscogsPlugin().get_album_info(release)
-        assert d.genre == "GENRE1, GENRE2"
-        assert d.style is None
+        assert d.style == "GENRE1, GENRE2"
+        assert d.genre is None
 
 
 @pytest.mark.parametrize(
