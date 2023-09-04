@@ -45,9 +45,11 @@ from typing import (
     Union,
 )
 
+import six
 from typing_extensions import TypeAlias
 from unidecode import unidecode
 
+from beets import config
 from beets.util import hidden
 
 MAX_FILENAME_LENGTH = 200
@@ -1072,3 +1074,14 @@ class cached_classproperty:  # noqa: N801
             self.cache[owner] = self.getter(owner)
 
         return self.cache[owner]
+
+
+def colorize(color_name, text):
+    """Colorize text if colored output is enabled. (Like _colorize but
+    conditional.)
+    """
+    if not config["ui"]["color"] or "NO_COLOR" in os.environ.keys():
+        return text
+
+    color = " ".join(config["ui"]["colors"][color_name].as_str_seq())
+    return f"[{color}]{text}[/]"
