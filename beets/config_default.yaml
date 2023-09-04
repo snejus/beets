@@ -129,7 +129,7 @@ ui:
         action_default: ['bold', 'cyan']
         action: ['bold', 'cyan']
         # New Colors
-        text_faint: ['faint']
+        text_faint: ['dim']
         import_path: ['bold', 'blue']
         import_path_items: ['bold', 'blue']
         changed: ['yellow']
