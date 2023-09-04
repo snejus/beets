@@ -29,8 +29,8 @@ def show_path_changes(path_changes):
 
     vs.
 
-    Source
-      -> Destination
+    Source ->
+    Destination
     """
     sources, destinations = zip(*path_changes)
 
@@ -38,24 +38,8 @@ def show_path_changes(path_changes):
     sources = list(map(displayable_path, sources))
     destinations = list(map(displayable_path, destinations))
 
-    # Calculate widths for terminal split
-    col_width = (ui.term_width() - len(" -> ")) // 2
-    max_width = len(max(sources + destinations, key=len))
-
-    if max_width > col_width:
-        # Print every change over two lines
-        for source, dest in zip(sources, destinations):
-            color_source, color_dest = ui.colordiff(source, dest)
-            ui.print_(f"{color_source} \n  -> {color_dest}")
-    else:
-        # Print every change on a single line, and add a header
-        title_pad = max_width - len("Source ") + len(" -> ")
-
-        ui.print_(f"Source {' ' * title_pad} Destination")
-        for source, dest in zip(sources, destinations):
-            pad = max_width - len(source)
-            color_source, color_dest = ui.colordiff(source, dest)
-            ui.print_(f"{color_source} {' ' * pad} -> {color_dest}")
+    for source, dest in zip(sources, destinations):
+        ui.console.print(ui.colordiff(source, dest), highlight=False)
 
 
 def move_items(
