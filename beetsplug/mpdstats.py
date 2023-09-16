@@ -65,7 +65,7 @@ class MPDClientWrapper:
         if host[0] in ["/", "~"]:
             host = os.path.expanduser(host)
 
-        self._log.info("connecting to {}:{}", host, port)
+        ui.print_(f"connecting to {host}:{port}")
         try:
             self.client.connect(host, port)
         except OSError as e:
@@ -169,7 +169,7 @@ class MPDStats:
         item = self.lib.items(query).get()
         if item:
             return item
-        self._log.info("item not found: {}", displayable_path(path))
+        ui.print_(f"item not found: {displayable_path(path)}")
 
     def update_item(self, item, attribute, value=None, increment=None):
         """Update the beets item. Set attribute to value or increment the value
@@ -245,15 +245,15 @@ class MPDStats:
     def handle_played(self, song):
         """Updates the play count of a song."""
         self.update_item(song["beets_item"], "play_count", increment=1)
-        self._log.info("played {}", displayable_path(song["path"]))
+        ui.print_(f"played {displayable_path(song['path'])}")
 
     def handle_skipped(self, song):
         """Updates the skip count of a song."""
         self.update_item(song["beets_item"], "skip_count", increment=1)
-        self._log.info("skipped {}", displayable_path(song["path"]))
+        ui.print_(f"skipped {displayable_path(song['path'])}")
 
     def on_stop(self, status):
-        self._log.info("stop")
+        ui.print_("stop")
 
         # if the current song stays the same it means that we stopped on the
         # current track and should not record a skip.
@@ -263,7 +263,7 @@ class MPDStats:
         self.now_playing = None
 
     def on_pause(self, status):
-        self._log.info("pause")
+        ui.print_("pause")
         self.now_playing = None
 
     def on_play(self, status):
@@ -289,11 +289,11 @@ class MPDStats:
                     self.handle_song_change(self.now_playing)
 
         if is_url(path):
-            self._log.info("playing stream {}", displayable_path(path))
+            ui.print_(f"playing stream {displayable_path(path)}")
             self.now_playing = None
             return
 
-        self._log.info("playing {}", displayable_path(path))
+        ui.print_(f"playing {displayable_path(path)}")
 
         self.now_playing = {
             "started": time.time(),
