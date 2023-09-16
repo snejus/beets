@@ -22,6 +22,7 @@ from beets import config, library, plugins, ui
 from beets.dbcore import types
 from beets.util import displayable_path
 
+ui.console.width = 400
 # If we lose the connection, how many times do we want to retry and how
 # much time should we wait between retries?
 RETRIES = 10
@@ -62,7 +63,7 @@ class MPDClientWrapper:
         if host[0] in ["/", "~"]:
             host = os.path.expanduser(host)
 
-        self._log.info("connecting to {0}:{1}", host, port)
+        ui.print_(f"connecting to {host}:{port}")
         try:
             self.client.connect(host, port)
         except OSError as e:
@@ -164,8 +165,7 @@ class MPDStats:
         item = self.lib.items(query).get()
         if item:
             return item
-
-        self._log.info("item not found: {0}", displayable_path(path))
+        ui.print_(f"item not found: {displayable_path(path)}")
 
     def update_item(self, item, attribute, value=None, increment=None):
         """Update the beets item. Set attribute to value or increment the value
@@ -238,15 +238,15 @@ class MPDStats:
     def handle_played(self, song):
         """Updates the play count of a song."""
         self.update_item(song["beets_item"], "play_count", increment=1)
-        self._log.info("played {0}", displayable_path(song["path"]))
+        ui.print_("played {}".format(displayable_path(song["path"])))
 
     def handle_skipped(self, song):
         """Updates the skip count of a song."""
         self.update_item(song["beets_item"], "skip_count", increment=1)
-        self._log.info("skipped {0}", displayable_path(song["path"]))
+        ui.print_("skipped {}".format(displayable_path(song["path"])))
 
     def on_stop(self, status):
-        self._log.info("stop")
+        ui.print_("stop")
 
         # if the current song stays the same it means that we stopped on the
         # current track and should not record a skip.
@@ -256,7 +256,7 @@ class MPDStats:
         self.now_playing = None
 
     def on_pause(self, status):
-        self._log.info("pause")
+        ui.print_("pause")
         self.now_playing = None
 
     def on_play(self, status):
@@ -285,11 +285,11 @@ class MPDStats:
                     self.handle_song_change(self.now_playing)
 
         if is_url(path):
-            self._log.info("playing stream {0}", displayable_path(path))
+            ui.print_("playing stream {}".format(displayable_path(path)))
             self.now_playing = None
             return
 
-        self._log.info("playing {0}", displayable_path(path))
+        ui.print_("playing {}".format(displayable_path(path)))
 
         self.now_playing = {
             "started": time.time(),
