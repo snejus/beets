@@ -33,7 +33,7 @@ PLUGIN_NAMESPACE = "beetsplug"
 LASTFM_KEY = "2dc3914abf35f0d9c92d97d8f8e42b43"
 
 # Global logger.
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 
 class PluginConflictException(Exception):
@@ -42,23 +42,6 @@ class PluginConflictException(Exception):
 
     For example two plugins may define different types for flexible fields.
     """
-
-
-class PluginLogFilter(logging.Filter):
-    """A logging filter that identifies the plugin that emitted a log
-    message.
-    """
-
-    def __init__(self, plugin):
-        self.prefix = f"{plugin.name}: "
-
-    def filter(self, record):
-        if hasattr(record.msg, "msg") and isinstance(record.msg.msg, str):
-            # A _LogMessage from our hacked-up Logging replacement.
-            record.msg.msg = self.prefix + record.msg.msg
-        elif isinstance(record.msg, str):
-            record.msg = self.prefix + record.msg
-        return True
 
 
 # Managing the plugins themselves.
@@ -85,8 +68,6 @@ class BeetsPlugin:
 
         self._log = log.getChild(self.name)
         self._log.setLevel(logging.NOTSET)  # Use `beets` logger level.
-        if not any(isinstance(f, PluginLogFilter) for f in self._log.filters):
-            self._log.addFilter(PluginLogFilter(self))
 
     def commands(self):
         """Should return a list of beets.ui.Subcommand objects for

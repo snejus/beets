@@ -29,7 +29,7 @@ class LoggingTest(BeetsTestCase):
         assert l3 == l4
         assert l3.__class__ == blog.BeetsLogger
         assert isinstance(
-            l3, (blog.StrFormatLogger, blog.ThreadLocalLevelLogger)
+            l3, blog.ThreadLocalLevelLogger
         )
 
         l5 = l3.getChild("shalala")
@@ -37,18 +37,6 @@ class LoggingTest(BeetsTestCase):
 
         l6 = blog.getLogger()
         assert l1 != l6
-
-    def test_str_format_logging(self):
-        l = blog.getLogger("baz123")
-        stream = StringIO()
-        handler = log.StreamHandler(stream)
-
-        l.addHandler(handler)
-        l.propagate = False
-
-        l.warning("foo {0} {bar}", "oof", bar="baz")
-        handler.flush()
-        assert stream.getvalue(), "foo oof baz"
 
 
 class LoggingLevelTest(AsIsImporterMixin, PluginMixin, ImportTestCase):
@@ -86,73 +74,73 @@ class LoggingLevelTest(AsIsImporterMixin, PluginMixin, ImportTestCase):
         self.config["verbose"] = 0
         with helper.capture_log() as logs:
             self.run_command("dummy")
-        assert "dummy: warning cmd" in logs
-        assert "dummy: info cmd" in logs
-        assert "dummy: debug cmd" not in logs
+        assert "warning cmd" in logs
+        assert "info cmd" in logs
+        assert "debug cmd" not in logs
 
     def test_command_level1(self):
         self.config["verbose"] = 1
         with helper.capture_log() as logs:
             self.run_command("dummy")
-        assert "dummy: warning cmd" in logs
-        assert "dummy: info cmd" in logs
-        assert "dummy: debug cmd" in logs
+        assert "warning cmd" in logs
+        assert "info cmd" in logs
+        assert "debug cmd" in logs
 
     def test_command_level2(self):
         self.config["verbose"] = 2
         with helper.capture_log() as logs:
             self.run_command("dummy")
-        assert "dummy: warning cmd" in logs
-        assert "dummy: info cmd" in logs
-        assert "dummy: debug cmd" in logs
+        assert "warning cmd" in logs
+        assert "info cmd" in logs
+        assert "debug cmd" in logs
 
     def test_listener_level0(self):
         self.config["verbose"] = 0
         with helper.capture_log() as logs:
             plugins.send("dummy_event")
-        assert "dummy: warning listener" in logs
-        assert "dummy: info listener" not in logs
-        assert "dummy: debug listener" not in logs
+        assert "warning listener" in logs
+        assert "info listener" not in logs
+        assert "debug listener" not in logs
 
     def test_listener_level1(self):
         self.config["verbose"] = 1
         with helper.capture_log() as logs:
             plugins.send("dummy_event")
-        assert "dummy: warning listener" in logs
-        assert "dummy: info listener" in logs
-        assert "dummy: debug listener" not in logs
+        assert "warning listener" in logs
+        assert "info listener" in logs
+        assert "debug listener" not in logs
 
     def test_listener_level2(self):
         self.config["verbose"] = 2
         with helper.capture_log() as logs:
             plugins.send("dummy_event")
-        assert "dummy: warning listener" in logs
-        assert "dummy: info listener" in logs
-        assert "dummy: debug listener" in logs
+        assert "warning listener" in logs
+        assert "info listener" in logs
+        assert "debug listener" in logs
 
     def test_import_stage_level0(self):
         self.config["verbose"] = 0
         with helper.capture_log() as logs:
             self.run_asis_importer()
-        assert "dummy: warning import_stage" in logs
-        assert "dummy: info import_stage" not in logs
-        assert "dummy: debug import_stage" not in logs
+        assert "warning import_stage" in logs
+        assert "info import_stage" not in logs
+        assert "debug import_stage" not in logs
 
     def test_import_stage_level1(self):
         self.config["verbose"] = 1
         with helper.capture_log() as logs:
             self.run_asis_importer()
-        assert "dummy: warning import_stage" in logs
-        assert "dummy: info import_stage" in logs
-        assert "dummy: debug import_stage" not in logs
+        assert "warning import_stage" in logs
+        assert "info import_stage" in logs
+        assert "debug import_stage" not in logs
 
     def test_import_stage_level2(self):
         self.config["verbose"] = 2
         with helper.capture_log() as logs:
             self.run_asis_importer()
-        assert "dummy: warning import_stage" in logs
-        assert "dummy: info import_stage" in logs
-        assert "dummy: debug import_stage" in logs
+        assert "warning import_stage" in logs
+        assert "info import_stage" in logs
+        assert "debug import_stage" in logs
 
 
 @_common.slow_test()

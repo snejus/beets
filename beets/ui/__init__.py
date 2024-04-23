@@ -17,7 +17,6 @@ interface. To invoke the CLI, just call beets.ui.main(). The actual
 CLI commands are implemented in the ui.commands module.
 """
 
-
 import errno
 import optparse
 import os.path
@@ -30,6 +29,8 @@ import traceback
 from typing import Any, Callable, List
 
 import confuse
+from rich.logging import RichHandler
+from rich.traceback import install
 from rich_tables.utils import diff, make_console
 
 from beets import config, library, logging, plugins, util
@@ -50,11 +51,30 @@ if sys.platform == "win32":
     else:
         colorama.init()
 
-
 log = logging.getLogger("beets")
+
 if not log.handlers:
-    log.addHandler(logging.StreamHandler())
+    handler = RichHandler(
+        show_path=False,
+        show_level=True,
+        omit_repeated_times=False,
+        rich_tracebacks=False,
+        tracebacks_show_locals=True,
+        tracebacks_width=console.width,
+        tracebacks_extra_lines=1,
+        keywords=["Sending event", "import"],
+        markup=True,
+    )
+    handler.setFormatter(
+        logging.Formatter(
+            "[b grey42]{name:<20}[/] {message}", datefmt="%T", style="{"
+        )
+    )
+    log.addHandler(handler)
+
 log.propagate = False  # Don't propagate to root handler.
+
+install(console=console, show_locals=False, extra_lines=2)
 
 
 PF_KEY_QUERIES = {
@@ -122,14 +142,14 @@ def print_(*strings, **kwargs):
     (it defaults to a newline).
     """
     if not strings:
-        strings = ['']
+        strings = [""]
 
     try:
         for string in strings:
             if isinstance(string, str):
                 console.print(string)
             else:
-                console.print(string, end='\n')
+                console.print(string, end="\n")
     except:
         console.print_exception(show_locals=True)
 
@@ -311,7 +331,7 @@ def input_options(
 
         # Wrap the query text.
         # Start prompt with U+279C: Heavy Round-Tipped Rightwards Arrow
-        prompt = colorize("action", "\u279C ")
+        prompt = colorize("action", "\u279c ")
         line_length = 0
         for i, (part, length) in enumerate(
             zip(prompt_parts, prompt_part_lengths)
@@ -380,7 +400,7 @@ def input_yn(prompt, require=False):
     "yes" unless `require` is `True`, in which case there is no default.
     """
     # Start prompt with U+279C: Heavy Round-Tipped Rightwards Arrow
-    yesno = colorize("action", "\u279C ") + colorize(
+    yesno = colorize("action", "\u279c ") + colorize(
         "action_description", "Enter Y or N:"
     )
     sel = input_options(("y", "n"), require, prompt, yesno)
@@ -1548,8 +1568,8 @@ def main(args=None):
         _raw_main(args)
     except UserError as exc:
         message = exc.args[0] if exc.args else None
-        if 'No matching' in message:
-            log.error(u'error: {0}', message)
+        if "No matching" in message:
+            log.error("error: {0}", message)
         else:
             console.print_exception(extra_lines=2, show_locals=True)
         sys.exit(1)

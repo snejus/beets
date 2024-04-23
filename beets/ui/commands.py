@@ -54,7 +54,7 @@ PromptChoice = namedtuple("PromptChoice", ["short", "long", "callback"])
 console = Console(force_terminal=True, force_interactive=True)
 
 # Global logger.
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 # The list of default subcommands. This is populated with Subcommand
 # objects that can be fed to a SubcommandsOptionParser.
