@@ -56,7 +56,7 @@ from beets.util import plurality
 VA_ARTISTS = ("", "various artists", "various", "va", "unknown")
 
 # Global logger.
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 
 # Recommendation enumeration.
