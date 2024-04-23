@@ -24,27 +24,13 @@ class LoggingTest(TestCase):
         l4 = log.getLogger("bar123")
         self.assertEqual(l3, l4)
         self.assertEqual(l3.__class__, blog.BeetsLogger)
-        self.assertIsInstance(
-            l3, (blog.StrFormatLogger, blog.ThreadLocalLevelLogger)
-        )
+        self.assertIsInstance(l3, blog.ThreadLocalLevelLogger)
 
         l5 = l3.getChild("shalala")
         self.assertEqual(l5.__class__, blog.BeetsLogger)
 
         l6 = blog.getLogger()
         self.assertNotEqual(l1, l6)
-
-    def test_str_format_logging(self):
-        l = blog.getLogger("baz123")
-        stream = StringIO()
-        handler = log.StreamHandler(stream)
-
-        l.addHandler(handler)
-        l.propagate = False
-
-        l.warning("foo {0} {bar}", "oof", bar="baz")
-        handler.flush()
-        self.assertTrue(stream.getvalue(), "foo oof baz")
 
 
 class LoggingLevelTest(unittest.TestCase, helper.TestHelper):
@@ -89,76 +75,76 @@ class LoggingLevelTest(unittest.TestCase, helper.TestHelper):
         self.config["verbose"] = 0
         with helper.capture_log() as logs:
             self.run_command("dummy")
-        self.assertIn("dummy: warning cmd", logs)
-        self.assertIn("dummy: info cmd", logs)
-        self.assertNotIn("dummy: debug cmd", logs)
+        self.assertIn("warning cmd", logs)
+        self.assertIn("info cmd", logs)
+        self.assertNotIn("debug cmd", logs)
 
     def test_command_level1(self):
         self.config["verbose"] = 1
         with helper.capture_log() as logs:
             self.run_command("dummy")
-        self.assertIn("dummy: warning cmd", logs)
-        self.assertIn("dummy: info cmd", logs)
-        self.assertIn("dummy: debug cmd", logs)
+        self.assertIn("warning cmd", logs)
+        self.assertIn("info cmd", logs)
+        self.assertIn("debug cmd", logs)
 
     def test_command_level2(self):
         self.config["verbose"] = 2
         with helper.capture_log() as logs:
             self.run_command("dummy")
-        self.assertIn("dummy: warning cmd", logs)
-        self.assertIn("dummy: info cmd", logs)
-        self.assertIn("dummy: debug cmd", logs)
+        self.assertIn("warning cmd", logs)
+        self.assertIn("info cmd", logs)
+        self.assertIn("debug cmd", logs)
 
     def test_listener_level0(self):
         self.config["verbose"] = 0
         with helper.capture_log() as logs:
             plugins.send("dummy_event")
-        self.assertIn("dummy: warning listener", logs)
-        self.assertNotIn("dummy: info listener", logs)
-        self.assertNotIn("dummy: debug listener", logs)
+        self.assertIn("warning listener", logs)
+        self.assertNotIn("info listener", logs)
+        self.assertNotIn("debug listener", logs)
 
     def test_listener_level1(self):
         self.config["verbose"] = 1
         with helper.capture_log() as logs:
             plugins.send("dummy_event")
-        self.assertIn("dummy: warning listener", logs)
-        self.assertIn("dummy: info listener", logs)
-        self.assertNotIn("dummy: debug listener", logs)
+        self.assertIn("warning listener", logs)
+        self.assertIn("info listener", logs)
+        self.assertNotIn("debug listener", logs)
 
     def test_listener_level2(self):
         self.config["verbose"] = 2
         with helper.capture_log() as logs:
             plugins.send("dummy_event")
-        self.assertIn("dummy: warning listener", logs)
-        self.assertIn("dummy: info listener", logs)
-        self.assertIn("dummy: debug listener", logs)
+        self.assertIn("warning listener", logs)
+        self.assertIn("info listener", logs)
+        self.assertIn("debug listener", logs)
 
     def test_import_stage_level0(self):
         self.config["verbose"] = 0
         with helper.capture_log() as logs:
             importer = self.create_importer()
             importer.run()
-        self.assertIn("dummy: warning import_stage", logs)
-        self.assertNotIn("dummy: info import_stage", logs)
-        self.assertNotIn("dummy: debug import_stage", logs)
+        self.assertIn("warning import_stage", logs)
+        self.assertNotIn("info import_stage", logs)
+        self.assertNotIn("debug import_stage", logs)
 
     def test_import_stage_level1(self):
         self.config["verbose"] = 1
         with helper.capture_log() as logs:
             importer = self.create_importer()
             importer.run()
-        self.assertIn("dummy: warning import_stage", logs)
-        self.assertIn("dummy: info import_stage", logs)
-        self.assertNotIn("dummy: debug import_stage", logs)
+        self.assertIn("warning import_stage", logs)
+        self.assertIn("info import_stage", logs)
+        self.assertNotIn("debug import_stage", logs)
 
     def test_import_stage_level2(self):
         self.config["verbose"] = 2
         with helper.capture_log() as logs:
             importer = self.create_importer()
             importer.run()
-        self.assertIn("dummy: warning import_stage", logs)
-        self.assertIn("dummy: info import_stage", logs)
-        self.assertIn("dummy: debug import_stage", logs)
+        self.assertIn("warning import_stage", logs)
+        self.assertIn("info import_stage", logs)
+        self.assertIn("debug import_stage", logs)
 
 
 @_common.slow_test()

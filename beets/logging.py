@@ -20,7 +20,6 @@ use {}-style formatting and can interpolate keywords arguments to the logging
 calls (`debug`, `info`, etc).
 """
 
-
 import logging
 import threading
 from copy import copy
@@ -46,7 +45,7 @@ def logsafe(val):
     return val
 
 
-class StrFormatLogger(logging.Logger):
+class StrFormatLogRecord(logging.LogRecord):
     """A version of `Logger` that uses `str.format`-style formatting
     instead of %-style formatting and supports keyword arguments.
 
@@ -58,42 +57,9 @@ class StrFormatLogger(logging.Logger):
     achieve this with less code.
     """
 
-    class _LogMessage:
-        def __init__(self, msg, args, kwargs):
-            self.msg = msg
-            self.args = args
-            self.kwargs = kwargs
-
-        def __str__(self):
-            args = [logsafe(a) for a in self.args]
-            kwargs = {k: logsafe(v) for (k, v) in self.kwargs.items()}
-            return self.msg.format(*args, **kwargs)
-
-    def _log(
-        self,
-        level,
-        msg,
-        args,
-        exc_info=None,
-        extra=None,
-        stack_info=False,
-        **kwargs,
-    ):
-        """Log msg.format(*args, **kwargs)"""
-        m = self._LogMessage(msg, args, kwargs)
-
-        stacklevel = kwargs.pop("stacklevel", 1)
-        stacklevel = {"stacklevel": stacklevel}
-
-        return super()._log(
-            level,
-            m,
-            (),
-            exc_info=exc_info,
-            extra=extra,
-            stack_info=stack_info,
-            **stacklevel,
-        )
+    def getMessage(self):
+        args = [logsafe(a) for a in self.args]
+        return self.msg.format(*args)
 
 
 class ThreadLocalLevelLogger(logging.Logger):
@@ -124,12 +90,13 @@ class ThreadLocalLevelLogger(logging.Logger):
         self.setLevel(level)
 
 
-class BeetsLogger(ThreadLocalLevelLogger, StrFormatLogger):
+class BeetsLogger(ThreadLocalLevelLogger):
     pass
 
 
 my_manager = copy(logging.Logger.manager)
-my_manager.loggerClass = BeetsLogger
+my_manager.setLoggerClass(BeetsLogger)
+logging.setLogRecordFactory(StrFormatLogRecord)
 
 
 # Act like the stdlib logging module by re-exporting its namespace.
