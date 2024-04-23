@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
     from .library import Library  # noqa: F401
 
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 
 class LibModel(dbcore.Model["Library"]):

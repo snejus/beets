@@ -58,6 +58,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
     from logging import Logger
 
+    from rich.console import Console
+
     from beets.library import Item
 
 MAX_FILENAME_LENGTH = 200
@@ -1209,4 +1211,7 @@ def unique_list(elements: Iterable[T]) -> list[T]:
     return list(dict.fromkeys(elements))
 
 
-console = make_console(highlight=False, stderr=True)
+@cache
+def get_console() -> Console:
+    color = beets.config["ui"]["color"].get()
+    return make_console(highlight=False, force_terminal=color)

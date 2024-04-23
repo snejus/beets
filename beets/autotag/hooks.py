@@ -43,7 +43,7 @@ V = TypeVar("V")
 
 JSONDict = dict[str, Any]
 
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 SYNCHRONISED_LIST_FIELDS = {
     ("albumtype", "albumtypes"),
