@@ -28,6 +28,8 @@ import traceback
 from typing import Any, Callable
 
 import confuse
+from rich.logging import RichHandler
+from rich.traceback import install
 
 from beets import config, library, logging, plugins, util
 from beets.autotag import mb
@@ -45,12 +47,37 @@ if sys.platform == "win32":
     else:
         colorama.init()
 
-
 log = logging.getLogger("beets")
+
 if not log.handlers:
-    log.addHandler(logging.StreamHandler())
+    handler = RichHandler(
+        show_path=False,
+        show_level=True,
+        omit_repeated_times=False,
+        rich_tracebacks=True,
+        tracebacks_show_locals=True,
+        tracebacks_width=console.width,
+        tracebacks_extra_lines=1,
+        keywords=["Sending event", "import"],
+        markup=True,
+    )
+    handler.setFormatter(
+        logging.Formatter(
+            "[b grey42]{name:<20}[/] {message}", datefmt="%T", style="{"
+        )
+    )
+    log.addHandler(handler)
+
 log.propagate = False  # Don't propagate to root handler.
 
+install(
+    console=console,
+    show_locals=True,
+    width=console.width,
+    code_width=console.width,
+    locals_max_length=1,
+    locals_hide_sunder=True,
+)
 
 PF_KEY_QUERIES = {
     "comp": "comp:true",
