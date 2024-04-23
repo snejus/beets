@@ -7,7 +7,7 @@ from beets import library, logging, plugins, ui
 from beets.util import syspath
 
 # Global logger.
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 
 def print_completion(*args):

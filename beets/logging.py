@@ -32,12 +32,15 @@ from logging import (
     WARNING,
     FileHandler,
     Filter,
+    Formatter,
     Handler,
     Logger,
     NullHandler,
     StreamHandler,
 )
 from typing import TYPE_CHECKING, Any, TypeVar, overload
+
+from rich_tables.utils import format_string
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -60,6 +63,7 @@ __all__ = [
     "INFO",
     "NOTSET",
     "WARNING",
+    "Formatter",
     "FileHandler",
     "Filter",
     "Handler",
@@ -128,7 +132,7 @@ class StrFormatLogger(Logger):
         def __str__(self):
             args = [_logsafe(a) for a in self.args]
             kwargs = {k: _logsafe(v) for (k, v) in self.kwargs.items()}
-            return self.msg.format(*args, **kwargs)
+            return format_string(self.msg.format(*args, **kwargs))
 
     def _log(
         self,

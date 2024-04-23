@@ -11,13 +11,14 @@ from rich_tables.fields import FIELDS_MAP
 from rich_tables.generic import flexitable
 from rich_tables.utils import border_panel, new_table, wrap
 
-from beets import config, ui
+from beets import config
 from beets.autotag.hooks import AlbumInfo
+from beets.util import get_console
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from rich.console import RenderableType
+    from rich.console import Console, RenderableType
 
     from beets.autotag.hooks import AlbumMatch, Info, TrackMatch
     from beets.library.models import Item
@@ -106,7 +107,7 @@ def show_album_change(
                 tracks_table.add_row(*values, style="b yellow")
 
     title = wrap("Tracks", "b i cyan")
-    ui.console.print(border_panel(tracks_table, title=title))
+    get_console().print(border_panel(tracks_table, title=title))
 
 
 def show_item_change(old: Item, new: Info, skip: set[str] = set()) -> None:
@@ -143,6 +144,7 @@ def show_item_change(old: Item, new: Info, skip: set[str] = set()) -> None:
     if "tracklist" in old:
         old["comments"] += "\n\nTracklist\n\n" + old["tracklist"]
 
+    console = get_console()
     if upd_meta.row_count:
         _type = "Album" if isinstance(new, AlbumInfo) else "Singleton"
         color = "magenta" if _type == "Album" else "cyan"
@@ -154,22 +156,26 @@ def show_item_change(old: Item, new: Info, skip: set[str] = set()) -> None:
             Align.center(updates_panel, vertical="bottom"),
             info_panel,
         ]
-        ui.console.print(new_table(rows=[row]))
+        console.print(new_table(rows=[row]))
 
-    ui.console.print(wrap(new.data_url or "", "b grey35"))
+    console.print(wrap(new.data_url or "", "b grey35"))
 
 
-def print_singleton_candidates(candidates: Sequence[TrackMatch]) -> None:
+def print_singleton_candidates(
+    console: Console, candidates: Sequence[TrackMatch]
+) -> None:
     candidata = [
         {"id": str(i), **m.disambig_data} for i, m in enumerate(candidates, 1)
     ]
-    ui.console.print(
+    console.print(
         border_panel(flexitable(candidata), title="Singleton candidates")
     )
-    ui.console.print("")
+    console.print("")
 
 
-def print_album_candidates(candidates: Sequence[AlbumMatch]) -> None:
+def print_album_candidates(
+    console: Console, candidates: Sequence[AlbumMatch]
+) -> None:
     candidata = []
     track_diffs_table = new_table("id", *track_fields)
     for idx, candidate in enumerate(candidates, 1):
@@ -179,8 +185,6 @@ def print_album_candidates(candidates: Sequence[AlbumMatch]) -> None:
             track_diffs_table.add_row(i, *get_track_diff(dict(old), new))
         track_diffs_table.add_row("")
 
-    ui.console.print(border_panel(track_diffs_table, title="Album tracks"))
-    ui.console.print(
-        border_panel(flexitable(candidata), title="Album candidates")
-    )
-    ui.console.print("")
+    console.print(border_panel(track_diffs_table, title="Album tracks"))
+    console.print(border_panel(flexitable(candidata), title="Album candidates"))
+    console.print("")
