@@ -7,8 +7,13 @@ from typing import TYPE_CHECKING
 
 from beets import logging, ui
 from beets.exceptions import UserError
-from beets.util import MoveOperation, displayable_path, normpath, syspath
-from beets.util.diff import colordiff
+from beets.util import (
+    MoveOperation,
+    displayable_path,
+    get_console,
+    normpath,
+    syspath,
+)
 
 from .utils import do_query
 
@@ -16,7 +21,7 @@ if TYPE_CHECKING:
     from beets.util import PathLike
 
 # Global logger.
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 
 def show_path_changes(path_changes):
@@ -41,7 +46,7 @@ def show_path_changes(path_changes):
     destinations = list(map(displayable_path, destinations))
 
     for source, dest in zip(sources, destinations):
-        ui.console.print(colordiff(source, dest), highlight=False)
+        get_console().print(ui.colordiff(source, dest), highlight=False)
 
 
 def move_items(

@@ -9,7 +9,7 @@ from beets.util.color import colorize
 from .utils import do_query
 
 # Global logger.
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 
 def update_items(lib, query, album, move, pretend, fields, exclude_fields=None):

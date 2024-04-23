@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-import logging
 import os
 import re
 import shutil
@@ -27,7 +26,7 @@ from typing import TYPE_CHECKING, Any
 
 import mediafile
 
-from beets import config, library, plugins, util
+from beets import config, library, logging, plugins, util
 from beets.autotag.hooks import AlbumMatch
 from beets.autotag.match import tag_album, tag_item
 from beets.dbcore.query import PathQuery
@@ -45,7 +44,7 @@ if TYPE_CHECKING:
     from .session import ImportSession
 
 # Global logger.
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 
 SINGLE_ARTIST_THRESH = 0.25
@@ -71,7 +70,7 @@ REIMPORT_FRESH_FIELDS_ITEM = [
 REIMPORT_FRESH_FIELDS_ALBUM = [*REIMPORT_FRESH_FIELDS_ITEM, "media"]
 
 # Global logger.
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 
 class ImportAbortError(Exception):

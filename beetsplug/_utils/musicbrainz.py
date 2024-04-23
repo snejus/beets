@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
     from .._typing import JSONDict
 
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 
 LUCENE_SPECIAL_CHAR_PAT = re.compile(r'([-+&|!(){}[\]^"~*?:\\/])')
