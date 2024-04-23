@@ -60,7 +60,7 @@ RSRC = util.bytestring_path(
 PLUGINPATH = os.path.join(RSRC.decode(), "beetsplug")
 
 # Propagate to root logger so the test runner can capture it
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 log.propagate = True
 log.setLevel(logging.DEBUG)
 

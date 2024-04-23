@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from beets.library import Item
 
 # Global logger.
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 
 # Recommendation enumeration.
