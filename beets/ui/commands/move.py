@@ -7,6 +7,7 @@ from beets.util import (
     MoveOperation,
     PathLike,
     displayable_path,
+    get_console,
     normpath,
     syspath,
 )
@@ -14,7 +15,7 @@ from beets.util import (
 from .utils import do_query
 
 # Global logger.
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 
 def show_path_changes(path_changes):
@@ -39,7 +40,7 @@ def show_path_changes(path_changes):
     destinations = list(map(displayable_path, destinations))
 
     for source, dest in zip(sources, destinations):
-        ui.console.print(ui.colordiff(source, dest), highlight=False)
+        get_console().print(ui.colordiff(source, dest), highlight=False)
 
 
 def move_items(

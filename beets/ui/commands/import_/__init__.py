@@ -8,7 +8,7 @@ from beets.util import displayable_path, normpath, syspath
 from .session import TerminalImportSession
 
 # Global logger.
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 
 def paths_from_logfile(path):

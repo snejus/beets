@@ -60,6 +60,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
     from logging import Logger
 
+    from rich.console import Console
+
     from beets.library import Item
 
 
@@ -1237,7 +1239,10 @@ def colorize(color_name: ColorName, text: str) -> str:
     return f"[{color}]{text}[/{color}]"
 
 
-console = make_console(highlight=False, stderr=True)
+@cache
+def get_console() -> Console:
+    color = beets.config["ui"]["color"].get()
+    return make_console(highlight=False, force_terminal=color)
 
 
 def colordiff(a: str, b: str) -> str | tuple[str, str]:

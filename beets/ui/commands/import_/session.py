@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from beets.autotag.hooks import Match
 
 # Global logger.
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 
 class TerminalImportSession(importer.ImportSession):
@@ -438,10 +438,10 @@ def choose_candidate(
             template = 'Finding tags for {} "{} - {}".'
             if singleton:
                 ui.print_(template.format("track", item.artist, item.title))
-                print_singleton_candidates(candidates)
+                print_singleton_candidates(ui.get_console(), candidates)
             else:
                 ui.print_(template.format("album", cur_artist, cur_album))
-                print_album_candidates(candidates)
+                print_album_candidates(ui.get_console(), candidates)
 
             # Ask the user for a choice.
             sel = ui.input_options(choice_opts, numrange=(1, len(candidates)))
