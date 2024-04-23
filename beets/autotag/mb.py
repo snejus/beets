@@ -71,7 +71,7 @@ class MusicBrainzAPIError(util.HumanReadableError):
         )
 
 
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 RELEASE_INCLUDES = [
     "artists",

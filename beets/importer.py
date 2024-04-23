@@ -71,7 +71,7 @@ REIMPORT_FRESH_FIELDS_ALBUM = [
 REIMPORT_FRESH_FIELDS_ITEM = list(REIMPORT_FRESH_FIELDS_ALBUM)
 
 # Global logger.
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 
 class ImportAbortError(Exception):
