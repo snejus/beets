@@ -29,6 +29,7 @@ from logging import (
     WARNING,
     FileHandler,
     Filter,
+    Formatter,
     Handler,
     Logger,
     NullHandler,
@@ -40,6 +41,7 @@ __all__ = [
     "INFO",
     "NOTSET",
     "WARNING",
+    "Formatter",
     "FileHandler",
     "Filter",
     "Handler",
@@ -153,12 +155,12 @@ class BeetsLogger(ThreadLocalLevelLogger, StrFormatLogger):
 
 
 my_manager = copy(Logger.manager)
-my_manager.loggerClass = BeetsLogger
+my_manager.setLoggerClass(BeetsLogger)
 
 
 # Override the `getLogger` to use our machinery.
-def getLogger(name=None):  # noqa
+def getLogger(name=None) -> Logger:  # noqa
     if name:
         return my_manager.getLogger(name)
     else:
-        return Logger.root
+        return my_manager.getLogger("beets")

@@ -31,11 +31,13 @@ import warnings
 from typing import Any, Callable
 
 import confuse
+from rich.logging import RichHandler
+from rich.traceback import install
 
 from beets import config, library, logging, plugins, util
 from beets.dbcore import db
 from beets.dbcore import query as db_query
-from beets.util import as_string, colordiff, colorize, console
+from beets.util import as_string, colordiff, colorize, get_console
 from beets.util.functemplate import template
 
 # On Windows platforms, use colorama to support "ANSI" terminal colors.
@@ -47,11 +49,15 @@ if sys.platform == "win32":
     else:
         colorama.init()
 
+log = logging.getLogger(__name__)
 
-log = logging.getLogger("beets")
-if not log.handlers:
-    log.addHandler(logging.StreamHandler())
-log.propagate = False  # Don't propagate to root handler.
+
+class SafeRichHandler(RichHandler):
+    def emit(self, record) -> None:
+        try:
+            return super().emit(record)
+        except Exception:
+            self.handleError(record)
 
 
 PF_KEY_QUERIES = {
@@ -123,7 +129,7 @@ def print_(*strings: str, end: str = "\n") -> None:
     The `end` keyword argument behaves similarly to the built-in `print`
     (it defaults to a newline).
     """
-    console.print(" ".join(strings or []), end=end)
+    get_console().print(" ".join(strings or []), end=end)
 
 
 # Configuration wrappers.
@@ -540,7 +546,7 @@ def show_path_changes(path_changes):
     destinations = list(map(util.displayable_path, destinations))
 
     for source, dest in zip(sources, destinations):
-        console.print(colordiff(source, dest), highlight=False)
+        get_console().print(colordiff(source, dest), highlight=False)
 
 
 # Helper functions for option parsing.
@@ -905,6 +911,44 @@ def _setup(
     return subcommands, lib
 
 
+def setup_logging():
+    level = logging.DEBUG if config["verbose"].get(int) else logging.INFO
+    root = logging.getLogger()
+    root.setLevel(level)
+
+    console = get_console()
+    if not root.handlers:
+        handler = SafeRichHandler(
+            show_path=False,
+            show_level=True,
+            omit_repeated_times=False,
+            rich_tracebacks=True,
+            tracebacks_show_locals=True,
+            tracebacks_width=console.width,
+            tracebacks_extra_lines=1,
+            keywords=["Sending event"],
+            markup=True,
+            console=console,
+        )
+        handler.setFormatter(
+            logging.Formatter(
+                "[b grey42]{name:<20}[/] {message}", datefmt="%T", style="{"
+            )
+        )
+        root.addHandler(handler)
+
+    root.propagate = False  # Don't propagate to root handler.
+
+    install(
+        console=console,
+        show_locals=True,
+        width=console.width,
+        code_width=console.width,
+        locals_max_length=1,
+        locals_hide_sunder=True,
+    )
+
+
 def _configure(options):
     """Amend the global configuration object with command line options."""
     # Add any additional config files specified with --config. This
@@ -918,11 +962,7 @@ def _configure(options):
         overlay_path = None
     config.set_args(options)
 
-    # Configure the logger.
-    if config["verbose"].get(int):
-        log.set_global_level(logging.DEBUG)
-    else:
-        log.set_global_level(logging.INFO)
+    setup_logging()
 
     if overlay_path:
         log.debug(
@@ -1093,7 +1133,7 @@ def main(args=None):
         if "No matching" in message:
             log.error("error: {}", message)
         else:
-            console.print_exception(extra_lines=2, show_locals=True)
+            get_console().print_exception(extra_lines=2, show_locals=True)
         sys.exit(1)
     except util.HumanReadableError as exc:
         exc.log(log)

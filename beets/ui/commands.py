@@ -39,7 +39,7 @@ from rich_tables.utils import border_panel, new_table, wrap
 import beets
 from beets import autotag, config, importer, library, logging, plugins, ui, util
 from beets.autotag import Recommendation, hooks
-from beets.ui import console, input_, print_, show_path_changes
+from beets.ui import get_console, input_, print_, show_path_changes
 from beets.util import (
     MoveOperation,
     ancestry,
@@ -56,7 +56,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 # Global logger.
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 # The list of default subcommands. This is populated with Subcommand
 # objects that can be fed to a SubcommandsOptionParser.
@@ -299,7 +299,7 @@ def show_album_change(
                 tracks_table.add_row(*values, style="b yellow")
 
     title = wrap("Tracks", "b i cyan")
-    console.print(border_panel(tracks_table, title=title))
+    get_console().print(border_panel(tracks_table, title=title))
 
 
 def show_item_change(
@@ -338,6 +338,7 @@ def show_item_change(
     if "tracklist" in old:
         old["comments"] += "\n\nTracklist\n\n" + old["tracklist"]
 
+    console = get_console()
     if upd_meta.row_count:
         _type = "Album" if isinstance(new, hooks.AlbumInfo) else "Singleton"
         color = "magenta" if _type == "Album" else "cyan"
@@ -438,7 +439,9 @@ class PromptChoice(NamedTuple):
     callback: Any
 
 
-def print_singleton_candidates(candidates: Sequence[hooks.TrackMatch]) -> None:
+def print_singleton_candidates(
+    console, candidates: Sequence[hooks.TrackMatch]
+) -> None:
     candidata = [
         {"id": str(i), **m.disambig_data} for i, m in enumerate(candidates, 1)
     ]
@@ -448,7 +451,9 @@ def print_singleton_candidates(candidates: Sequence[hooks.TrackMatch]) -> None:
     console.print("")
 
 
-def print_album_candidates(candidates: Sequence[hooks.AlbumMatch]) -> None:
+def print_album_candidates(
+    console, candidates: Sequence[hooks.AlbumMatch]
+) -> None:
     candidata = []
     track_diffs_table = new_table("id", *track_fields)
     for idx, candidate in enumerate(candidates, 1):
@@ -530,10 +535,10 @@ def choose_candidate(
             template = 'Finding tags for {} "{} - {}".'
             if singleton:
                 print_(template.format("track", item.artist, item.title))
-                print_singleton_candidates(candidates)
+                print_singleton_candidates(get_console(), candidates)
             else:
                 print_(template.format("album", cur_artist, cur_album))
-                print_album_candidates(candidates)
+                print_album_candidates(get_console(), candidates)
 
             # Ask the user for a choice.
             sel = ui.input_options(choice_opts, numrange=(1, len(candidates)))
