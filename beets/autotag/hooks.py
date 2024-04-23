@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
     JSONDict = dict[str, Any]
 
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 V = TypeVar("V")
 

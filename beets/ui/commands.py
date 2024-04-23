@@ -53,7 +53,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 # Global logger.
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 # The list of default subcommands. This is populated with Subcommand
 # objects that can be fed to a SubcommandsOptionParser.
