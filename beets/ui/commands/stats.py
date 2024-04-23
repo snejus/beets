@@ -7,7 +7,7 @@ from beets.util import syspath
 from beets.util.units import human_bytes, human_seconds
 
 # Global logger.
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 
 def show_stats(lib, query, exact):
