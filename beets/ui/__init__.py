@@ -467,14 +467,6 @@ def human_seconds(interval):
     return f"{interval:3.1f} {suffix}s"
 
 
-def human_seconds_short(interval):
-    """Formats a number of seconds as a short human-readable M:SS
-    string.
-    """
-    interval = int(interval)
-    return "%i:%02i" % (interval // 60, interval % 60)
-
-
 def get_path_formats(subview=None):
     """Get the configuration's path formats as a list of query/template
     pairs.

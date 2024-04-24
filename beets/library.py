@@ -17,7 +17,6 @@
 from __future__ import annotations
 
 import os
-import re
 import shlex
 import string
 import sys
@@ -31,7 +30,6 @@ from mediafile import MediaFile, UnreadableFileError
 
 import beets
 from beets import dbcore, logging, plugins, util
-from beets.dbcore import Results, types
 from beets.util import (
     MoveOperation,
     bytestring_path,
@@ -42,10 +40,10 @@ from beets.util import (
 )
 from beets.util.functemplate import Template, template
 
-# To use the SQLite "blob" type, it doesn't suffice to provide a byte
-# string; SQLite treats that as encoded text. Wrapping it in a
-# `memoryview` tells it that we actually mean non-text data.
-BLOB_TYPE = memoryview
+from .dbcore import Results
+from .dbcore.fields import TYPE_BY_FIELD
+from .dbcore.query import PathQuery
+from .dbcore.types import BLOB_TYPE
 
 log = logging.getLogger("beets")
 
@@ -69,230 +67,6 @@ class SingletonQuery(dbcore.FieldQuery[str]):
         if util.str2bool(value):
             return query
         return dbcore.query.NotQuery(query)
-
-
-class PathQuery(dbcore.FieldQuery[bytes]):
-    """A query that matches all items under a given path.
-
-    Matching can either be case-insensitive or case-sensitive. By
-    default, the behavior depends on the OS: case-insensitive on Windows
-    and case-sensitive otherwise.
-    """
-
-    # For tests
-    force_implicit_query_detection = False
-
-    def __init__(self, field, pattern, fast=True, case_sensitive=None):
-        """Create a path query.
-
-        `pattern` must be a path, either to a file or a directory.
-
-        `case_sensitive` can be a bool or `None`, indicating that the
-        behavior should depend on the filesystem.
-        """
-        super().__init__(field, pattern, fast)
-
-        path = util.normpath(pattern)
-
-        # By default, the case sensitivity depends on the filesystem
-        # that the query path is located on.
-        if case_sensitive is None:
-            case_sensitive = util.case_sensitive(path)
-        self.case_sensitive = case_sensitive
-
-        # Use a normalized-case pattern for case-insensitive matches.
-        if not case_sensitive:
-            # We need to lowercase the entire path, not just the pattern.
-            # In particular, on Windows, the drive letter is otherwise not
-            # lowercased.
-            # This also ensures that the `match()` method below and the SQL
-            # from `col_clause()` do the same thing.
-            path = path.lower()
-
-        # Match the path as a single file.
-        self.file_path = path
-        # As a directory (prefix).
-        self.dir_path = os.path.join(path, b"")
-
-    @classmethod
-    def is_path_query(cls, query_part):
-        """Try to guess whether a unicode query part is a path query.
-
-        Condition: separator precedes colon and the file exists.
-        """
-        colon = query_part.find(":")
-        if colon != -1:
-            query_part = query_part[:colon]
-
-        # Test both `sep` and `altsep` (i.e., both slash and backslash on
-        # Windows).
-        if not (
-            os.sep in query_part or (os.altsep and os.altsep in query_part)
-        ):
-            return False
-
-        if cls.force_implicit_query_detection:
-            return True
-        return os.path.exists(syspath(normpath(query_part)))
-
-    def match(self, item):
-        path = item.path if self.case_sensitive else item.path.lower()
-        return (path == self.file_path) or path.startswith(self.dir_path)
-
-    def col_clause(self):
-        file_blob = BLOB_TYPE(self.file_path)
-        dir_blob = BLOB_TYPE(self.dir_path)
-
-        if self.case_sensitive:
-            query_part = "({0} = ?) || (substr({0}, 1, ?) = ?)"
-        else:
-            query_part = "(BYTELOWER({0}) = BYTELOWER(?)) || \
-                         (substr(BYTELOWER({0}), 1, ?) = BYTELOWER(?))"
-
-        return query_part.format(self.field), (
-            file_blob,
-            len(dir_blob),
-            dir_blob,
-        )
-
-    def __repr__(self) -> str:
-        return (
-            f"{self.__class__.__name__}({self.field!r}, {self.pattern!r}, "
-            f"fast={self.fast}, case_sensitive={self.case_sensitive})"
-        )
-
-
-# Library-specific field types.
-
-
-class DateType(types.Float):
-    # TODO representation should be `datetime` object
-    # TODO distinguish between date and time types
-    query = dbcore.query.DateQuery
-
-    def format(self, value):
-        return time.strftime(
-            beets.config["time_format"].as_str(), time.localtime(value or 0)
-        )
-
-    def parse(self, string):
-        try:
-            # Try a formatted date string.
-            return time.mktime(
-                time.strptime(string, beets.config["time_format"].as_str())
-            )
-        except ValueError:
-            # Fall back to a plain timestamp number.
-            try:
-                return float(string)
-            except ValueError:
-                return self.null
-
-
-class PathType(types.Type[bytes, bytes]):
-    """A dbcore type for filesystem paths.
-
-    These are represented as `bytes` objects, in keeping with
-    the Unix filesystem abstraction.
-    """
-
-    sql = "BLOB"
-    query = PathQuery
-    model_type = bytes
-
-    def __init__(self, nullable=False):
-        """Create a path type object.
-
-        `nullable` controls whether the type may be missing, i.e., None.
-        """
-        self.nullable = nullable
-
-    @property
-    def null(self):
-        if self.nullable:
-            return None
-        else:
-            return b""
-
-    def format(self, value):
-        return util.displayable_path(value)
-
-    def parse(self, string):
-        return normpath(bytestring_path(string))
-
-    def normalize(self, value):
-        if isinstance(value, str):
-            # Paths stored internally as encoded bytes.
-            return bytestring_path(value)
-
-        elif isinstance(value, BLOB_TYPE):
-            # We unwrap buffers to bytes.
-            return bytes(value)
-
-        else:
-            return value
-
-    def from_sql(self, sql_value):
-        return self.normalize(sql_value)
-
-    def to_sql(self, value):
-        if isinstance(value, bytes):
-            value = BLOB_TYPE(value)
-        return value
-
-
-class MusicalKey(types.String):
-    """String representing the musical key of a song.
-
-    The standard format is C, Cm, C#, C#m, etc.
-    """
-
-    ENHARMONIC = {
-        r"db": "c#",
-        r"eb": "d#",
-        r"gb": "f#",
-        r"ab": "g#",
-        r"bb": "a#",
-    }
-
-    null = None
-
-    def parse(self, key):
-        key = key.lower()
-        for flat, sharp in self.ENHARMONIC.items():
-            key = re.sub(flat, sharp, key)
-        key = re.sub(r"[\W\s]+minor", "m", key)
-        key = re.sub(r"[\W\s]+major", "", key)
-        return key.capitalize()
-
-    def normalize(self, key):
-        if key is None:
-            return None
-        else:
-            return self.parse(key)
-
-
-class DurationType(types.Float):
-    """Human-friendly (M:SS) representation of a time interval."""
-
-    query = dbcore.query.DurationQuery
-
-    def format(self, value):
-        if not beets.config["format_raw_length"].get(bool):
-            return beets.ui.human_seconds_short(value or 0.0)
-        else:
-            return value
-
-    def parse(self, string):
-        try:
-            # Try to format back hh:ss to seconds.
-            return util.raw_seconds_short(string)
-        except ValueError:
-            # Fall back to a plain float.
-            try:
-                return float(string)
-            except ValueError:
-                return self.null
 
 
 # Library-specific sort types.
@@ -567,98 +341,101 @@ class Item(LibModel):
     _table = "items"
     _flex_table = "item_attributes"
     _fields = {
-        "id": types.PRIMARY_ID,
-        "path": PathType(),
-        "album_id": types.FOREIGN_ID,
-        "title": types.STRING,
-        "artist": types.STRING,
-        "artists": types.MULTI_VALUE_DSV,
-        "artists_ids": types.MULTI_VALUE_DSV,
-        "artist_sort": types.STRING,
-        "artists_sort": types.MULTI_VALUE_DSV,
-        "artist_credit": types.STRING,
-        "artists_credit": types.MULTI_VALUE_DSV,
-        "remixer": types.STRING,
-        "album": types.STRING,
-        "albumartist": types.STRING,
-        "albumartists": types.MULTI_VALUE_DSV,
-        "albumartist_sort": types.STRING,
-        "albumartists_sort": types.MULTI_VALUE_DSV,
-        "albumartist_credit": types.STRING,
-        "albumartists_credit": types.MULTI_VALUE_DSV,
-        "genre": types.STRING,
-        "style": types.STRING,
-        "discogs_albumid": types.INTEGER,
-        "discogs_artistid": types.INTEGER,
-        "discogs_labelid": types.INTEGER,
-        "lyricist": types.STRING,
-        "composer": types.STRING,
-        "composer_sort": types.STRING,
-        "work": types.STRING,
-        "mb_workid": types.STRING,
-        "work_disambig": types.STRING,
-        "arranger": types.STRING,
-        "grouping": types.STRING,
-        "year": types.PaddedInt(4),
-        "month": types.PaddedInt(2),
-        "day": types.PaddedInt(2),
-        "track": types.PaddedInt(2),
-        "tracktotal": types.PaddedInt(2),
-        "disc": types.PaddedInt(2),
-        "disctotal": types.PaddedInt(2),
-        "lyrics": types.STRING,
-        "comments": types.STRING,
-        "bpm": types.INTEGER,
-        "comp": types.BOOLEAN,
-        "mb_trackid": types.STRING,
-        "mb_albumid": types.STRING,
-        "mb_artistid": types.STRING,
-        "mb_artistids": types.MULTI_VALUE_DSV,
-        "mb_albumartistid": types.STRING,
-        "mb_albumartistids": types.MULTI_VALUE_DSV,
-        "mb_releasetrackid": types.STRING,
-        "trackdisambig": types.STRING,
-        "albumtype": types.STRING,
-        "albumtypes": types.SEMICOLON_SPACE_DSV,
-        "label": types.STRING,
-        "barcode": types.STRING,
-        "acoustid_fingerprint": types.STRING,
-        "acoustid_id": types.STRING,
-        "mb_releasegroupid": types.STRING,
-        "release_group_title": types.STRING,
-        "asin": types.STRING,
-        "isrc": types.STRING,
-        "catalognum": types.STRING,
-        "script": types.STRING,
-        "language": types.STRING,
-        "country": types.STRING,
-        "albumstatus": types.STRING,
-        "media": types.STRING,
-        "albumdisambig": types.STRING,
-        "releasegroupdisambig": types.STRING,
-        "disctitle": types.STRING,
-        "encoder": types.STRING,
-        "rg_track_gain": types.NULL_FLOAT,
-        "rg_track_peak": types.NULL_FLOAT,
-        "rg_album_gain": types.NULL_FLOAT,
-        "rg_album_peak": types.NULL_FLOAT,
-        "r128_track_gain": types.NULL_FLOAT,
-        "r128_album_gain": types.NULL_FLOAT,
-        "original_year": types.PaddedInt(4),
-        "original_month": types.PaddedInt(2),
-        "original_day": types.PaddedInt(2),
-        "initial_key": MusicalKey(),
-        "length": DurationType(),
-        "bitrate": types.ScaledInt(1000, "kbps"),
-        "bitrate_mode": types.STRING,
-        "encoder_info": types.STRING,
-        "encoder_settings": types.STRING,
-        "format": types.STRING,
-        "samplerate": types.ScaledInt(1000, "kHz"),
-        "bitdepth": types.INTEGER,
-        "channels": types.INTEGER,
-        "mtime": DateType(),
-        "added": DateType(),
+        f: TYPE_BY_FIELD[f]
+        for f in (
+            "id",
+            "path",
+            "album_id",
+            "title",
+            "artist",
+            "artists",
+            "artists_ids",
+            "artist_sort",
+            "artists_sort",
+            "artist_credit",
+            "artists_credit",
+            "remixer",
+            "album",
+            "albumartist",
+            "albumartists",
+            "albumartist_sort",
+            "albumartists_sort",
+            "albumartist_credit",
+            "albumartists_credit",
+            "genre",
+            "style",
+            "discogs_albumid",
+            "discogs_artistid",
+            "discogs_labelid",
+            "lyricist",
+            "composer",
+            "composer_sort",
+            "work",
+            "mb_workid",
+            "work_disambig",
+            "arranger",
+            "grouping",
+            "year",
+            "month",
+            "day",
+            "track",
+            "tracktotal",
+            "disc",
+            "disctotal",
+            "lyrics",
+            "comments",
+            "bpm",
+            "comp",
+            "mb_trackid",
+            "mb_albumid",
+            "mb_artistid",
+            "mb_artistids",
+            "mb_albumartistid",
+            "mb_albumartistids",
+            "mb_releasetrackid",
+            "trackdisambig",
+            "albumtype",
+            "albumtypes",
+            "label",
+            "barcode",
+            "acoustid_fingerprint",
+            "acoustid_id",
+            "mb_releasegroupid",
+            "release_group_title",
+            "asin",
+            "isrc",
+            "catalognum",
+            "script",
+            "language",
+            "country",
+            "albumstatus",
+            "media",
+            "albumdisambig",
+            "releasegroupdisambig",
+            "disctitle",
+            "encoder",
+            "rg_track_gain",
+            "rg_track_peak",
+            "rg_album_gain",
+            "rg_album_peak",
+            "r128_track_gain",
+            "r128_album_gain",
+            "original_year",
+            "original_month",
+            "original_day",
+            "initial_key",
+            "length",
+            "bitrate",
+            "bitrate_mode",
+            "encoder_info",
+            "encoder_settings",
+            "format",
+            "samplerate",
+            "bitdepth",
+            "channels",
+            "mtime",
+            "added",
+        )
     }
 
     _search_fields = (
@@ -671,7 +448,7 @@ class Item(LibModel):
     )
 
     _types = {
-        "data_source": types.STRING,
+        "data_source": TYPE_BY_FIELD["data_source"],
     }
 
     # Set of item fields that are backed by `MediaFile` fields.
@@ -1222,56 +999,56 @@ class Album(LibModel):
     _flex_table = "album_attributes"
     _always_dirty = True
     _fields = {
-        "id": types.PRIMARY_ID,
-        "artpath": PathType(True),
-        "added": DateType(),
-        "albumartist": types.STRING,
-        "albumartist_sort": types.STRING,
-        "albumartist_credit": types.STRING,
-        "albumartists": types.MULTI_VALUE_DSV,
-        "albumartists_sort": types.MULTI_VALUE_DSV,
-        "albumartists_credit": types.MULTI_VALUE_DSV,
-        "album": types.STRING,
-        "genre": types.STRING,
-        "style": types.STRING,
-        "discogs_albumid": types.INTEGER,
-        "discogs_artistid": types.INTEGER,
-        "discogs_labelid": types.INTEGER,
-        "year": types.PaddedInt(4),
-        "month": types.PaddedInt(2),
-        "day": types.PaddedInt(2),
-        "disctotal": types.PaddedInt(2),
-        "comp": types.BOOLEAN,
-        "mb_albumid": types.STRING,
-        "mb_albumartistid": types.STRING,
-        "albumtype": types.STRING,
-        "albumtypes": types.SEMICOLON_SPACE_DSV,
-        "label": types.STRING,
-        "barcode": types.STRING,
-        "mb_releasegroupid": types.STRING,
-        "release_group_title": types.STRING,
-        "asin": types.STRING,
-        "catalognum": types.STRING,
-        "script": types.STRING,
-        "language": types.STRING,
-        "country": types.STRING,
-        "albumstatus": types.STRING,
-        "albumdisambig": types.STRING,
-        "releasegroupdisambig": types.STRING,
-        "rg_album_gain": types.NULL_FLOAT,
-        "rg_album_peak": types.NULL_FLOAT,
-        "r128_album_gain": types.NULL_FLOAT,
-        "original_year": types.PaddedInt(4),
-        "original_month": types.PaddedInt(2),
-        "original_day": types.PaddedInt(2),
+        f: TYPE_BY_FIELD[f]
+        for f in (
+            "id",
+            "artpath",
+            "added",
+            "albumartist",
+            "albumartist_sort",
+            "albumartist_credit",
+            "albumartists",
+            "albumartists_sort",
+            "albumartists_credit",
+            "album",
+            "genre",
+            "style",
+            "discogs_albumid",
+            "discogs_artistid",
+            "discogs_labelid",
+            "year",
+            "month",
+            "day",
+            "disctotal",
+            "comp",
+            "mb_albumid",
+            "mb_albumartistid",
+            "albumtype",
+            "albumtypes",
+            "label",
+            "barcode",
+            "mb_releasegroupid",
+            "release_group_title",
+            "asin",
+            "catalognum",
+            "script",
+            "language",
+            "country",
+            "albumstatus",
+            "albumdisambig",
+            "releasegroupdisambig",
+            "rg_album_gain",
+            "rg_album_peak",
+            "r128_album_gain",
+            "original_year",
+            "original_month",
+            "original_day",
+        )
     }
 
     _search_fields = ("album", "albumartist", "genre")
 
-    _types = {
-        "path": PathType(),
-        "data_source": types.STRING,
-    }
+    _types = {f: TYPE_BY_FIELD[f] for f in ("path", "data_source")}
 
     _sorts = {
         "albumartist": SmartArtistSort,

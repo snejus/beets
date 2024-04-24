@@ -28,7 +28,6 @@ from confuse import ConfigValueError
 
 from beets import util
 from beets.dbcore import types
-from beets.library import DateType
 from beets.util import bytestring_path, syspath
 from beetsplug.metasync import MetaSource
 
@@ -65,9 +64,9 @@ class Itunes(MetaSource):
         "itunes_rating": types.INTEGER,  # 0..100 scale
         "itunes_playcount": types.INTEGER,
         "itunes_skipcount": types.INTEGER,
-        "itunes_lastplayed": DateType(),
-        "itunes_lastskipped": DateType(),
-        "itunes_dateadded": DateType(),
+        "itunes_lastplayed": types.DateType(),
+        "itunes_lastskipped": types.DateType(),
+        "itunes_dateadded": types.DateType(),
     }
 
     def __init__(self, config, log):

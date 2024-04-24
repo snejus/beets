@@ -391,7 +391,7 @@ def summarize_items(items, singleton):
                 round(int(items[0].samplerate) / 1000, 1), items[0].bitdepth
             )
             summary_parts.append(sample_bits)
-        summary_parts.append(ui.human_seconds_short(total_duration))
+        # summary_parts.append(ui.human_seconds_short(total_duration))
         summary_parts.append(ui.human_bytes(total_filesize))
 
     return ", ".join(summary_parts)
