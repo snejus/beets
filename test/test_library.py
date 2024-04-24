@@ -30,6 +30,7 @@ from mediafile import MediaFile, UnreadableFileError
 import beets.dbcore.query
 import beets.library
 from beets import config, plugins, util
+from beets.dbcore.types import DateType, DurationType, MusicalKey, PathType
 from beets.test import _common
 from beets.test._common import item
 from beets.test.helper import TestHelper
@@ -1390,7 +1391,7 @@ class LibraryFieldTypesTest(unittest.TestCase):
     """Test format() and parse() for library-specific field types"""
 
     def test_datetype(self):
-        t = beets.library.DateType()
+        t = DateType()
 
         # format
         time_format = beets.config["time_format"].as_str()
@@ -1403,7 +1404,7 @@ class LibraryFieldTypesTest(unittest.TestCase):
         self.assertEqual(t.null, t.parse("1973-11-29"))
 
     def test_pathtype(self):
-        t = beets.library.PathType()
+        t = PathType()
 
         # format
         self.assertEqual("/tmp", t.format("/tmp"))
@@ -1413,7 +1414,7 @@ class LibraryFieldTypesTest(unittest.TestCase):
         self.assertEqual(np(b"/tmp/\xc3\xa4lbum"), t.parse("/tmp/\u00e4lbum/"))
 
     def test_musicalkey(self):
-        t = beets.library.MusicalKey()
+        t = MusicalKey()
 
         # parse
         self.assertEqual("C#m", t.parse("c#m"))
@@ -1421,7 +1422,7 @@ class LibraryFieldTypesTest(unittest.TestCase):
         self.assertEqual("Not c#m", t.parse("not C#m"))
 
     def test_durationtype(self):
-        t = beets.library.DurationType()
+        t = DurationType()
 
         # format
         self.assertEqual("1:01", t.format(61.23))

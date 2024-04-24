@@ -18,8 +18,9 @@ import time
 
 import mpd
 
-from beets import config, library, plugins, ui
+from beets import config, plugins, ui
 from beets.dbcore import types
+from beets.dbcore.query import PathQuery
 from beets.util import displayable_path
 
 ui.console.width = 400
@@ -161,7 +162,7 @@ class MPDStats:
 
     def get_item(self, path):
         """Return the beets item related to path."""
-        query = library.PathQuery("path", path)
+        query = PathQuery("path", path)
         item = self.lib.items(query).get()
         if item:
             return item
@@ -327,7 +328,7 @@ class MPDStatsPlugin(plugins.BeetsPlugin):
     item_types = {
         "play_count": types.INTEGER,
         "skip_count": types.INTEGER,
-        "last_played": library.DateType(),
+        "last_played": types.DateType(),
         "rating": types.FLOAT,
     }
 
