@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 from copy import deepcopy
 from dataclasses import dataclass
-from functools import total_ordering
+from functools import cached_property, total_ordering
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, TypeVar, cast
 
 from jellyfish import levenshtein_distance
@@ -603,6 +603,10 @@ class Match:
     distance: Distance
     info: Info
 
+    @cached_classproperty
+    def disambig_fields(cls) -> Sequence[str]:
+        return config["match"][cls.disambig_fields_key].as_str_seq()
+
     @property
     def dist(self) -> str:
         if self.distance <= config["match"]["strong_rec_thresh"].as_number():
@@ -617,21 +621,14 @@ class Match:
     def name(self) -> str:
         return self.info.name or ""
 
-    @property
-    def penalty(self, limit: int = 0) -> str | None:
+    @cached_property
+    def penalty(self) -> str | None:
         """Returns a colorized string that indicates all the penalties
         applied to a distance object.
         """
-        penalties = self.distance.penalties
-        if penalties:
-            if limit and len(penalties) > limit:
-                penalties = penalties[:limit] + ["..."]
+        if penalties := self.distance.penalties:
             return colorize("text_warning", f"({', '.join(penalties)})")
         return None
-
-    @property
-    def disambig_fields(self) -> Sequence[str]:
-        return config["match"][self.disambig_fields_key].as_str_seq()
 
     @property
     def dist_data(self) -> JSONDict:
