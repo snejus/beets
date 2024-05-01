@@ -327,6 +327,10 @@ def distance(
     for _ in range(len(items) - len(mapping)):
         dist.add("unmatched_tracks", 1.0)
 
+    fields = AlbumMatch.disambig_fields
+    missing_field_count = sum(f not in album_info for f in fields)
+    dist.add("missing_fields", missing_field_count / len(fields))
+
     # Plugins.
     dist.update(plugins.album_distance(items, album_info, mapping))
 
