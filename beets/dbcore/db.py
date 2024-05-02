@@ -41,6 +41,8 @@ from typing import (
     TypedDict,
 )
 
+from rich import print
+from rich_tables.generic import flexitable
 from typing_extensions import (
     Self,
     TypeVar,  # default value support
@@ -68,7 +70,21 @@ if TYPE_CHECKING:
 
 D = TypeVar("D", bound="Database", default=Any)
 
+DEBUG = bool(os.getenv("BEETS_DEBUG", False))
+
+
 FlexAttrs = dict[str, str]
+
+
+def print_query(sql, subvals=None):
+    """If debugging, replace placeholders and print the query."""
+    if not DEBUG:
+        return
+    topr = sql
+    for val in subvals or []:
+        topr = topr.replace("?", str(val), 1)
+    for item in flexitable({"sql": topr}):
+        print(item, file=sys.stderr)
 
 
 class DBAccessError(Exception):
@@ -1008,6 +1024,7 @@ class Transaction:
         """Execute an SQL statement with substitution values and return
         a list of rows from the database.
         """
+        print_query(statement, subvals)
         cursor = self.db._connection().execute(statement, subvals)
         return cursor.fetchall()
 
@@ -1035,6 +1052,7 @@ class Transaction:
 
     def mutate(self, statement: str, subvals: Sequence[SQLiteType] = ()) -> Any:
         """Run one write statement with shared mutation/error handling."""
+        print_query(statement, subvals)
         with self._handle_mutate():
             return self.db._connection().execute(statement, subvals).lastrowid
 
@@ -1042,6 +1060,7 @@ class Transaction:
         self, statement: str, subvals: Sequence[tuple[SQLiteType, ...]] = ()
     ) -> Any:
         """Run batched writes with shared mutation/error handling."""
+        print_query(statement, subvals)
         with self._handle_mutate():
             return (
                 self.db._connection().executemany(statement, subvals).lastrowid
@@ -1051,6 +1070,7 @@ class Transaction:
         """Execute a string containing multiple SQL statements."""
         # We don't know whether this mutates, but quite likely it does.
         self._mutated = True
+        print_query(statements)
         self.db._connection().executescript(statements)
 
 
