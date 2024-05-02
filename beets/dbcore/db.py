@@ -30,6 +30,8 @@ from collections.abc import Generator, Iterable, Iterator, Mapping, Sequence
 from sqlite3 import Connection, sqlite_version_info
 from typing import TYPE_CHECKING, Any, AnyStr, Callable, Generic
 
+from rich import print
+from rich_tables.generic import flexitable
 from typing_extensions import TypeVar  # default value support
 from unidecode import unidecode
 
@@ -54,7 +56,21 @@ if TYPE_CHECKING:
 
 D = TypeVar("D", bound="Database", default=Any)
 
+DEBUG = bool(os.getenv("BEETS_DEBUG", False))
+
+
 FlexAttrs = dict[str, str]
+
+
+def print_query(sql, subvals=None):
+    """If debugging, replace placeholders and print the query."""
+    if not DEBUG:
+        return
+    topr = sql
+    for val in subvals or []:
+        topr = topr.replace("?", str(val), 1)
+    for item in flexitable({"sql": topr}):
+        print(item, file=sys.stderr)
 
 
 class DBAccessError(Exception):
@@ -971,6 +987,7 @@ class Transaction:
         """Execute an SQL statement with substitution values and return
         a list of rows from the database.
         """
+        print_query(statement, subvals)
         cursor = self.db._connection().execute(statement, subvals)
         return cursor.fetchall()
 
@@ -979,6 +996,7 @@ class Transaction:
         the row ID of the last affected row.
         """
         try:
+            print_query(statement, subvals)
             cursor = self.db._connection().execute(statement, subvals)
         except sqlite3.OperationalError as e:
             # In two specific cases, SQLite reports an error while accessing
@@ -999,6 +1017,7 @@ class Transaction:
         """Execute a string containing multiple SQL statements."""
         # We don't know whether this mutates, but quite likely it does.
         self._mutated = True
+        print_query(statements)
         self.db._connection().executescript(statements)
 
 
