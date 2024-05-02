@@ -321,7 +321,7 @@ wheels = [
 
 [[package]]
 name = "beets"
-version = "2.13.0"
+version = "2.13.1"
 source = { editable = "." }
 dependencies = [
     { name = "colorama", marker = "sys_platform == 'win32'" },
@@ -336,6 +336,7 @@ dependencies = [
     { name = "pyyaml" },
     { name = "requests" },
     { name = "requests-ratelimiter" },
+    { name = "rich-tables" },
     { name = "typing-extensions" },
     { name = "unidecode" },
 ]
@@ -576,6 +577,7 @@ requires-dist = [
     { name = "requests-oauthlib", marker = "extra == 'tidal'", specifier = ">=0.6.1" },
     { name = "requests-ratelimiter", specifier = ">=0.7.0" },
     { name = "resampy", marker = "extra == 'autobpm'", specifier = ">=0.4.3" },
+    { name = "rich-tables", editable = "../rich-tables" },
     { name = "soco", marker = "extra == 'sonosupdate'" },
     { name = "titlecase", marker = "extra == 'titlecase'" },
     { name = "typing-extensions" },
@@ -1033,6 +1035,18 @@ wheels = [
 ]
 
 [[package]]
+name = "coloraide"
+version = "8.12.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5d/ce/355d2eff4f189b73ba7dbdb2f8c06861965d8d5c3309761d3e318b185496/coloraide-8.12.1.tar.gz", hash = "sha256:1ec65d8e293527bfd7785482f390e84250561f7484dc9b9d2bb62d4ce05271d3", size = 22408711, upload-time = "2026-08-23T18:28:58.406Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/32/1e/8039069ece1efd209cc03558e83d5e29d9acc96f9e3341c9304bd8eedb70/coloraide-8.12.1-py3-none-any.whl", hash = "sha256:65d57a1990ee0e09961d64aa0746aa3759f94237a69984c008ebf31c4db08329", size = 364061, upload-time = "2026-08-23T18:28:56.051Z" },
+]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -1377,6 +1391,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/21/14/38128fbafd7e0ed41d874df6c9a653d47c2d111cfe59e2b4ac95161b4abd/httpx2-2.9.1.tar.gz", hash = "sha256:1932a768737e3666291582833da748cc4e563c337cf96706fccc04fa6e58764a", size = 95458, upload-time = "2026-07-24T09:21:04.972Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/13/b8/cfd91c4ab9134d386d48f0b6ac662ff3d4be6efdee59ee1c67ebc3c0487c/httpx2-2.9.1-py3-none-any.whl", hash = "sha256:1820fe14a9ab1107bfeff39259987429450b070ec0ff38cc87eb0d8c97fdc71a", size = 91191, upload-time = "2026-07-24T09:21:02.6Z" },
+]
+
+[[package]]
+name = "humanize"
+version = "4.16.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0a/ea/13a1ef3c12d12662905801495283530251918b70d62d368f1d2e0272c70d/humanize-4.16.0.tar.gz", hash = "sha256:7dc2244a2f84a4bfb1d36c37bac80cd78e35cdc5c119206d87b018e1445f3a3f", size = 89515, upload-time = "2026-06-30T16:17:29.859Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b0/aa/0b7365d30fed43e7a3449aba1fe20a0a7174d9cf13e282af4e69ac825441/humanize-4.16.0-py3-none-any.whl", hash = "sha256:353eb2f34c09d098b2880eee8bef21832eae6d174f48c5762fff7e5fcb74d01d", size = 137209, upload-time = "2026-06-30T16:17:28.36Z" },
 ]
 
 [[package]]
@@ -2005,6 +2028,18 @@ wheels = [
 ]
 
 [[package]]
+name = "markdown-it-py"
+version = "4.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mdurl" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/06/ff/7841249c247aa650a76b9ee4bbaeae59370dc8bfd2f6c01f3630c35eb134/markdown_it_py-4.2.0.tar.gz", hash = "sha256:04a21681d6fbb623de53f6f364d352309d4094dd4194040a10fd51833e418d49", size = 82454, upload-time = "2026-05-07T12:08:28.36Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b3/81/4da04ced5a082363ecfa159c010d200ecbd959ae410c10c0264a38cac0f5/markdown_it_py-4.2.0-py3-none-any.whl", hash = "sha256:9f7ebbcd14fe59494226453aed97c1070d83f8d24b6fc3a3bcf9a38092641c4a", size = 91687, upload-time = "2026-05-07T12:08:27.182Z" },
+]
+
+[[package]]
 name = "markupsafe"
 version = "3.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -2087,6 +2122,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/fb/df/5bd7a48c256faecd1d36edc13133e51397e41b73bb77e1a69deab746ebac/markupsafe-3.0.3-cp314-cp314t-win32.whl", hash = "sha256:915c04ba3851909ce68ccc2b8e2cd691618c4dc4c4232fb7982bca3f41fd8c3d", size = 14819, upload-time = "2025-09-27T18:37:26.285Z" },
     { url = "https://files.pythonhosted.org/packages/1a/8a/0402ba61a2f16038b48b39bccca271134be00c5c9f0f623208399333c448/markupsafe-3.0.3-cp314-cp314t-win_amd64.whl", hash = "sha256:4faffd047e07c38848ce017e8725090413cd80cbc23d86e55c587bf979e579c9", size = 15426, upload-time = "2025-09-27T18:37:27.316Z" },
     { url = "https://files.pythonhosted.org/packages/70/bc/6f1c2f612465f5fa89b95bead1f44dcb607670fd42891d8fdcd5d039f4f4/markupsafe-3.0.3-cp314-cp314t-win_arm64.whl", hash = "sha256:32001d6a8fc98c8cb5c947787c5d08b0a50663d139f1305bac5885d98d9b40fa", size = 14146, upload-time = "2025-09-27T18:37:28.327Z" },
+]
+
+[[package]]
+name = "mdurl"
+version = "0.1.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d6/54/cfe61301667036ec958cb99bd3efefba235e65cdeb9c84d24a8293ba1d90/mdurl-0.1.2.tar.gz", hash = "sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba", size = 8729, upload-time = "2022-08-14T12:40:10.846Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8", size = 9979, upload-time = "2022-08-14T12:40:09.779Z" },
 ]
 
 [[package]]
@@ -2173,6 +2217,33 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/2f/e1/aab6c946570496b78e67804721f3d5e2d62a93081b9b37df77764ef56347/msgpack-1.2.1-cp314-cp314t-win32.whl", hash = "sha256:c1c79a604a2969a868a78b6ebd27a887e00c624f14f66b3038e0590cb23332d1", size = 70914, upload-time = "2026-06-18T16:13:49.385Z" },
     { url = "https://files.pythonhosted.org/packages/13/0a/e608956488a2af014cfe6e3d665e090b8ee42aa14b07f8f95b8880d66b09/msgpack-1.2.1-cp314-cp314t-win_amd64.whl", hash = "sha256:f12038a35fabd52e56a3547bab42401af49a45caa6dd00b34c44de235bc93ee2", size = 77999, upload-time = "2026-06-18T16:13:50.467Z" },
     { url = "https://files.pythonhosted.org/packages/d2/8a/27e2e57055176e366a46b85d02d68e7a5bcfbdd8474c9706375d965f24d3/msgpack-1.2.1-cp314-cp314t-win_arm64.whl", hash = "sha256:0adcf06ffde0777c0e1a9b771a2b1c4226ba1bbf748c8efcc02fcdeca3299107", size = 71160, upload-time = "2026-06-18T16:13:51.498Z" },
+]
+
+[[package]]
+name = "multimethod"
+version = "2.0.2"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version < '3.11'",
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b1/2d/6274e03d1d656f329f3546140a536fc728b68a1ef123d0deebc751541473/multimethod-2.0.2.tar.gz", hash = "sha256:4f753e9ef0eb08f25037fb7d04f3de22547716c4af257a978e1c4d660edab8f4", size = 15657, upload-time = "2025-11-18T01:16:33.222Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e2/3d/44e60142e058f7e41d0ab19e7f5cc9d77a00833fd6f0197dbbd4f13c0321/multimethod-2.0.2-py3-none-any.whl", hash = "sha256:e6e61347765ec0c154aef827bd6952a685a6693eb9d927fb530a6c364c77939e", size = 9561, upload-time = "2025-11-18T01:16:31.811Z" },
+]
+
+[[package]]
+name = "multimethod"
+version = "2.1"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version == '3.13.*'",
+    "python_full_version == '3.12.*'",
+    "python_full_version == '3.11.*'",
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cb/5c/556c53f25a75c7ec1b467a5871a22461615139dab72578166df7f8ad1104/multimethod-2.1.tar.gz", hash = "sha256:c59e75fbe51516ed632d3df4b56df0876747be001c068d3ee1e83e9f65c2846f", size = 16016, upload-time = "2026-07-29T00:31:35.523Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a7/9e/3538af4267d2e29d871e7a1ae390e8ff32122b3c560fe718569c4cd7624a/multimethod-2.1-py3-none-any.whl", hash = "sha256:54b5256562351762a275dd65571b5d6db750848f1eb6bb21c61cb5ff2748b663", size = 9529, upload-time = "2026-07-29T00:31:34.367Z" },
 ]
 
 [[package]]
@@ -3389,6 +3460,49 @@ wheels = [
 ]
 
 [[package]]
+name = "rich"
+version = "15.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "markdown-it-py" },
+    { name = "pygments" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c0/8f/0722ca900cc807c13a6a0c696dacf35430f72e0ec571c4275d2371fca3e9/rich-15.0.0.tar.gz", hash = "sha256:edd07a4824c6b40189fb7ac9bc4c52536e9780fbbfbddf6f1e2502c31b068c36", size = 230680, upload-time = "2026-04-12T08:24:00.75Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/82/3b/64d4899d73f91ba49a8c18a8ff3f0ea8f1c1d75481760df8c68ef5235bf5/rich-15.0.0-py3-none-any.whl", hash = "sha256:33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb", size = 310654, upload-time = "2026-04-12T08:24:02.83Z" },
+]
+
+[[package]]
+name = "rich-tables"
+version = "0.10.0"
+source = { editable = "../rich-tables" }
+dependencies = [
+    { name = "coloraide" },
+    { name = "decorator" },
+    { name = "humanize" },
+    { name = "multimethod", version = "2.0.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "multimethod", version = "2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "platformdirs" },
+    { name = "rich" },
+    { name = "sqlparse" },
+    { name = "typing-extensions" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "coloraide", specifier = ">=4.1" },
+    { name = "decorator", specifier = ">=5.2.1" },
+    { name = "humanize", specifier = ">=4.11.0" },
+    { name = "multimethod", specifier = ">=2" },
+    { name = "platformdirs", specifier = ">=4.2.0" },
+    { name = "rgbxy", marker = "extra == 'hue'", specifier = ">=0.5" },
+    { name = "rich", specifier = ">=12.3.0" },
+    { name = "sqlparse", specifier = ">=0.4.4" },
+    { name = "typing-extensions", specifier = ">=4.7.1" },
+]
+provides-extras = ["hue"]
+
+[[package]]
 name = "roman"
 version = "5.2"
 source = { registry = "https://pypi.org/simple" }
@@ -4152,6 +4266,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/3b/44/6716b257b0aa6bfd51a1b31665d1c205fb12cb5ad56de752dfa15657de2f/sphinxcontrib_serializinghtml-2.0.0.tar.gz", hash = "sha256:e9d912827f872c029017a53f0ef2180b327c3f7fd23c87229f7a8e8b70031d4d", size = 16080, upload-time = "2024-07-29T01:10:09.332Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/52/a7/d2782e4e3f77c8450f727ba74a8f12756d5ba823d81b941f1b04da9d033a/sphinxcontrib_serializinghtml-2.0.0-py3-none-any.whl", hash = "sha256:6e2cb0eef194e10c27ec0023bfeb25badbbb5868244cf5bc5bdc04e4464bf331", size = 92072, upload-time = "2024-07-29T01:10:08.203Z" },
+]
+
+[[package]]
+name = "sqlparse"
+version = "0.6.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5f/d3/3f06a1006f2261d1342aefb3c71eed02f5d4ca5bdbecd86ebc12ad38306e/sqlparse-0.6.0.tar.gz", hash = "sha256:113c35c75365ab9cc9c7231d68c6428fb11c085fc8e9eb1ad659b7ddbf6cd2b9", size = 178477, upload-time = "2026-08-13T19:16:06.396Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d9/50/f00935da0ec7cbf325f8dc4f772ae46fbc7b672dd62876e73f0a94adda57/sqlparse-0.6.0-py3-none-any.whl", hash = "sha256:b861c0288ce2fa56209a9a6412d2e066ac664b3873b89c26c9d8415e8e32996f", size = 50070, upload-time = "2026-08-13T19:16:04.062Z" },
 ]
 
 [[package]]
