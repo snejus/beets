@@ -82,11 +82,6 @@ class LimitPlugin(BeetsPlugin):
             n = 0
             N = None
 
-            def __init__(self, *args, **kwargs) -> None:
-                """Force the query to be slow so that 'value_match' is called."""
-                super().__init__(*args, **kwargs)
-                self.fast = False
-
             @classmethod
             def value_match(cls, pattern: str, value: str) -> bool:
                 if cls.N is None:

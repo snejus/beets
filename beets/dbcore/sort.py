@@ -26,7 +26,7 @@ class Sort:
         return sorted(items)
 
     def is_slow(self) -> bool:
-        """Indicate whether this query is *slow*, meaning that it cannot
+        """Indicate whether this sort is *slow*, meaning that it cannot
         be executed in SQL and must be executed in Python.
         """
         return False

@@ -801,7 +801,6 @@ class Results(Sequence[AnyModel]):
         model_class: type[AnyModel],
         rows: list[sqlite3.Row],
         db: D,
-        query: Query | None = None,
         sort: Sort | None = None,
     ) -> None:
         """Create a result set that will construct objects of type
@@ -811,9 +810,7 @@ class Results(Sequence[AnyModel]):
         constructed. `rows` is a query result: a list of mappings. The
         new objects will be associated with the database `db`.
 
-        If `query` is provided, it is used as a predicate to filter the
-        results for a "slow query" that cannot be evaluated by the
-        database directly. If `sort` is provided, it is used to sort the
+        If `sort` is provided, it is used to sort the
         full list of results before returning. This means it is a "slow
         sort" and all objects must be built before returning the first
         one.
@@ -821,7 +818,6 @@ class Results(Sequence[AnyModel]):
         self.model_class = model_class
         self.rows = rows
         self.db = db
-        self.query = query
         self.sort = sort
 
         # We keep a queue of rows we haven't yet consumed for
@@ -857,13 +853,10 @@ class Results(Sequence[AnyModel]):
                 while self._rows:
                     row = self._rows.pop(0)
                     obj = self._make_model(row)
-                    # If there is a slow-query predicate, ensurer that the
-                    # object passes it.
-                    if not self.query or self.query.match(obj):
-                        self._objects.append(obj)
-                        index += 1
-                        yield obj
-                        break
+                    self._objects.append(obj)
+                    index += 1
+                    yield obj
+                    break
 
     def __iter__(self) -> Iterator[AnyModel]:
         """Construct and generate Model objects for all matching
@@ -892,15 +885,7 @@ class Results(Sequence[AnyModel]):
         if not self._rows:
             # Fully materialized. Just count the objects.
             return len(self._objects)
-
-        if self.query:
-            # A slow query. Fall back to testing every object.
-            count = 0
-            for obj in self:
-                count += 1
-            return count
-
-        # A fast query. Just count the rows.
+        # Just count the rows.
         return self._row_count
 
     def __nonzero__(self) -> bool:
@@ -1276,7 +1261,9 @@ class Database:
         def regexp(value: Any, pattern: str) -> bool:
             if isinstance(value, bytes):
                 value = value.decode()
-            return re.search(pattern, str(value)) is not None
+            return (
+                value is not None and re.search(pattern, str(value)) is not None
+            )
 
         def bytelower(bytestring: AnyStr | None) -> AnyStr | None:
             """A custom ``bytelower`` sqlite function so we can compare
@@ -1485,7 +1472,6 @@ class Database:
             model_cls,
             rows,
             self,
-            None if where else query,  # Slow query component.
             sort if sort.is_slow() else None,  # Slow sort component.
         )
 
