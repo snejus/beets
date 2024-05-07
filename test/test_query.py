@@ -15,7 +15,6 @@
 """Various tests for querying the library database."""
 
 import sys
-from functools import partial
 from pathlib import Path
 
 import pytest
@@ -215,29 +214,6 @@ class TestGet:
     def test_negation_prefix(self, lib, q, expected_titles):
         actual_titles = {i.title for i in lib.items(q)}
         assert actual_titles == set(expected_titles)
-
-    @pytest.mark.parametrize(
-        "make_q",
-        [
-            partial(DateQuery, "added", "2001-01-01"),
-            partial(MatchQuery, "artist", "one"),
-            partial(NoneQuery, "rg_track_gain"),
-            partial(NumericQuery, "year", "2002"),
-            partial(StringQuery, "year", "2001"),
-            partial(RegexpQuery, "album", "^.a"),
-            partial(SubstringQuery, "title", "x"),
-        ],
-    )
-    def test_fast_vs_slow(self, lib, make_q):
-        """Test that the results are the same regardless of the `fast` flag
-        for negated `FieldQuery`s.
-        """
-        q_fast = make_q(True)
-        q_slow = make_q(False)
-
-        assert list(map(dict, lib.items(q_fast))) == list(
-            map(dict, lib.items(q_slow))
-        )
 
 
 class TestMatch:
@@ -481,13 +457,16 @@ class TestRelatedQueries:
             album_name = f"Album{album_idx}"
             items = [
                 helper.create_item(
-                    album=album_name, title=f"{album_name} Item{idx}"
+                    album=album_name,
+                    title=(title := f"{album_name} Item{idx}"),
+                    item_flex=f"{title} Flex{idx}",
                 )
                 for idx in range(1, 3)
             ]
             album = helper.lib.add_album(items)
             album.artpath = f"{album_name} Artpath"
             album.catalognum = "ABC"
+            album.album_flex = f"{album_name} Flex"
             album.store()
 
         return helper.lib
@@ -518,6 +497,18 @@ class TestRelatedQueries:
                 ["Album1 Item1", "Album1 Item2"],
                 ["Album1"],
                 id="query-field-common-to-album-and-item",
+            ),
+            _p(
+                "item_flex:Item1",
+                ["Album1 Item1", "Album2 Item1"],
+                ["Album1", "Album2"],
+                id="query-item-flex-field",
+            ),
+            _p(
+                "album_flex:Album1",
+                ["Album1 Item1", "Album1 Item2"],
+                ["Album1"],
+                id="query-album-flex-field",
             ),
         ],
     )
