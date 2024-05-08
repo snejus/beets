@@ -24,6 +24,7 @@ import sys
 import time
 import unicodedata
 from functools import cached_property
+from typing import Mapping, Type
 
 from mediafile import MediaFile, UnreadableFileError
 
@@ -417,6 +418,39 @@ class LibModel(dbcore.Model):
     def __bytes__(self):
         return self.__str__().encode("utf-8")
 
+    # Convenient queries.
+
+    @classmethod
+    def field_query(
+        cls, field: str, pattern: str, query_cls: Type[dbcore.FieldQuery]
+    ) -> dbcore.Query:
+        """Get a `FieldQuery` for this model."""
+        fast = field in cls.all_db_fields
+        if field in cls.shared_db_fields:
+            # This field exists in both tables, so SQLite will encounter
+            # an OperationalError if we try to use it in a query.
+            # Using an explicit table name resolves this.
+            field = f"{cls._table}.{field}"
+
+        return query_cls(field, pattern, fast)
+
+    @classmethod
+    def all_fields_query(
+        cls, pattern_by_field: Mapping[str, str]
+    ) -> dbcore.AndQuery:
+        """Get a query that matches many fields with different patterns.
+
+        `pattern_by_field` should be a mapping from field names to patterns.
+        The resulting query is a conjunction ("and") of per-field queries
+        for all of these field/pattern pairs.
+        """
+        return dbcore.AndQuery(
+            [
+                cls.field_query(f, p, dbcore.MatchQuery)
+                for f, p in pattern_by_field.items()
+            ]
+        )
+
 
 class FormattedItemMapping(dbcore.db.FormattedMapping):
     """Add lookup for album-level fields.
@@ -654,7 +688,7 @@ class Item(LibModel):
         an album (e.g. singletons) would be left out.
         """
         return (
-            f"LEFT JOIN {cls._relation._table} "
+            f"LEFT JOIN {cls._relation.table_with_flex_attrs} "
             f"ON {cls._table}.album_id = {cls._relation._table}.id"
         )
 
@@ -1270,7 +1304,7 @@ class Album(LibModel):
         any items.
         """
         return (
-            f"LEFT JOIN {cls._relation._table} "
+            f"LEFT JOIN {cls._relation.table_with_flex_attrs} "
             f"ON {cls._table}.id = {cls._relation._table}.album_id"
         )
 
@@ -1962,9 +1996,10 @@ class DefaultTemplateFunctions:
             subqueries.extend(initial_subqueries)
         for key in keys:
             value = db_item.get(key, "")
-            # Use slow queries for flexible attributes.
-            fast = key in item_keys
-            subqueries.append(dbcore.MatchQuery(key, value, fast))
+            subqueries.append(
+                db_item.field_query(key, value, dbcore.MatchQuery)
+            )
+
         query = dbcore.AndQuery(subqueries)
         ambigous_items = (
             self.lib.items(query)
