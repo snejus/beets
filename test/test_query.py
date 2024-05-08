@@ -504,6 +504,12 @@ class TestRelatedQueries:
                 ["Album1"],
                 id="query-album-flex-field",
             ),
+            _p(
+                "item_flex1:'Item1 Flex1' item_flex2:Album1",
+                ["Album1 Item1"],
+                ["Album1"],
+                id="query-by-many-flex",
+            ),
         ],
     )
     def test_related_query(self, lib, q, expected_titles, expected_albums):
