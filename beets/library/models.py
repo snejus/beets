@@ -346,7 +346,7 @@ class Album(LibModel):
         any items.
         """
         return (
-            f"LEFT JOIN {cls._relation._table} "
+            f"LEFT JOIN {cls._relation.table_with_flex_attrs} "
             f"ON {cls._table}.id = {cls._relation._table}.album_id"
         )
 
@@ -776,7 +776,7 @@ class Item(LibModel):
         an album (e.g. singletons) would be left out.
         """
         return (
-            f"LEFT JOIN {cls._relation._table} "
+            f"LEFT JOIN {cls._relation.table_with_flex_attrs} "
             f"ON {cls._table}.album_id = {cls._relation._table}.id"
         )
 
