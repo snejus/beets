@@ -1292,17 +1292,30 @@ class Database:
         where, subvals = query.clause()
         order_by = sort.order_clause()
 
+        this_table = model_cls._table
+        select_fields = [f"{this_table}.*"]
         _from = model_cls.table_with_flex_attrs
-        if query.field_names & model_cls.other_db_fields:
+
+        required_fields = query.field_names
+        if required_fields - model_cls._fields.keys():
             _from += f" {model_cls.relation_join}"
 
-        table = model_cls._table
-        # group by id to avoid duplicates when joining with the relation
+            if required_fields - model_cls.all_db_fields:
+                # merge all flexible attribute into a single JSON field
+                select_fields.append(
+                    f"""
+                    json_patch(
+                        COALESCE({this_table}."flex_attrs [json_str]", '{{}}'),
+                        COALESCE({model_cls._relation._table}."flex_attrs [json_str]", '{{}}')
+                    ) AS all_flex_attrs
+                    """  # noqa: E501
+                )
+
         sql = (
-            f"SELECT {table}.* "
+            f"SELECT {', '.join(select_fields)} "
             f"FROM ({_from}) "
             f"WHERE {where or 1} "
-            f"GROUP BY {table}.id"
+            f"GROUP BY {this_table}.id"
         )
 
         if order_by:
