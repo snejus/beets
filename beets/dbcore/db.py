@@ -49,6 +49,7 @@ from typing import (
     cast,
 )
 
+from mediafile import MediaFile
 from rich import print
 from rich_tables.generic import flexitable
 from unidecode import unidecode
@@ -357,6 +358,10 @@ class Model(ABC):
     def other_db_fields(cls) -> set[str]:
         """Fields in the related table."""
         return cls._relation._fields.keys() - cls.shared_db_fields
+
+    @cached_classproperty
+    def writable_db_fields(cls) -> set[str]:
+        return MediaFile.fields() & cls._relation._fields.keys()
 
     @cached_classproperty
     def table_with_flex_attrs(cls) -> str:
