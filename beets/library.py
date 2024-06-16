@@ -446,6 +446,17 @@ class LibModel(dbcore.Model):
         )
 
     @classmethod
+    def any_writable_field_query(
+        cls, query_class: Type[dbcore.FieldQuery], pattern: str
+    ) -> dbcore.OrQuery:
+        return dbcore.OrQuery(
+            [
+                cls.field_query(f, pattern, query_class)
+                for f in cls.writable_db_fields
+            ]
+        )
+
+    @classmethod
     def match_all_query(
         cls, pattern_by_field: Mapping[str, str]
     ) -> dbcore.AndQuery:
