@@ -78,6 +78,9 @@ New features
   ``genres`` values will be written to media files the next time you run a
   command that writes tags (such as ``beet write`` or during import). No manual
   action or ``mbsync`` is required.
+- Ability to query albums with track **flexible** fields and vice versa.
+- Queries have been made faster, and their speed is constant regardless of their
+  complexity or the type of queried fields.
 
   The ``genre`` field is split by the first separator found in the string, in
   the following order of precedence:
@@ -176,9 +179,6 @@ Other changes
 
 2.6.1 (February 02, 2026)
 -------------------------
-
-Bug fixes
-~~~~~~~~~
 
 - Make ``packaging`` a required dependency. :bug:`6332`
 
