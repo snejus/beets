@@ -12,6 +12,9 @@ New features:
   `beet list -a title:something` or `beet list artpath:cover`. Consequently
   album queries involving `path` field have been sped up, like `beet list -a
   path:/path/`.
+* Ability to query albums with track **flexible** fields and vice versa.
+* Queries have been made faster, and their speed is constant regardless of
+  their complexity or the type of queried fields.
 
 Bug fixes:
 
