@@ -15,6 +15,9 @@ New features:
 * :doc:`plugins/autobpm`: Add new configuration option ``beat_track_kwargs``
   which enables adjusting keyword arguments supplied to librosa's
   ``beat_track`` function call.
+* Ability to query albums with track **flexible** fields and vice versa.
+* Queries have been made faster, and their speed is constant regardless of
+  their complexity or the type of queried fields.
 
 Bug fixes:
 
