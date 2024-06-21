@@ -25,6 +25,9 @@ New features
   upgrading. The migration runs once when the database schema is updated,
   splitting genre strings and writing the changes to both the database and media
   files. No manual action or ``mbsync`` is required.
+- Ability to query albums with track **flexible** fields and vice versa.
+- Queries have been made faster, and their speed is constant regardless of their
+  complexity or the type of queried fields.
 
 Bug fixes
 ~~~~~~~~~
@@ -58,9 +61,6 @@ Other changes
 
 2.6.1 (February 02, 2026)
 -------------------------
-
-Bug fixes
-~~~~~~~~~
 
 - Make ``packaging`` a required dependency. :bug:`6332`
 
