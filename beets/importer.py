@@ -920,14 +920,11 @@ class ImportTask(BaseImportTask):
                         displayable_path(item.path),
                     )
                 item_fields = _reduce_and_log(
-                    item, dup_item._values_flex, REIMPORT_FRESH_FIELDS_ITEM
+                    item,
+                    dup_item._values_flex,
+                    set(REIMPORT_FRESH_FIELDS_ITEM) | overwrite_props,
                 )
                 item.update(item_fields)
-                saved = {}
-                for prop in set(item) & overwrite_props:
-                    saved[prop] = item[prop]
-                item.update(dup_item._values_flex)
-                item.update(saved)
                 log.debug(
                     "Reimported item {}. Preserving flexible attributes {}. "
                     "Path: {}",
