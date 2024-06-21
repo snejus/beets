@@ -33,6 +33,9 @@ New features:
       resolve differences in metadata source styles.
 - :doc:`plugins/spotify`: Added support for multi-artist albums and tracks,
       saving all contributing artists to the respective fields.
+- Ability to query albums with track **flexible** fields and vice versa.
+- Queries have been made faster, and their speed is constant regardless of their
+  complexity or the type of queried fields.
 
 Bug fixes:
 
