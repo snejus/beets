@@ -72,6 +72,9 @@ New features:
 - :doc:`plugins/web`: Display artist and album as part of the search results.
 - :doc:`plugins/spotify` :doc:`plugins/deezer`: Add new configuration option
   ``search_limit`` to limit the number of results returned by search queries.
+- Ability to query albums with track **flexible** fields and vice versa.
+- Queries have been made faster, and their speed is constant regardless of their
+  complexity or the type of queried fields.
 
 Bug fixes:
 
