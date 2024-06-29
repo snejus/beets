@@ -22,8 +22,7 @@ from beets.test import _common
 from beets.test.helper import (
     AutotagStub,
     BeetsTestCase,
-    ImportTestCase,
-    TerminalImportSessionSetup,
+    TerminalImportHelper,
     control_stdin,
 )
 from beetsplug.edit import EditPlugin
@@ -322,9 +321,7 @@ class EditCommandTest(BeetsTestCase, EditMixin):
 
 
 @_common.slow_test()
-class EditDuringImporterTest(
-    TerminalImportSessionSetup, ImportTestCase, EditMixin
-):
+class EditDuringImporterTest(TerminalImportHelper, EditMixin):
     """TODO"""
 
     IGNORED = ["added", "album_id", "id", "mtime", "path"]
