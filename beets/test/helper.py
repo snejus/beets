@@ -36,6 +36,7 @@ import os.path
 import shutil
 import subprocess
 import sys
+import unittest
 from contextlib import contextmanager
 from enum import Enum
 from io import StringIO
@@ -488,6 +489,41 @@ class TestHelper(_common.Assertions):
         with open(syspath(path), "a+") as f:
             f.write(content)
         return path
+
+
+# A test harness for all beets tests.
+# Provides temporary, isolated configuration.
+class BeetsTestCase(unittest.TestCase, TestHelper):
+    """A unittest.TestCase subclass that saves and restores beets'
+    global configuration. This allows tests to make temporary
+    modifications that will then be automatically removed when the test
+    completes. Also provides some additional assertion methods, a
+    temporary directory, and a DummyIO.
+    """
+
+    def setUp(self):
+        self.setup_beets()
+
+        # Initialize, but don't install, a DummyIO.
+        self.io = _common.DummyIO()
+
+    def tearDown(self):
+        self.teardown_beets()
+
+
+class LibTestCase(BeetsTestCase):
+    """A test case that includes an in-memory library object (`lib`) and
+    an item added to the library (`i`).
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.lib = beets.library.Library(":memory:")
+        self.i = _common.item(self.lib)
+
+    def tearDown(self):
+        self.lib._connection().close()
+        super().tearDown()
 
 
 class ImportHelper(TestHelper):
