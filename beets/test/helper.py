@@ -511,19 +511,14 @@ class BeetsTestCase(unittest.TestCase, TestHelper):
         self.teardown_beets()
 
 
-class LibTestCase(BeetsTestCase):
+class ItemInDBTestCase(BeetsTestCase):
     """A test case that includes an in-memory library object (`lib`) and
-    an item added to the library (`i`).
+    an item added to the library (`item`).
     """
 
     def setUp(self):
         super().setUp()
-        self.lib = beets.library.Library(":memory:")
         self.i = _common.item(self.lib)
-
-    def tearDown(self):
-        self.lib._connection().close()
-        super().tearDown()
 
 
 class ImportHelper:
