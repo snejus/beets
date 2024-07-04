@@ -1350,12 +1350,6 @@ class ItemReadTest(unittest.TestCase):
 
 
 class FilesizeTest(BeetsTestCase):
-    def setUp(self):
-        self.setup_beets()
-
-    def tearDown(self):
-        self.teardown_beets()
-
     def test_filesize(self):
         item = self.add_item_fixture()
         self.assertNotEqual(item.filesize, 0)
