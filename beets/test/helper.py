@@ -213,6 +213,7 @@ class TestHelper(_common.Assertions):
         sure you call ``unload_plugins()`` afterwards.
         """
         # FIXME this should eventually be handled by a plugin manager
+        plugins = (self.plugin,) if hasattr(self, "plugin") else plugins
         beets.config["plugins"] = plugins
         beets.plugins.load_plugins(plugins)
         beets.plugins.find_plugins()
@@ -230,7 +231,7 @@ class TestHelper(_common.Assertions):
         Album._queries.update(beets.plugins.named_queries(Album))
 
     def unload_plugins(self):
-        """Unload all plugins and remove the from the configuration."""
+        """Unload all plugins and remove them from the configuration."""
         # FIXME this should eventually be handled by a plugin manager
         beets.config["plugins"] = []
         beets.plugins._classes = set()
@@ -521,6 +522,22 @@ class ItemInDBTestCase(BeetsTestCase):
     def setUp(self):
         super().setUp()
         self.i = _common.item(self.lib)
+
+
+class PluginMixin:
+    plugin: ClassVar[str]
+
+    def setUp(self):
+        super().setUp()
+        self.load_plugins()
+
+    def tearDown(self):
+        super().tearDown()
+        self.unload_plugins()
+
+
+class PluginTestCase(PluginMixin, BeetsTestCase):
+    pass
 
 
 class ImportHelper:

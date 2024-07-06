@@ -49,17 +49,12 @@ class EmbedartCliTest(TestHelper, FetchImageHelper):
     def setUp(self):
         self.io.install()
         super().setUp()  # Converter is threaded
-        self.load_plugins("embedart")
 
     def _setup_data(self, artpath=None):
         if not artpath:
             artpath = self.small_artpath
         with open(syspath(artpath), "rb") as f:
             self.image_data = f.read()
-
-    def tearDown(self):
-        self.unload_plugins()
-        super().tearDown()
 
     def test_embed_art_from_file_with_yes_input(self):
         self._setup_data()

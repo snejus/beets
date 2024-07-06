@@ -874,7 +874,6 @@ class ConfigTest(BeetsTestCase):
             del os.environ["APPDATA"]
         else:
             os.environ["APPDATA"] = self._old_appdata
-        self.unload_plugins()
         super().tearDown()
 
     def _make_test_cmd(self):
@@ -1459,11 +1458,6 @@ class CommonOptionsParserCliTest(BeetsTestCase):
         self.item.path = b"xxx/yyy"
         self.lib.add(self.item)
         self.lib.add_album([self.item])
-        self.load_plugins()
-
-    def tearDown(self):
-        self.unload_plugins()
-        super().tearDown()
 
     def test_base(self):
         l = self.run_with_output("ls")

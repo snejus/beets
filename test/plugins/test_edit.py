@@ -21,7 +21,7 @@ from beets.library import Item
 from beets.test import _common
 from beets.test.helper import (
     AutotagStub,
-    BeetsTestCase,
+    PluginTestCase,
     TerminalImportHelper,
     control_stdin,
 )
@@ -72,8 +72,10 @@ class ModifyFileMocker:
             f.write(contents)
 
 
-class EditMixin:
+class EditMixin(PluginTestCase):
     """Helper containing some common functionality used for the Edit tests."""
+
+    plugin = "edit"
 
     def assertItemFieldsModified(  # noqa
         self, library_items, items, fields=[], allowed=["path"]
@@ -114,7 +116,7 @@ class EditMixin:
 
 @_common.slow_test()
 @patch("beets.library.Item.write")
-class EditCommandTest(BeetsTestCase, EditMixin):
+class EditCommandTest(EditMixin):
     """Black box tests for `beetsplug.edit`. Command line interaction is
     simulated using `test.helper.control_stdin()`, and yaml editing via an
     external editor is simulated using `ModifyFileMocker`.
@@ -125,7 +127,6 @@ class EditCommandTest(BeetsTestCase, EditMixin):
 
     def setUp(self):
         super().setUp()
-        self.load_plugins("edit")
         # Add an album, storing the original fields for comparison.
         self.album = self.add_album_fixture(track_count=self.TRACK_COUNT)
         self.album_orig = {f: self.album[f] for f in self.album._fields}
@@ -136,7 +137,6 @@ class EditCommandTest(BeetsTestCase, EditMixin):
     def tearDown(self):
         EditPlugin.listeners = None
         super().tearDown()
-        self.unload_plugins()
 
     def assertCounts(  # noqa
         self,
@@ -328,7 +328,6 @@ class EditDuringImporterTest(TerminalImportHelper, EditMixin):
 
     def setUp(self):
         super().setUp()
-        self.load_plugins("edit")
         # Create some mediafiles, and store them for comparison.
         self._create_import_dir(3)
         self.items_orig = [Item.from_path(f.path) for f in self.media_files]
@@ -338,7 +337,6 @@ class EditDuringImporterTest(TerminalImportHelper, EditMixin):
 
     def tearDown(self):
         EditPlugin.listeners = None
-        self.unload_plugins()
         super().tearDown()
         self.matcher.restore()
 
