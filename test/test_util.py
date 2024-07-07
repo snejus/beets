@@ -231,11 +231,3 @@ class ConfitDeprecationTest(BeetsTestCase):
 
         self.assertIn(__file__, w.filename)
         self.assertNotIn("confit.py", w.filename)
-
-
-def suite():
-    return unittest.TestLoader().loadTestsFromName(__name__)
-
-
-if __name__ == "__main__":
-    unittest.main(defaultTest="suite")
