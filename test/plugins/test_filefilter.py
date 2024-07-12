@@ -35,11 +35,10 @@ class FileFilterPluginMixin(ImportTestCase):
     def setUp(self):
         super().setUp()
         self.__create_import_dir(2)
-        self._setup_import_session()
-        config["import"]["pretend"] = True
+        self.setup_importer(pretend=True)
 
         import_files = [self.import_dir]
-        self._setup_import_session(singletons=self.singletons)
+        self.setup_importer(singletons=self.singletons)
         self.importer.paths = import_files
 
     def tearDown(self):

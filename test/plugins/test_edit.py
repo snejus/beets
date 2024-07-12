@@ -331,12 +331,11 @@ class EditDuringImporterTestCase(EditMixin, TerminalImportTestCase):
     def setUp(self):
         super().setUp()
         # Create some mediafiles, and store them for comparison.
-        self.prepare_album_for_import()
-        self._setup_import_session(singletons=self.singletons)
+        self.prepare_album_for_import(1)
+        self.setup_importer(singletons=self.singletons)
         self.items_orig = [Item.from_path(f.path) for f in self.import_media]
         self.matcher = AutotagStub().install()
         self.matcher.matching = AutotagStub.GOOD
-        self.config["import"]["timid"] = True
 
     def tearDown(self):
         EditPlugin.listeners = None
