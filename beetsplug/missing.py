@@ -229,17 +229,18 @@ class MissingPlugin(BeetsPlugin):
 
     def _missing(self, album):
         """Query MusicBrainz to determine items missing from `album`."""
-        item_mbids = [x.mb_trackid for x in album.items()]
+        item_mbids = {x.mb_trackid for x in album.items()}
         if len(list(album.items())) < album.albumtotal:
             # fetch missing items
             # TODO: Implement caching that without breaking other stuff
-            album_info = hooks.album_for_mbid(album.mb_albumid)
-            for track_info in getattr(album_info, "tracks", []):
-                if track_info.track_id not in item_mbids:
-                    item = _item(track_info, album_info, album.id)
-                    self._log.debug(
-                        "track {0} in album {1}",
-                        track_info.track_id,
-                        album_info.album_id,
-                    )
-                    yield item
+            album_info = next(hooks.albums_for_id(album.mb_albumid), None)
+            if album_info:
+                for track_info in album_info.tracks:
+                    if track_info.track_id not in item_mbids:
+                        item = _item(track_info, album_info, album.id)
+                        self._log.debug(
+                            "track {0} in album {1}",
+                            track_info.track_id,
+                            album_info.album_id,
+                        )
+                        yield item
