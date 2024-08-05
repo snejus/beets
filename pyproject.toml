@@ -259,3 +259,8 @@ py_version = 38
 multi_line_output = 3
 line_length = 80
 indent = 4
+
+[tool.ruff]
+line-length = 80
+preview = false
+target-version = "py38"
