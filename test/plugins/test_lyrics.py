@@ -14,7 +14,6 @@
 
 """Tests for the 'lyrics' plugin."""
 
-
 import itertools
 import os
 import re
@@ -22,6 +21,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 import confuse
+import pytest
 import requests
 
 from beets import logging
@@ -38,42 +38,33 @@ tekstowo = lyrics.Tekstowo(MagicMock(), log)
 lrclib = lyrics.LRCLib(MagicMock(), log)
 
 
+class TestLyrics:
+    @pytest.mark.parametrize(
+        "separator, should_split",
+        [
+            ("ft.", True),
+            ("feat", True),
+            ("feat.", True),
+            ("featuring", True),
+            ("&", True),
+            ("and", True),
+            ("feats", False),
+        ],
+    )
+    def test_search_artist(self, separator, should_split):
+        artist, title = f"Alice {separator} Bob", "song"
+        item = Item(artist=artist, title=title)
+        expected_pairs = [(item.artist, [title])]
+        if should_split:
+            expected_pairs.append(("Alice", [title]))
+
+        assert expected_pairs == list(lyrics.search_pairs(item))
+
+
 class LyricsPluginTest(unittest.TestCase):
     def setUp(self):
         """Set up configuration."""
         lyrics.LyricsPlugin()
-
-    def test_search_artist(self):
-        item = Item(artist="Alice ft. Bob", title="song")
-        assert ("Alice ft. Bob", ["song"]) in lyrics.search_pairs(item)
-        assert ("Alice", ["song"]) in lyrics.search_pairs(item)
-
-        item = Item(artist="Alice feat Bob", title="song")
-        assert ("Alice feat Bob", ["song"]) in lyrics.search_pairs(item)
-        assert ("Alice", ["song"]) in lyrics.search_pairs(item)
-
-        item = Item(artist="Alice feat. Bob", title="song")
-        assert ("Alice feat. Bob", ["song"]) in lyrics.search_pairs(item)
-        assert ("Alice", ["song"]) in lyrics.search_pairs(item)
-
-        item = Item(artist="Alice feats Bob", title="song")
-        assert ("Alice feats Bob", ["song"]) in lyrics.search_pairs(item)
-        assert ("Alice", ["song"]) not in lyrics.search_pairs(item)
-
-        item = Item(artist="Alice featuring Bob", title="song")
-        assert ("Alice featuring Bob", ["song"]) in lyrics.search_pairs(item)
-        assert ("Alice", ["song"]) in lyrics.search_pairs(item)
-
-        item = Item(artist="Alice & Bob", title="song")
-        assert ("Alice & Bob", ["song"]) in lyrics.search_pairs(item)
-        assert ("Alice", ["song"]) in lyrics.search_pairs(item)
-
-        item = Item(artist="Alice and Bob", title="song")
-        assert ("Alice and Bob", ["song"]) in lyrics.search_pairs(item)
-        assert ("Alice", ["song"]) in lyrics.search_pairs(item)
-
-        item = Item(artist="Alice and Bob", title="song")
-        assert ("Alice and Bob", ["song"]) == list(lyrics.search_pairs(item))[0]
 
     def test_search_artist_sort(self):
         item = Item(artist="CHVRCHΞS", title="song", artist_sort="CHVRCHES")
@@ -509,14 +500,14 @@ class GeniusFetchTest(GeniusBaseTest):
                         {
                             "result": {
                                 "primary_artist": {
-                                    "name": "\u200Bblackbear",
+                                    "name": "\u200bblackbear",
                                 },
                                 "url": "blackbear_url",
                             }
                         },
                         {
                             "result": {
-                                "primary_artist": {"name": "El\u002Dp"},
+                                "primary_artist": {"name": "El\u002dp"},
                                 "url": "El-p_url",
                             }
                         },
@@ -786,10 +777,10 @@ class SlugTests(unittest.TestCase):
         assert lyrics.slug(text) == "cafe-au-lait-boisson"
         text = "Multiple  spaces -- and symbols! -- merged"
         assert lyrics.slug(text) == "multiple-spaces-and-symbols-merged"
-        text = "\u200Bno-width-space"
+        text = "\u200bno-width-space"
         assert lyrics.slug(text) == "no-width-space"
 
         # variations of dashes should get standardized
-        dashes = ["\u200D", "\u2010"]
+        dashes = ["\u200d", "\u2010"]
         for dash1, dash2 in itertools.combinations(dashes, 2):
             assert lyrics.slug(dash1) == lyrics.slug(dash2)

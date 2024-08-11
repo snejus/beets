@@ -12,9 +12,9 @@
 # The above copyright notice and this permission notice shall be
 # included in all copies or substantial portions of the Software.
 
-"""Fetches, embeds, and displays lyrics.
-"""
+"""Fetches, embeds, and displays lyrics."""
 
+from __future__ import annotations
 
 import difflib
 import errno
@@ -25,7 +25,6 @@ import re
 import struct
 import unicodedata
 import urllib
-import warnings
 
 import requests
 from unidecode import unidecode
@@ -106,6 +105,17 @@ epub_tocdup = False
 """
 
 
+class TimeoutSession(requests.Session):
+    def request(self, *args, **kwargs):
+        kwargs.setdefault("timeout", 10)
+        return super().request(*args, **kwargs)
+
+
+# Create an instance of the TimeoutSession
+r_session = TimeoutSession()
+r_session.headers.update({"User-Agent": USER_AGENT})
+
+
 # Utilities.
 
 
@@ -174,7 +184,7 @@ def search_pairs(item):
     artists = generate_alternatives(artist, patterns)
     # Use the artist_sort as fallback only if it differs from artist to avoid
     # repeated remote requests with the same search terms
-    if artist != artist_sort:
+    if artist_sort and artist_sort != artist:
         artists.append(artist_sort)
 
     patterns = [
@@ -250,40 +260,28 @@ class Backend:
             self._encode(title.title()),
         )
 
-    def fetch_url(self, url):
+    def fetch_url(self, url: str) -> str | None:
         """Retrieve the content at a given URL, or return None if the source
         is unreachable.
         """
+        self._log.info("Fetching {}", url)
         try:
-            # Disable the InsecureRequestWarning that comes from using
-            # `verify=false`.
-            # https://github.com/kennethreitz/requests/issues/2214
-            # We're not overly worried about the NSA MITMing our lyrics scraper
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                r = requests.get(
-                    url,
-                    verify=False,
-                    headers={
-                        "User-Agent": USER_AGENT,
-                    },
-                    timeout=10,
-                )
+            r = r_session.get(url)
+            r.raise_for_status()
+        except requests.HTTPError:
+            self._log.debug("failed to fetch: {0} ({1})", url, r.status_code)
         except requests.RequestException as exc:
             self._log.debug("lyrics request failed: {0}", exc)
-            return
-        if r.status_code == requests.codes.ok:
-            return r.text
         else:
-            self._log.debug("failed to fetch: {0} ({1})", url, r.status_code)
-            return None
+            return r.text
+        return None
 
     def fetch(self, artist, title, album=None, length=None):
         raise NotImplementedError()
 
 
 class LRCLib(Backend):
-    base_url = "https://lrclib.net/api/get"
+    base_url = "https://lrclib.net/api/search"
 
     def fetch(self, artist, title, album=None, length=None):
         params = {
@@ -294,20 +292,27 @@ class LRCLib(Backend):
         }
 
         try:
-            response = requests.get(
-                self.base_url,
-                params=params,
-                timeout=10,
-            )
+            self._log.info("Fetching {} with {}", self.base_url, params)
+            response = r_session.get(self.base_url, params=params)
             data = response.json()
         except (requests.RequestException, json.decoder.JSONDecodeError) as exc:
             self._log.debug("LRCLib API request failed: {0}", exc)
             return None
 
-        if self.config["synced"]:
-            return data.get("syncedLyrics")
+        if not data:
+            return None
 
-        return data.get("plainLyrics")
+        item = sorted(
+            data,
+            key=lambda i: (
+                abs(i["duration"] - length),
+                i["syncedLyrics"] is None,
+            ),
+        )[0]
+        if self.config["synced"]:
+            return item.get("syncedLyrics")
+
+        return item.get("plainLyrics")
 
 
 class MusiXmatch(Backend):
@@ -372,10 +377,7 @@ class Genius(Backend):
     def __init__(self, config, log):
         super().__init__(config, log)
         self.api_key = config["genius_api_key"].as_str()
-        self.headers = {
-            "Authorization": "Bearer %s" % self.api_key,
-            "User-Agent": USER_AGENT,
-        }
+        self.headers = {"Authorization": "Bearer %s" % self.api_key}
 
     def fetch(self, artist, title, album=None, length=None):
         """Fetch lyrics from genius.com
@@ -414,11 +416,11 @@ class Genius(Backend):
         search_url = self.base_url + "/search"
         data = {"q": title + " " + artist.lower()}
         try:
-            response = requests.get(
+            self._log.info("Fetching {} with {}", search_url, data)
+            response = r_session.get(
                 search_url,
                 params=data,
                 headers=self.headers,
-                timeout=10,
             )
         except requests.RequestException as exc:
             self._log.debug("Genius API request failed: {0}", exc)
@@ -788,8 +790,9 @@ class LyricsPlugin(plugins.BeetsPlugin):
         "tekstowo": Tekstowo,
         "lrclib": LRCLib,
     }
+    backends: list[Backend]
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.import_stages = [self.imported]
         self.config.add(
@@ -857,7 +860,7 @@ class LyricsPlugin(plugins.BeetsPlugin):
                 "documentation for further details."
             )
 
-        self.backends = [
+        self.backends: list[Backend] = [
             self.SOURCE_BACKENDS[source](self.config, self._log)
             for source in sources
         ]
@@ -1077,7 +1080,7 @@ class LyricsPlugin(plugins.BeetsPlugin):
                         lyrics, self.config["bing_lang_to"]
                     )
         else:
-            self._log.info("lyrics not found: {0}", item)
+            self._log.warning("lyrics not found: {0}", item)
             fallback = self.config["fallback"].get()
             if fallback:
                 lyrics = fallback
@@ -1088,17 +1091,25 @@ class LyricsPlugin(plugins.BeetsPlugin):
             item.try_write()
         item.store()
 
-    def get_lyrics(self, artist, title, album=None, length=None):
+    def get_lyrics(self, artist, title, album=None, length=None) -> str | None:
         """Fetch lyrics, trying each source in turn. Return a string or
         None if no lyrics were found.
         """
         for backend in self.backends:
-            lyrics = backend.fetch(artist, title, album=album, length=length)
-            if lyrics:
-                self._log.debug(
-                    "got lyrics from backend: {0}", backend.__class__.__name__
-                )
+            if not artist and isinstance(backend, MusiXmatch):
+                continue
+            backend_name = backend.__class__.__name__
+            if lyrics := backend.fetch(
+                artist, title, album=album, length=length
+            ):
+                self._log.debug("got lyrics from backend: {0}", backend_name)
                 return _scrape_strip_cruft(lyrics, True)
+            else:
+                self._log.debug(
+                    f"Failed fetching: {backend_name=}, {artist=}, {title=}"
+                )
+
+        return None
 
     def append_translation(self, text, to_lang):
         from xml.etree import ElementTree
@@ -1112,10 +1123,9 @@ class LyricsPlugin(plugins.BeetsPlugin):
                 "https://api.microsofttranslator.com/v2/Http.svc/"
                 "Translate?text=%s&to=%s" % ("|".join(text_lines), to_lang)
             )
-            r = requests.get(
-                url,
-                headers={"Authorization ": self.bing_auth_token},
-                timeout=10,
+            self._log.info("Fetching {}", url)
+            r = r_session.get(
+                url, headers={"Authorization ": self.bing_auth_token}
             )
             if r.status_code != 200:
                 self._log.debug(
