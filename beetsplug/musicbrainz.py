@@ -21,6 +21,7 @@ from collections import Counter
 from contextlib import suppress
 from dataclasses import dataclass
 from functools import cached_property, singledispatchmethod
+from html import unescape
 from itertools import groupby, product
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urljoin
@@ -82,6 +83,7 @@ RELEASE_INCLUDES = [
     "release-rels",
     "genres",
     "tags",
+    "annotation",
 ]
 
 TRACK_INCLUDES = [
@@ -90,6 +92,7 @@ TRACK_INCLUDES = [
     "isrcs",
     "work-level-rels",
     "artist-rels",
+    "annotation",
 ]
 
 BROWSE_INCLUDES = [
@@ -482,6 +485,9 @@ class MusicBrainzPlugin(MetadataSourcePlugin):
             medium_total=medium_total,
             data_source=self.data_source,
             data_url=track_url(recording["id"]),
+            comments=(
+                unescape(ann) if (ann := recording.get("annotation")) else None
+            ),
         )
 
         if recording.get("artist-credit"):
@@ -689,7 +695,11 @@ class MusicBrainzPlugin(MetadataSourcePlugin):
             data_source=self.data_source,
             data_url=album_url(release["id"]),
             barcode=release.get("barcode"),
+            comments=(
+                unescape(ann) if (ann := release["annotation"]) else None
+            ),
         )
+
         info.va = info.artist_id == VARIOUS_ARTISTS_ID
         if info.va:
             info.artist = config["va_name"].as_str()
@@ -844,7 +854,7 @@ class MusicBrainzPlugin(MetadataSourcePlugin):
 
     def _search_api(
         self,
-        query_type: Literal["recording", "release"],
+        query_type: Literal["annotation", "recording", "release"],
         filters: dict[str, str],
     ) -> list[JSONDict]:
         """Perform MusicBrainz API search and return results.
