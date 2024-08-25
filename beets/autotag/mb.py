@@ -533,6 +533,10 @@ def album_info(release: Dict) -> beets.autotag.hooks.AlbumInfo:
         data_url=album_url(release["id"]),
         barcode=release.get("barcode"),
     )
+    if annotations := musicbrainzngs.search_annotations(release["id"])[
+        "annotation-list"
+    ]:
+        info.comment = annotations[0]["text"]
     info.va = info.artist_id == VARIOUS_ARTISTS_ID
     if info.va:
         info.artist = config["va_name"].as_str()
