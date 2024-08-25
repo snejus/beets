@@ -72,6 +72,11 @@ class ReleaseFormat(TypedDict):
     descriptions: list[str] | None
 
 
+def get_title_without_remix(name: str) -> str:
+    """Split the track name, deduce the title and return it."""
+    return re.sub(r"[([]+.*", "", name)
+
+
 class DiscogsPlugin(BeetsPlugin):
     def __init__(self):
         super().__init__()
@@ -491,14 +496,10 @@ class DiscogsPlugin(BeetsPlugin):
                 elif albumtype == "Single":
                     albumtypes.add("single")
                     albumtype = "album"
-                    # titles = (
-                    #     {
-                    #         Helpers.parse_track_name(t).get("main_title")
-                    #         for t in tracks
-                    #     },
-                    # )
-                    # if len(titles) < 2:
-                    #     albumtype = "single"
+        main_titles = {get_title_without_remix(t["title"]) for t in tracks}
+        if len(main_titles) == 1:
+            albumtype = "single"
+            albumtypes = {"single"}
         albumtypes.add(albumtype)
         if result.data.get("labels"):
             label = result.data["labels"][0].get("name")
