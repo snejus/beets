@@ -53,6 +53,7 @@ RELEASE_INCLUDES = [
     "release-rels",
     "genres",
     "tags",
+    "annotation",
 ]
 
 RECORDING_INCLUDES = [
@@ -61,6 +62,7 @@ RECORDING_INCLUDES = [
     "isrcs",
     "work-level-rels",
     "artist-rels",
+    "annotation",
 ]
 
 
