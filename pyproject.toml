@@ -61,7 +61,7 @@ pyxdg = { version = "*", optional = true }
 rarfile = { version = "*", optional = true }
 reflink = { version = "*", optional = true }
 requests = { version = "*", optional = true }
-resampy = {version = ">=0.4.3", optional = true}
+resampy = { version = ">=0.4.3", optional = true }
 requests-oauthlib = { version = ">=0.6.1", optional = true }
 soco = { version = "*", optional = true }
 
@@ -80,6 +80,7 @@ py7zr = "*"
 pyxdg = "*"
 rarfile = "*"
 reflink = "*"
+requests-mock = ">=1.12.1"
 requests_oauthlib = "*"
 responses = ">=0.3.0"
 

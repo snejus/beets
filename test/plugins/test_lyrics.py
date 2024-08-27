@@ -14,15 +14,15 @@
 
 """Tests for the 'lyrics' plugin."""
 
-
 import itertools
 import os
 import re
 import unittest
+from functools import partial
 from unittest.mock import MagicMock, patch
 
 import confuse
-import requests
+import pytest
 
 from beets import logging
 from beets.library import Item
@@ -36,6 +36,8 @@ google = lyrics.Google(MagicMock(), log)
 genius = lyrics.Genius(MagicMock(), log)
 tekstowo = lyrics.Tekstowo(MagicMock(), log)
 lrclib = lyrics.LRCLib(MagicMock(), log)
+
+_p = pytest.param
 
 
 class LyricsPluginTest(unittest.TestCase):
@@ -509,14 +511,14 @@ class GeniusFetchTest(GeniusBaseTest):
                         {
                             "result": {
                                 "primary_artist": {
-                                    "name": "\u200Bblackbear",
+                                    "name": "\u200bblackbear",
                                 },
                                 "url": "blackbear_url",
                             }
                         },
                         {
                             "result": {
-                                "primary_artist": {"name": "El\u002Dp"},
+                                "primary_artist": {"name": "El\u002dp"},
                                 "url": "El-p_url",
                             }
                         },
@@ -675,61 +677,73 @@ class TekstowoIntegrationTest(TekstowoBaseTest, LyricsAssertions):
 # test LRCLib backend
 
 
-class LRCLibLyricsTest(unittest.TestCase):
-    def setUp(self):
-        self.plugin = lyrics.LyricsPlugin()
-        lrclib.config = self.plugin.config
+def lyrics_match(duration, synced, plain):
+    return {"duration": duration, "syncedLyrics": synced, "plainLyrics": plain}
 
-    @patch("beetsplug.lyrics.requests.get")
-    def test_fetch_synced_lyrics(self, mock_get):
-        mock_response = {
-            "syncedLyrics": "[00:00.00] la la la",
-            "plainLyrics": "la la la",
-        }
-        mock_get.return_value.json.return_value = mock_response
-        mock_get.return_value.status_code = 200
 
-        lyrics = lrclib.fetch("la", "la", "la", 999)
-        assert lyrics == mock_response["plainLyrics"]
+class TestLRCLibLyrics:
+    ITEM_DURATION = 999
 
-        self.plugin.config["synced"] = True
-        lyrics = lrclib.fetch("la", "la", "la", 999)
-        assert lyrics == mock_response["syncedLyrics"]
+    @pytest.fixture
+    def config(self):
+        return {"synced": True}
 
-    @patch("beetsplug.lyrics.requests.get")
-    def test_fetch_plain_lyrics(self, mock_get):
-        mock_response = {
-            "syncedLyrics": "",
-            "plainLyrics": "la la la",
-        }
-        mock_get.return_value.json.return_value = mock_response
-        mock_get.return_value.status_code = 200
+    @pytest.fixture
+    def lrclib(self, config):
+        lrclib = lyrics.LRCLib(config, log)
+        return lrclib
 
-        lyrics = lrclib.fetch("la", "la", "la", 999)
+    @pytest.fixture
+    def response(self):
+        return [lyrics_match(1, "synced", "plain")]
 
-        assert lyrics == mock_response["plainLyrics"]
+    @pytest.fixture
+    def fetch_lyrics(self, lrclib, requests_mock, response):
+        requests_mock.get(lyrics.LRCLib.base_url, json=response)
 
-    @patch("beetsplug.lyrics.requests.get")
-    def test_fetch_not_found(self, mock_get):
-        mock_response = {
-            "statusCode": 404,
-            "error": "Not Found",
-            "message": "Failed to find specified track",
-        }
-        mock_get.return_value.json.return_value = mock_response
-        mock_get.return_value.status_code = 404
+        return partial(lrclib.fetch, "la", "la", "la", self.ITEM_DURATION)
 
-        lyrics = lrclib.fetch("la", "la", "la", 999)
+    @pytest.mark.parametrize(
+        "response, expected_lyrics",
+        [
+            _p([], None, id="handle non-matching lyrics"),
+            _p(
+                [lyrics_match(1, "synced", "plain")],
+                "synced",
+                id="synced when available",
+            ),
+            _p(
+                [lyrics_match(1, None, "plain")],
+                "plain",
+                id="default to plain",
+            ),
+            _p(
+                [
+                    lyrics_match(ITEM_DURATION, None, "plain 1"),
+                    lyrics_match(1, "synced", "plain 2"),
+                ],
+                "plain 1",
+                id="prefer matching duration",
+            ),
+            _p(
+                [
+                    lyrics_match(1, None, "plain 1"),
+                    lyrics_match(1, "synced", "plain 2"),
+                ],
+                "synced",
+                id="prefer match with synced lyrics",
+            ),
+        ],
+    )
+    def test_pick_lyrics_match(self, fetch_lyrics, expected_lyrics):
+        assert fetch_lyrics() == expected_lyrics
 
-        assert lyrics is None
-
-    @patch("beetsplug.lyrics.requests.get")
-    def test_fetch_exception(self, mock_get):
-        mock_get.side_effect = requests.RequestException
-
-        lyrics = lrclib.fetch("la", "la", "la", 999)
-
-        assert lyrics is None
+    @pytest.mark.parametrize(
+        "config, expected_lyrics",
+        [({"synced": True}, "synced"), ({"synced": False}, "plain")],
+    )
+    def test_synced_config_option(self, fetch_lyrics, expected_lyrics):
+        assert fetch_lyrics() == expected_lyrics
 
 
 class LRCLibIntegrationTest(LyricsAssertions):
@@ -786,10 +800,10 @@ class SlugTests(unittest.TestCase):
         assert lyrics.slug(text) == "cafe-au-lait-boisson"
         text = "Multiple  spaces -- and symbols! -- merged"
         assert lyrics.slug(text) == "multiple-spaces-and-symbols-merged"
-        text = "\u200Bno-width-space"
+        text = "\u200bno-width-space"
         assert lyrics.slug(text) == "no-width-space"
 
         # variations of dashes should get standardized
-        dashes = ["\u200D", "\u2010"]
+        dashes = ["\u200d", "\u2010"]
         for dash1, dash2 in itertools.combinations(dashes, 2):
             assert lyrics.slug(dash1) == lyrics.slug(dash2)

@@ -12,9 +12,9 @@
 # The above copyright notice and this permission notice shall be
 # included in all copies or substantial portions of the Software.
 
-"""Fetches, embeds, and displays lyrics.
-"""
+"""Fetches, embeds, and displays lyrics."""
 
+from __future__ import annotations
 
 import difflib
 import errno
@@ -28,6 +28,7 @@ import urllib
 import warnings
 
 import requests
+from typing_extensions import TypedDict
 from unidecode import unidecode
 
 try:
@@ -282,10 +283,46 @@ class Backend:
         raise NotImplementedError()
 
 
-class LRCLib(Backend):
-    base_url = "https://lrclib.net/api/get"
+class LRCLibItem(TypedDict):
+    id: int
+    name: str
+    trackName: str
+    artistName: str
+    albumName: str
+    duration: float
+    instrumental: bool
+    plainLyrics: str
+    syncedLyrics: str | None
 
-    def fetch(self, artist, title, album=None, length=None):
+
+class LRCLib(Backend):
+    base_url = "https://lrclib.net/api/search"
+
+    @staticmethod
+    def pick_lyrics(data: list[LRCLibItem], item_duration: float) -> LRCLibItem:
+        """Return the best matching lyrics item from the given data.
+
+        We sort the data items by
+        1. Comparing the lyrics match duration to the item duration
+        2. Preferring matches that have synced lyrics
+
+        And return the first item from the sorted list.
+        """
+        return sorted(
+            data,
+            key=lambda i: (
+                abs(i["duration"] - item_duration),
+                not i["syncedLyrics"],
+            ),
+        )[0]
+
+    def fetch(
+        self,
+        artist: str,
+        title: str,
+        album: str | None = None,
+        length: float = 0.0,
+    ) -> str | None:
         params = {
             "artist_name": artist,
             "track_name": title,
@@ -299,15 +336,20 @@ class LRCLib(Backend):
                 params=params,
                 timeout=10,
             )
-            data = response.json()
+            data: list[LRCLibItem] = response.json()
         except (requests.RequestException, json.decoder.JSONDecodeError) as exc:
             self._log.debug("LRCLib API request failed: {0}", exc)
             return None
 
-        if self.config["synced"]:
-            return data.get("syncedLyrics")
+        if not data:
+            return None
 
-        return data.get("plainLyrics")
+        item = self.pick_lyrics(data, length)
+
+        if self.config["synced"] and (synced_lyrics := item["syncedLyrics"]):
+            return synced_lyrics
+
+        return item["plainLyrics"]
 
 
 class MusiXmatch(Backend):
