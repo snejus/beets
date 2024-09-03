@@ -40,61 +40,68 @@ skip_ci = pytest.mark.skipif(
 )
 
 
-class TestLyricsUtils:
-    def test_search_artist_sort(self):
-        item = Item(artist="CHVRCHΞS", title="song", artist_sort="CHVRCHES")
-        assert ("CHVRCHΞS", ["song"]) in lyrics.search_pairs(item)
-        assert ("CHVRCHES", ["song"]) in lyrics.search_pairs(item)
+class TestLyricsSearchAlternatives:
+    @pytest.mark.parametrize(
+        "artists, expected_alternatives",
+        [
+            (("CHVRCHΞS", "CHVRCHES"), ["CHVRCHΞS", "CHVRCHES"]),
+            (("横山克", "Masaru Yokoyama"), ["横山克", "Masaru Yokoyama"]),
+            (("Artist", "artist"), ["Artist"]),
+            (("Artist", ""), ["Artist"]),
+            (("Artist ft Other", ""), ["Artist ft Other", "Artist"]),
+        ],
+    )
+    def test_get_artist_alternatives(self, artists, expected_alternatives):
+        assert lyrics.get_artist_alternatives(*artists) == expected_alternatives
 
-        # Make sure that the original artist name is still the first entry
-        assert ("CHVRCHΞS", ["song"]) == list(lyrics.search_pairs(item))[0]
+    @pytest.mark.parametrize(
+        "title",
+        [
+            "Song (live)",
+            "Song (live) (new)",
+            "Song: Part 1",
+            "Song: Part 1 (live)",
+            "Song ft. Bob",
+            "Song ft. Bob (B remix)",
+            "Song ft. Bob (B remix): Part 1",
+            "Song ft. Bob (B remix): Part 1 (live)",
+        ],
+    )
+    def test_get_simple_title_alternatives(self, title):
+        """Check that the alternatives include the original and the clean title."""
+        assert lyrics.get_title_alternatives(title) == [(title,), ("Song",)]
 
+    @pytest.mark.parametrize(
+        "title, expected_extra_titles",
+        [
+            ("Song/Other", []),
+            ("Song / Other", []),
+            ("Song / Other (live)", [("Song", "Other (live)")]),
+            ("Song (live) / Other", [("Song (live)", "Other")]),
+            (
+                "Song ft. Bob (B remix) / Other: Part 1 (live)",
+                [("Song ft. Bob (B remix)", "Other: Part 1 (live)")],
+            ),
+        ],
+    )
+    def test_get_split_title_alternatives(self, title, expected_extra_titles):
+        expected_titles = [*expected_extra_titles, ("Song", "Other")]
+
+        assert lyrics.get_title_alternatives(title) == expected_titles
+
+    def test_get_search_alternatives(self):
         item = Item(
-            artist="横山克", title="song", artist_sort="Masaru Yokoyama"
+            title="Song (live) / Other",
+            artist="Artist ft. Other",
+            artist_sort="Artist",
         )
-        assert ("横山克", ["song"]) in lyrics.search_pairs(item)
-        assert ("Masaru Yokoyama", ["song"]) in lyrics.search_pairs(item)
 
-        # Make sure that the original artist name is still the first entry
-        assert ("横山克", ["song"]) == list(lyrics.search_pairs(item))[0]
-
-    def test_search_pairs_multi_titles(self):
-        item = Item(title="1 / 2", artist="A")
-        assert ("A", ["1 / 2"]) in lyrics.search_pairs(item)
-        assert ("A", ["1", "2"]) in lyrics.search_pairs(item)
-
-        item = Item(title="1/2", artist="A")
-        assert ("A", ["1/2"]) in lyrics.search_pairs(item)
-        assert ("A", ["1", "2"]) in lyrics.search_pairs(item)
-
-    def test_search_pairs_titles(self):
-        item = Item(title="Song (live)", artist="A")
-        assert ("A", ["Song"]) in lyrics.search_pairs(item)
-        assert ("A", ["Song (live)"]) in lyrics.search_pairs(item)
-
-        item = Item(title="Song (live) (new)", artist="A")
-        assert ("A", ["Song"]) in lyrics.search_pairs(item)
-        assert ("A", ["Song (live) (new)"]) in lyrics.search_pairs(item)
-
-        item = Item(title="Song (live (new))", artist="A")
-        assert ("A", ["Song"]) in lyrics.search_pairs(item)
-        assert ("A", ["Song (live (new))"]) in lyrics.search_pairs(item)
-
-        item = Item(title="Song ft. B", artist="A")
-        assert ("A", ["Song"]) in lyrics.search_pairs(item)
-        assert ("A", ["Song ft. B"]) in lyrics.search_pairs(item)
-
-        item = Item(title="Song featuring B", artist="A")
-        assert ("A", ["Song"]) in lyrics.search_pairs(item)
-        assert ("A", ["Song featuring B"]) in lyrics.search_pairs(item)
-
-        item = Item(title="Song and B", artist="A")
-        assert ("A", ["Song and B"]) in lyrics.search_pairs(item)
-        assert ("A", ["Song"]) not in lyrics.search_pairs(item)
-
-        item = Item(title="Song: B", artist="A")
-        assert ("A", ["Song"]) in lyrics.search_pairs(item)
-        assert ("A", ["Song: B"]) in lyrics.search_pairs(item)
+        assert list(lyrics.get_search_alternatives(item)) == [
+            ("Artist ft. Other", ("Song (live)", "Other")),
+            ("Artist ft. Other", ("Song", "Other")),
+            ("Artist", ("Song (live)", "Other")),
+            ("Artist", ("Song", "Other")),
+        ]
 
     def test_remove_credits(self):
         assert (

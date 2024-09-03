@@ -28,7 +28,7 @@ import urllib
 from contextlib import contextmanager
 from functools import cached_property, lru_cache, partial
 from html import unescape
-from typing import TYPE_CHECKING, Any, Iterator
+from typing import TYPE_CHECKING, Any, Iterable, Iterator
 from urllib.parse import urlparse
 
 import requests
@@ -40,6 +40,8 @@ from beets.autotag.hooks import string_dist
 from beets.util import FT_TOKEN_RE, split_ft_artist
 
 if TYPE_CHECKING:
+    from beets.library import Item
+
     from .types import GeniusSearchResult, JSONDict, LRCLibItem
 
 try:
@@ -57,8 +59,9 @@ except ImportError:
     HAS_LANGDETECT = False
 
 BREAK_RE = re.compile(r"\n?\s*<br([\s|/][^>]*)*>\s*\n?", re.I)
-COLON_PART_RE = re.compile(r"\s*:.*")
-remove_parens = partial(re.compile(r"\s+[(].*[)]$").sub, "")
+REMOVE_PARENS = partial(re.compile(r"\s*\(.*?\)\s*").sub, "")
+REMOVE_COLON = partial(re.compile(r"\s*:.*").sub, "")
+SPLIT_TITLE_RE = re.compile(r"\s*/\s*")
 
 USER_AGENT = f"beets/{beets.__version__}"
 
@@ -130,43 +133,54 @@ def extract_text_between(html, start_marker, end_marker):
     return html
 
 
-def search_pairs(item):
-    """Yield a pairs of artists and titles to search for.
+def get_artist_alternatives(artist: str, artist_sort: str) -> list[str]:
+    """Break down the artist name into a list of unique variations.
 
-    The first item in the pair is the name of the artist, the second
-    item is a list of song names.
+    This includes:
+    1. The original ``artist``.
+    2. The primary artist name if there are featured artists.
+    3. ``artist_sort`` name if it is given and different from ``artist``.
 
-    In addition to the artist and title obtained from the `item` the
-    method tries to strip extra information like paranthesized suffixes
-    and featured artists from the strings and add them as candidates.
-    The artist sort name is added as a fallback candidate to help in
-    cases where artist name includes special characters or is in a
-    non-latin script.
-    The method also tries to split multiple titles separated with `/`.
+    The artist sort name is added as a fallback for those cases where artist
+    name includes special characters or is in a non-latin script.
     """
 
-    title, artist, artist_sort = item.title, item.artist, item.artist_sort
+    artists = [artist, split_ft_artist(artist)[0]]
+    if artist_sort and artist_sort.lower() != artist.lower():
+        artists.append(artist_sort)
 
-    artists = {artist, split_ft_artist(artist)[0]}
-    if artist.lower() != artist_sort.lower():
-        artists.add(artist_sort)
+    return list(dict.fromkeys(artists))
 
-    titles = {
-        remove_parens(title),
-        FT_TOKEN_RE.split(title)[0],
-        COLON_PART_RE.sub("", title),
-    }
 
-    # Check for a dual song (e.g. Pink Floyd - Speak to Me / Breathe)
-    # and each of them.
-    multi_titles = []
-    for title in titles:
-        multi_titles.append([title])
-        if "/" in title:
-            multi_titles.append([x.strip() for x in title.split("/")])
+def get_title_alternatives(title: str) -> list[tuple[str, ...]]:
+    """Break down a song title into various possible forms.
 
+    This function takes a song title and generates a list of tuples containing
+    different variations of the title. It performs the following transformations:
+    1. Keep the original title.
+    2. Remove any text within parentheses.
+    3. Remove any text after a colon.
+    4. Remove featuring artists.
+
+    Unique resulting variations are sorted by length in descending order, and titles
+    containing slashes (split release type) are split into pairs of titles.
+    """
+    split_title = tuple(SPLIT_TITLE_RE.split(title))
+    clean_split_title = tuple(
+        REMOVE_COLON(FT_TOKEN_RE.split(REMOVE_PARENS(p))[0])
+        for p in split_title
+    )
+    # Ensure track titles such as Pink Floyd - Speak to Me / Breathe are split
+    return list(dict.fromkeys([split_title, clean_split_title]))
+
+
+def get_search_alternatives(
+    item: Item,
+) -> Iterable[tuple[str, tuple[str, ...]]]:
+    """Yield pairs of (artist, titles) to search for."""
     return itertools.product(
-        sorted(artists, key=lambda a: a != artist), multi_titles
+        get_artist_alternatives(item.artist, item.artist_sort),
+        get_title_alternatives(item.title),
     )
 
 
@@ -883,7 +897,7 @@ class LyricsPlugin(RequestHandler, plugins.BeetsPlugin):
                 for t in titles
                 if (lyrics := self.get_lyrics(artist, t, item.album, length))
             ]
-            for artist, titles in search_pairs(item)
+            for artist, titles in get_search_alternatives(item)
         )
 
         if lyrics := "\n\n---\n\n".join(next(filter(None, lyrics_matches), [])):
