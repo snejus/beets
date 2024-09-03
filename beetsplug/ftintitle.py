@@ -14,35 +14,22 @@
 
 """Moves "featured" artists to the title from the artist field."""
 
+from __future__ import annotations
+
 from beets import ui
 from beets.plugins import BeetsPlugin
 from beets.util import FT_TOKEN_RE, displayable_path, split_ft_artist
 
 
-def find_feat_part(artist, albumartist):
-    """Attempt to find featured artists in the item's artist fields and
-    return the results. Returns None if no featured artist found.
+def find_feat_part(artist: str, albumartist: str) -> str | None:
+    """Return the featuring artist from the given artist string.
+
+    Once we split the string and have two artists, if one of them matches the
+    given albumartist, we know that the other artist is the featuring artist.
     """
-    # Look for the album artist in the artist field. If it's not
-    # present, give up.
-    albumartist_split = artist.split(albumartist, 1)
-    if len(albumartist_split) <= 1:
-        return None
-
-    # If the last element of the split (the right-hand side of the
-    # album artist) is nonempty, then it probably contains the
-    # featured artist.
-    elif albumartist_split[1] != "":
-        # Extract the featured artist from the right-hand side.
-        _, feat_part = split_ft_artist(albumartist_split[1])
-        return feat_part
-
-    # Otherwise, if there's nothing on the right-hand side, look for a
-    # featuring artist on the left-hand side.
-    else:
-        lhs, rhs = split_ft_artist(albumartist_split[0])
-        if lhs:
-            return lhs
+    if albumartist in (unique_artists := set(split_ft_artist(artist))):
+        # pick the other (ft) artist
+        return (unique_artists - {albumartist}).pop()
 
     return None
 

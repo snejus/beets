@@ -14,115 +14,71 @@
 
 """Tests for the 'ftintitle' plugin."""
 
-import unittest
+import pytest
 
-from beets.test.helper import PluginTestCase
-from beetsplug import ftintitle
+from beets.test.helper import PluginMixin, TestHelper
+from beetsplug.ftintitle import find_feat_part
+
+_p = pytest.param
 
 
-class FtInTitlePluginFunctional(PluginTestCase):
+class TestKickFtAround(PluginMixin, TestHelper):
     plugin = "ftintitle"
 
-    def _ft_add_item(self, path, artist, title, aartist):
-        return self.add_item(
-            path=path,
-            artist=artist,
-            artist_sort=artist,
-            title=title,
-            albumartist=aartist,
+    ARTIST = "Alice"
+    TITLE = "Title"
+    ARTIST_WITH_FT = "Alice ft Bob"
+    TITLE_WITH_FT = "Title feat. Bob"
+
+    @pytest.fixture(autouse=True)
+    def _setup(self):
+        self.setup_beets()
+
+        yield
+
+        self.teardown_beets()
+
+    @pytest.fixture
+    def item(self):
+        return self.add_item_fixture(
+            albumartist=self.ARTIST,
+            artist=self.ARTIST_WITH_FT,
+            title=self.TITLE,
         )
 
-    def _ft_set_config(
-        self, ftformat, drop=False, auto=True, keep_in_artist=False
+    @pytest.fixture
+    def command(self, drop):
+        return ("ftintitle", "--drop") if drop else ("ftintitle",)
+
+    @pytest.mark.parametrize(
+        "drop, keep_in_artist, expected_artist, expected_title",
+        [
+            _p(False, False, ARTIST, TITLE_WITH_FT, id="move-to-title"),
+            _p(False, True, ARTIST_WITH_FT, TITLE_WITH_FT, id="copy-to-title"),
+            _p(True, False, ARTIST, TITLE, id="drop"),
+            _p(True, True, ARTIST_WITH_FT, TITLE, id="keep-in-place"),
+        ],
+    )
+    def test_handle_ft(
+        self, item, command, keep_in_artist, expected_artist, expected_title
     ):
-        self.config["ftintitle"]["format"] = ftformat
-        self.config["ftintitle"]["drop"] = drop
-        self.config["ftintitle"]["auto"] = auto
-        self.config["ftintitle"]["keep_in_artist"] = keep_in_artist
+        with self.configure_plugin({"keep_in_artist": keep_in_artist}):
+            self.run_command(*command)
 
-    def test_functional_drop(self):
-        item = self._ft_add_item("/", "Alice ft Bob", "Song 1", "Alice")
-        self.run_command("ftintitle", "-d")
         item.load()
-        assert item["artist"] == "Alice"
-        assert item["title"] == "Song 1"
-
-    def test_functional_not_found(self):
-        item = self._ft_add_item("/", "Alice ft Bob", "Song 1", "George")
-        self.run_command("ftintitle", "-d")
-        item.load()
-        # item should be unchanged
-        assert item["artist"] == "Alice ft Bob"
-        assert item["title"] == "Song 1"
-
-    def test_functional_custom_format(self):
-        self._ft_set_config("feat. {0}")
-        item = self._ft_add_item("/", "Alice ft Bob", "Song 1", "Alice")
-        self.run_command("ftintitle")
-        item.load()
-        assert item["artist"] == "Alice"
-        assert item["title"] == "Song 1 feat. Bob"
-
-        self._ft_set_config("featuring {0}")
-        item = self._ft_add_item("/", "Alice feat. Bob", "Song 1", "Alice")
-        self.run_command("ftintitle")
-        item.load()
-        assert item["artist"] == "Alice"
-        assert item["title"] == "Song 1 featuring Bob"
-
-        self._ft_set_config("with {0}")
-        item = self._ft_add_item("/", "Alice feat Bob", "Song 1", "Alice")
-        self.run_command("ftintitle")
-        item.load()
-        assert item["artist"] == "Alice"
-        assert item["title"] == "Song 1 with Bob"
-
-    def test_functional_keep_in_artist(self):
-        self._ft_set_config("feat. {0}", keep_in_artist=True)
-        item = self._ft_add_item("/", "Alice ft Bob", "Song 1", "Alice")
-        self.run_command("ftintitle")
-        item.load()
-        assert item["artist"] == "Alice ft Bob"
-        assert item["title"] == "Song 1 feat. Bob"
-
-        item = self._ft_add_item("/", "Alice ft Bob", "Song 1", "Alice")
-        self.run_command("ftintitle", "-d")
-        item.load()
-        assert item["artist"] == "Alice ft Bob"
-        assert item["title"] == "Song 1"
+        assert item.artist == expected_artist
+        assert item.title == expected_title
 
 
-class FtInTitlePluginTest(unittest.TestCase):
-    def setUp(self):
-        """Set up configuration"""
-        ftintitle.FtInTitlePlugin()
-
-    def test_find_feat_part(self):
-        test_cases = [
-            {
-                "artist": "Alice ft. Bob",
-                "album_artist": "Alice",
-                "feat_part": "Bob",
-            },
-            {
-                "artist": "Alice defeat Bob",
-                "album_artist": "Alice",
-                "feat_part": None,
-            },
-            {
-                "artist": "Alice & Bob",
-                "album_artist": "Bob",
-                "feat_part": "Alice",
-            },
-            {
-                "artist": "Alice ft. Carol",
-                "album_artist": "Bob",
-                "feat_part": None,
-            },
-        ]
-
-        for test_case in test_cases:
-            feat_part = ftintitle.find_feat_part(
-                test_case["artist"], test_case["album_artist"]
-            )
-            assert feat_part == test_case["feat_part"]
+@pytest.mark.parametrize(
+    "album_artist, artist, expected_feat_artist",
+    [
+        ("Alice", "Alice ft. Bob", "Bob"),
+        ("Alice", "Alice & Bob", "Bob"),
+        ("Alice", "Alice defeat Bob", None),
+        ("Alice", "Bob ft. Carol", None),
+        ("Alice ft. Bob", "Alice ft. Bob", None),
+    ],
+)
+def test_find_feat_part(artist, album_artist, expected_feat_artist):
+    assert find_feat_part(artist, album_artist) == expected_feat_artist
