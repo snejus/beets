@@ -89,6 +89,10 @@ Bug fixes:
   previous behaviour add commas between your query keywords. For help see
   :ref:`combiningqueries`.
 * Fix the ``TypeError`` when :ref:`set_fields` is provided non-string values. :bug:`4840`
+* :doc:`plugins/lyrics`: Rewrite lyrics tests using pytest to provide isolated
+  configuration for each test case. This fixes the issue where some tests
+  failed because they read developer's local lyrics configuration.
+  :bug:`5133`
 
 For packagers:
 
