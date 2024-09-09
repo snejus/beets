@@ -84,6 +84,9 @@ Other changes:
   calculate the bpm. Previously this import was being done immediately, so
   every ``beet`` invocation was being delayed by a couple of seconds.
   :bug:`5185`
+* :doc:`plugins/lyrics`: Rewrite lyrics tests using pytest to provide isolated
+  configuration for each test case.
+  :bug:`5133`
 
 2.0.0 (May 30, 2024)
 --------------------
