@@ -377,7 +377,7 @@ class TestTekstowoLyrics(LyricsPluginBackendMixin):
             ("tekstowopl/szukajwykonawcaagfdgjatytulagfdgafg", None),
             (
                 "tekstowopl/szukajwykonawcajuicewrldtytulluciddreams",
-                "https://www.tekstowo.pl/piosenka,juice_wrld,lucid_dreams__remix__ft__lil_uzi_vert.html",  # noqa: E501
+                "https://www.tekstowo.pl/piosenka,juice_wrld,lucid_dreams__forget_me_.html",  # noqa: E501
             ),
         ],
     )
