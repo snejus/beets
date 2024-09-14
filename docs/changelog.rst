@@ -47,6 +47,12 @@ Bug fixes:
 * :doc:`plugins/discogs`: Fix the ``TypeError`` when there is no description.
 * Remove single quotes from all SQL queries
   :bug:`4709`
+* :doc:`plugins/lyrics`: Fix fetching lyrics from ``lrclib`` source. Instead of
+  attempting to fetch lyrics for a specific album, artist, title and duration
+  combination, the plugin now performs a search which yields many results.
+  Update the default ``sources`` configuration to prioritize ``lrclib`` over
+  other sources since it returns reliable results quicker than others.
+  :bug:`5102`
 
 For packagers:
 
@@ -87,6 +93,9 @@ Other changes:
   calculate the bpm. Previously this import was being done immediately, so
   every ``beet`` invocation was being delayed by a couple of seconds.
   :bug:`5185`
+* :doc:`plugins/lyrics`: Rewrite lyrics tests using pytest to provide isolated
+  configuration for each test case.
+  :bug:`5133`
 
 2.0.0 (May 30, 2024)
 --------------------
