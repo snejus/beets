@@ -798,7 +798,7 @@ class DiscogsPlugin(BeetsPlugin):
             track.get("artists", []), join_key="join"
         )
         length = self.get_track_length(track["duration"])
-        return TrackInfo(
+        track_info = TrackInfo(
             title=title,
             track_id=track_id,
             artist=artist,
@@ -808,6 +808,14 @@ class DiscogsPlugin(BeetsPlugin):
             medium=medium,
             medium_index=medium_index,
         )
+        if composers := (
+            ea["name"]
+            for ea in track.get("extraartists", [])
+            if ea["role"] == "Written-By"
+        ):
+            track_info.composer = "/".join(composers)
+
+        return track_info
 
     def get_track_index(self, position):
         """Returns the medium, medium index and subtrack index for a discogs
