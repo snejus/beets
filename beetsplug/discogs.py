@@ -201,9 +201,10 @@ class DiscogsPlugin(BeetsPlugin):
         if not self.discogs_client:
             return ()
 
+        artist = re.sub(r"va\b|various artists", "", artist, flags=re.I).strip()
         if album:
             album = re.sub(r" *\([^)]*\)", "", album)
-        query = f"{artist} {album.split(' - ')[-1]}"
+        query = f"{artist} {album.split(' - ')[-1]}".strip()
 
         try:
             results = self.get_albums(query)
