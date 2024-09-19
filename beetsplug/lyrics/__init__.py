@@ -656,7 +656,7 @@ class LyricsPlugin(RequestHandler, plugins.BeetsPlugin):
             if s not in disabled
         }
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.import_stages = [self.imported]
         self.config.add(
@@ -693,7 +693,6 @@ class LyricsPlugin(RequestHandler, plugins.BeetsPlugin):
         self.album = False
         # The current rest file content. None means the file is not
         # open yet.
-        self.rest = None
 
         self.config["bing_lang_from"] = [
             x.lower() for x in self.config["bing_lang_from"].as_str_seq()
@@ -831,7 +830,7 @@ class LyricsPlugin(RequestHandler, plugins.BeetsPlugin):
 
     def writerest(self, directory):
         """Write self.rest to a ReST file"""
-        if self.rest is not None and self.artist is not None:
+        if self.rest and self.artist is not None:
             path = os.path.join(
                 directory, "artists", slug(self.artist) + ".rst"
             )
@@ -917,7 +916,7 @@ class LyricsPlugin(RequestHandler, plugins.BeetsPlugin):
                 item.try_write()
             item.store()
 
-    def get_lyrics(self, artist, title, album=None, length=None):
+    def get_lyrics(self, artist, title, album=None, length=None) -> str | None:
         """Fetch lyrics, trying each source in turn. Return a string or
         None if no lyrics were found.
         """
@@ -928,6 +927,7 @@ class LyricsPlugin(RequestHandler, plugins.BeetsPlugin):
                     artist, title, album=album, length=length
                 ):
                     return lyrics
+        return None
 
     def append_translation(self, text, to_lang):
         from xml.etree import ElementTree
