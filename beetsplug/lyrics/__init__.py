@@ -448,12 +448,12 @@ class Genius(SimilarityMixin, Backend):
         return None
 
 
-class Tekstowo(Backend):
+class Tekstowo(SimilarityMixin, Backend):
     # Fetch lyrics from Tekstowo.pl.
     REQUIRES_BS = True
 
     BASE_URL = "https://www.tekstowo.pl"
-    URL_PATTERN = BASE_URL + "/szukaj,{}.html"
+    URL_PATTERN = f"{BASE_URL}/szukaj,{{}}.html"
 
     def build_url(self, artist, title):
         artistitle = f"{artist.title()} {title.title()}"
@@ -461,66 +461,28 @@ class Tekstowo(Backend):
             urllib.parse.quote_plus(unidecode(artistitle))
         )
 
-    def fetch(self, artist, title, album=None, length=None):
-        search_results = self.fetch_text(self.build_url(title, artist))
-        song_page_url = self.parse_search_results(search_results)
-        if not song_page_url:
-            return None
+    def fetch(self, artist, title, album=None, length=None) -> str | None:
+        if (search_html := self.fetch_text(self.build_url(title, artist))) and (
+            song_url := self.find_lyrics_url(search_html, artist, title)
+        ):
+            return self.scrape_lyrics(self.fetch_text(song_url))
 
-        song_page_html = self.fetch_text(song_page_url)
-        return self.scrape_lyrics(song_page_html, artist, title)
+        return None
 
-    def parse_search_results(self, html: str) -> str | None:
-        soup = get_soup(html)
+    def find_lyrics_url(self, html: str, artist: str, title: str) -> str | None:
+        check = partial(self.check_match, artist, title)
+        for result_div in get_soup(html).find_all("div", class_="flex-group"):
+            if (a := result_div.find("a")) and check(*a["title"].split(" - ")):
+                return f'{self.BASE_URL}{a["href"]}'
 
-        content_div = soup.find("div", class_="content")
-        if not content_div:
-            return None
+        return None
 
-        card_div = content_div.find("div", class_="card")
-        if not card_div:
-            return None
+    @staticmethod
+    def scrape_lyrics(html: str) -> str | None:
+        if div := get_soup(html).select_one("div.song-text > div.inner-text"):
+            return div.get_text()
 
-        song_rows = card_div.find_all("div", class_="box-przeboje")
-        if not song_rows:
-            return None
-
-        song_row = song_rows[0]
-        if not song_row:
-            return None
-
-        link = song_row.find("a")
-        if not link:
-            return None
-
-        return self.BASE_URL + link.get("href")
-
-    def scrape_lyrics(self, html: str, artist: str, title: str) -> str | None:
-        soup = get_soup(html)
-
-        info_div = soup.find("div", class_="col-auto")
-        if not info_div:
-            return None
-
-        info_elements = info_div.find_all("a")
-        if not info_elements:
-            return None
-
-        html_title = info_elements[-1].get_text()
-        html_artist = info_elements[-2].get_text()
-
-        title_dist = string_dist(html_title, title)
-        artist_dist = string_dist(html_artist, artist)
-
-        thresh = self.config["dist_thresh"].get(float)
-        if title_dist > thresh or artist_dist > thresh:
-            return None
-
-        lyrics_div = soup.select("div.song-text > div.inner-text")
-        if not lyrics_div:
-            return None
-
-        return lyrics_div[0].get_text()
+        return None
 
 
 def remove_credits(text):

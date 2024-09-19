@@ -340,49 +340,42 @@ class TestTekstowoLyrics(LyricsPluginBackendMixin):
         return "tekstowo"
 
     @pytest.mark.parametrize(
-        "file_name, query, should_scrape",
+        "file_name, should_scrape",
         [
-            _p(
-                "tekstowopl/piosenka24kgoldncityofangels1",
-                ("24kGoldn", "City of Angels"),
-                True,
-                id="match",
-            ),
-            _p(
-                "tekstowopl/piosenkabaileybiggerblackeyedsusan",
-                ("Kelly Bailey", "Black Mesa Inbound"),
-                False,
-                id="no-search-query-match",
-            ),
+            ("tekstowopl/piosenka24kgoldncityofangels1", True),
+            ("tekstowopl/piosenkabaileybiggerblackeyedsusan", True),
             _p(
                 "tekstowopl/piosenkabeethovenbeethovenpianosonata17tempestthe3rdmovement",  # noqa: E501
-                (
-                    "Beethoven",
-                    "Beethoven Piano Sonata 17 Tempest The 3rd Movement",
-                ),
                 False,
                 id="no-lyrics",
             ),
         ],
     )
-    def test_scrape_tekstowo_lyrics(
-        self, backend, lyrics_html, query, should_scrape
-    ):
-        actually_scraped = bool(backend.scrape_lyrics(lyrics_html, *query))
-        assert actually_scraped == should_scrape
+    def test_scrape_tekstowo_lyrics(self, backend, lyrics_html, should_scrape):
+        assert bool(backend.scrape_lyrics(lyrics_html)) == should_scrape
 
     @pytest.mark.parametrize(
-        "file_name, expected_url",
+        "file_name, query, expected_url",
         [
-            ("tekstowopl/szukajwykonawcaagfdgjatytulagfdgafg", None),
+            (
+                "tekstowopl/szukajwykonawcaagfdgjatytulagfdgafg",
+                ("Juice Wrld", "Lucid Dreams (Forget Me)"),
+                None,
+            ),
             (
                 "tekstowopl/szukajwykonawcajuicewrldtytulluciddreams",
+                ("Juice Wrld", "Lucid Dreams (Forget Me)"),
                 "https://www.tekstowo.pl/piosenka,juice_wrld,lucid_dreams__forget_me_.html",  # noqa: E501
+            ),
+            (
+                "tekstowopl/szukajwykonawcajuicewrldtytulluciddreams",
+                ("Juice Wrld", "Lucid Dreams (Remix) ft. Lil Uzi Vert"),
+                "https://www.tekstowo.pl/piosenka,juice_wrld,lucid_dreams__remix__ft__lil_uzi_vert.html",  # noqa: E501
             ),
         ],
     )
-    def test_parse_search_results(self, backend, lyrics_html, expected_url):
-        assert backend.parse_search_results(lyrics_html) == expected_url
+    def test_find_lyrics_url(self, backend, query, lyrics_html, expected_url):
+        assert backend.find_lyrics_url(lyrics_html, *query) == expected_url
 
 
 def lyrics_match(duration, synced, plain):
