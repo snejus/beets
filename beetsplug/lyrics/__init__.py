@@ -877,27 +877,24 @@ class LyricsPlugin(RequestHandler, plugins.BeetsPlugin):
             self.info("🔵 Lyrics already present: {}", item)
             return
 
-        lyrics = None
-        album = item.album
         length = round(item.length)
-        for artist, titles in search_pairs(item):
-            lyrics = [
-                self.get_lyrics(artist, title, album=album, length=length)
-                for title in titles
+        lyrics_matches = (
+            [
+                lyrics
+                for t in titles
+                if (lyrics := self.get_lyrics(artist, t, item.album, length))
             ]
-            if any(lyrics):
-                break
+            for artist, titles in search_pairs(item)
+        )
 
-        lyrics = "\n\n---\n\n".join(filter(None, lyrics))
-
-        if lyrics:
+        if lyrics := "\n\n---\n\n".join(next(filter(None, lyrics_matches), [])):
             self.info("🟢 Found lyrics: {0}", item)
             if (
                 HAS_LANGDETECT
                 and self.config["bing_client_secret"]
                 and (
                     lang_to := self.config["bing_lang_to"]
-                    != (lyrics_lang_from := langdetect.detect(lyrics_match))
+                    != (lyrics_lang_from := langdetect.detect(lyrics))
                     and (
                         not (
                             lang_from := self.config["bing_lang_from"].get(list)
@@ -906,16 +903,16 @@ class LyricsPlugin(RequestHandler, plugins.BeetsPlugin):
                     )
                 )
             ):
-                lyrics = self.append_translation(lyrics_match, lang_to)
+                lyrics = self.append_translation(lyrics, lang_to)
         else:
             self.info("🔴 Lyrics not found: {}", item)
             if (fallback := self.config["fallback"].get()) is not None:
-                lyrics_match = fallback
+                lyrics = fallback
             else:
                 return
 
-        if lyrics_match != item.lyrics:
-            item.lyrics = lyrics_match
+        if lyrics != item.lyrics:
+            item.lyrics = lyrics
             if write:
                 item.try_write()
             item.store()
