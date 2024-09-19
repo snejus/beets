@@ -900,15 +900,21 @@ class LyricsPlugin(RequestHandler, plugins.BeetsPlugin):
 
         if lyrics:
             self.info("🟢 Found lyrics: {0}", item)
-            if HAS_LANGDETECT and self.config["bing_client_secret"].get():
-                lang_from = langdetect.detect(lyrics)
-                if self.config["bing_lang_to"].get() != lang_from and (
-                    not self.config["bing_lang_from"]
-                    or (lang_from in self.config["bing_lang_from"].as_str_seq())
-                ):
-                    lyrics = self.append_translation(
-                        lyrics, self.config["bing_lang_to"]
+            if (
+                HAS_LANGDETECT
+                and self.config["bing_client_secret"]
+                and (
+                    lang_to := self.config["bing_lang_to"]
+                    != (lyrics_lang_from := langdetect.detect(lyrics_match))
+                    and (
+                        not (
+                            lang_from := self.config["bing_lang_from"].get(list)
+                        )
+                        or lyrics_lang_from in lang_from
                     )
+                )
+            ):
+                lyrics = self.append_translation(lyrics_match, lang_to)
         else:
             self.info("🔴 Lyrics not found: {}", item)
             if (fallback := self.config["fallback"].get()) is not None:
