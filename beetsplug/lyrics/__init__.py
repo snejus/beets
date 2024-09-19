@@ -549,8 +549,6 @@ class Google(Backend):
 
     def is_lyrics(self, text, artist=None):
         """Determine whether the text seems to be valid lyrics."""
-        if not text:
-            return False
         bad_triggers_occ = []
         nb_lines = text.count("\n")
         if nb_lines <= 1:
@@ -620,21 +618,15 @@ class Google(Backend):
             self.debug("Error: {}", reason)
             return None
 
-        if "items" in data.keys():
-            for item in data["items"]:
-                url_link = item["link"]
-                url_title = item.get("title", "")
-                if not self.is_page_candidate(
-                    url_link, url_title, title, artist
-                ):
-                    continue
-                lyrics = self.scrape_lyrics(self.fetch_text(url_link))
-                if not lyrics:
-                    continue
-
-                if self.is_lyrics(lyrics, artist):
-                    self.debug("Got lyrics from {}", item["displayLink"])
-                    return lyrics
+        for item in data.get("items", []):
+            url = item["link"]
+            if (
+                self.is_page_candidate(url, item["title"], title, artist)
+                and (lyrics := self.scrape_lyrics(self.fetch_text(url)))
+                and self.is_lyrics(lyrics, artist)
+            ):
+                self.debug("Got lyrics from {}", item["displayLink"])
+                return lyrics
 
         return None
 
