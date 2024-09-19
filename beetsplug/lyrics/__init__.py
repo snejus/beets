@@ -21,13 +21,14 @@ import atexit
 import difflib
 import errno
 import itertools
+import json
 import os.path
 import re
 import urllib
 from contextlib import contextmanager
-from functools import cached_property
+from functools import cached_property, lru_cache, partial
 from html import unescape
-from typing import Any, Iterator
+from typing import TYPE_CHECKING, Any, Iterator
 from urllib.parse import urlparse
 
 import requests
@@ -37,6 +38,9 @@ import beets
 from beets import plugins, ui
 from beets.autotag.hooks import string_dist
 from beets.util import FT_TOKEN_RE, split_ft_artist
+
+if TYPE_CHECKING:
+    from .types import GeniusSearchResult, JSONDict, LRCLibItem
 
 try:
     from bs4 import BeautifulSoup
@@ -53,8 +57,8 @@ except ImportError:
     HAS_LANGDETECT = False
 
 BREAK_RE = re.compile(r"\n?\s*<br([\s|/][^>]*)*>\s*\n?", re.I)
-PARENS_RE = re.compile(r"\s+[(].*[)]$")
 COLON_PART_RE = re.compile(r"\s*:.*")
+remove_parens = partial(re.compile(r"\s+[(].*[)]$").sub, "")
 
 USER_AGENT = f"beets/{beets.__version__}"
 
@@ -148,7 +152,7 @@ def search_pairs(item):
         artists.add(artist_sort)
 
     titles = {
-        PARENS_RE.sub("", title),
+        remove_parens(title),
         FT_TOKEN_RE.split(title)[0],
         COLON_PART_RE.sub("", title),
     }
@@ -360,7 +364,27 @@ class MusiXmatch(Backend):
         return lyrics
 
 
-class Genius(Backend):
+class SimilarityMixin:
+    config: beets.IncludeLazyConfig
+
+    @cached_property
+    def dist_thresh(self) -> float:
+        return self.config["dist_thresh"].get(float)
+
+    def check_match(
+        self, target_artist: str, target_title: str, artist: str, title: str
+    ) -> bool:
+        """Check if the given artist and title are 'good enough' match."""
+        return (
+            max(
+                string_dist(target_artist, artist),
+                string_dist(target_title, title),
+            )
+            < self.dist_thresh
+        )
+
+
+class Genius(SimilarityMixin, Backend):
     """Fetch lyrics from Genius via genius-api.
 
     Simply adapted from
@@ -368,6 +392,7 @@ class Genius(Backend):
     """
 
     REQUIRES_BS = True
+    JSON_BLOCK_RE = re.compile(r"(?<=JSON.parse\(').*?(?='\);\n)")
 
     base_url = "https://api.genius.com"
     search_url = f"{base_url}/search"
@@ -384,85 +409,43 @@ class Genius(Backend):
         we first query the api for a url matching our artist & title,
         then attempt to scrape that url for the lyrics.
         """
-        json = self._search(artist, title)
 
-        # find a matching artist in the json
-        for hit in json["response"]["hits"]:
-            hit_artist = hit["result"]["primary_artist"]["name"]
+        if (
+            data := self.fetch_json(
+                self.search_url,
+                params={"q": f"{artist} {title}".lower()},
+                headers=self.headers,
+            )
+        ) and (url := self.find_lyrics_url(data, artist, title)):
+            return self.scrape_lyrics(self.fetch_text(url))
 
-            if slug(hit_artist) == slug(artist):
-                html = self.fetch_text(hit["result"]["url"])
-                return self.scrape_lyrics(html)
+    def find_lyrics_url(
+        self, data: JSONDict, artist: str, title: str
+    ) -> str | None:
+        """Find URL to the lyrics page the given artist and title.
 
-        self.debug("Failed to find a matching artist for '{}'", artist)
+        https://docs.genius.com/#search-h2.
+        """
+        check = partial(self.check_match, artist, title)
+        for item in data["response"]["hits"]:
+            result: GeniusSearchResult = item["result"]
+            if check(result["artist_names"], REMOVE_PARENS(result["title"])):
+                return result["url"]
+
         return None
 
-    def _search(self, artist, title):
-        """Searches the genius api for a given artist and title
+    @classmethod
+    @lru_cache
+    def scrape_lyrics(cls, html: str) -> str | None:
+        for m in cls.JSON_BLOCK_RE.finditer(html):
+            if "songPage" in (text := m.group()):
+                data = json.loads(
+                    ast.literal_eval(f"'{text}'").replace(r"\$", "$")
+                )
+                html = data["songPage"]["lyricsData"]["body"]["html"]
+                return get_soup(html).get_text()
 
-        https://docs.genius.com/#search-h2
-
-        :returns: json response
-        """
-        return self.fetch_json(
-            self.search_url,
-            params={"q": f"{title} {artist.lower()}"},
-            headers=self.headers,
-        )
-
-    def scrape_lyrics(self, html: str) -> str | None:
-        """Scrape lyrics from a given genius.com html"""
-        soup = get_soup(html)
-
-        # Most of the time, the page contains a div with class="lyrics" where
-        # all of the lyrics can be found already correctly formatted
-        # Sometimes, though, it packages the lyrics into separate divs, most
-        # likely for easier ad placement
-
-        lyrics_divs = soup.find_all("div", {"data-lyrics-container": True})
-        if not lyrics_divs:
-            self.debug("Received unusual song page html")
-            return self._try_extracting_lyrics_from_non_data_lyrics_container(
-                soup
-            )
-        lyrics = ""
-        for lyrics_div in lyrics_divs:
-            lyrics += lyrics_div.get_text() + "\n\n"
-        while lyrics[-1] == "\n":
-            lyrics = lyrics[:-1]
-        return lyrics
-
-    def _try_extracting_lyrics_from_non_data_lyrics_container(self, soup):
-        """Extract lyrics from a div without attribute data-lyrics-container
-        This is the second most common layout on genius.com
-        """
-        verse_div = soup.find("div", class_=re.compile("Lyrics__Container"))
-        if not verse_div:
-            if soup.find(
-                "div",
-                class_=re.compile("LyricsPlaceholder__Message"),
-                string="This song is an instrumental",
-            ):
-                self.debug("Detected instrumental")
-                return "[Instrumental]"
-            else:
-                self.debug("Couldn't scrape page using known layouts")
-                return None
-
-        lyrics_div = verse_div.parent
-
-        ads = lyrics_div.find_all(
-            "div", class_=re.compile("InreadAd__Container")
-        )
-        for ad in ads:
-            ad.replace_with("\n")
-
-        footers = lyrics_div.find_all(
-            "div", class_=re.compile("Lyrics__Footer")
-        )
-        for footer in footers:
-            footer.replace_with("")
-        return lyrics_div.get_text()
+        return None
 
 
 class Tekstowo(Backend):

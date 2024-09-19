@@ -321,7 +321,7 @@ class TestGeniusLyrics(LyricsPluginBackendMixin):
     @pytest.mark.parametrize(
         "file_name, expected_line_count",
         [
-            ("geniuscom/2pacalleyezonmelyrics", 134),
+            ("geniuscom/2pacalleyezonmelyrics", 131),
             ("geniuscom/Ttngchinchillalyrics", 29),
             ("geniuscom/sample", 0),  # see https://github.com/beetbox/beets/issues/3535
         ],
