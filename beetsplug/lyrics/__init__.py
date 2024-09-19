@@ -882,7 +882,7 @@ class LyricsPlugin(RequestHandler, plugins.BeetsPlugin):
         """
         # Skip if the item already has lyrics.
         if not force and item.lyrics:
-            self.info("Lyrics already present: {}", item)
+            self.info("🔵 Lyrics already present: {}", item)
             return
 
         lyrics = None
@@ -899,7 +899,7 @@ class LyricsPlugin(RequestHandler, plugins.BeetsPlugin):
         lyrics = "\n\n---\n\n".join(filter(None, lyrics))
 
         if lyrics:
-            self.info("Lyrics found: {}", item)
+            self.info("🟢 Found lyrics: {0}", item)
             if HAS_LANGDETECT and self.config["bing_client_secret"].get():
                 lang_from = langdetect.detect(lyrics)
                 if self.config["bing_lang_to"].get() != lang_from and (
@@ -910,7 +910,7 @@ class LyricsPlugin(RequestHandler, plugins.BeetsPlugin):
                         lyrics, self.config["bing_lang_to"]
                     )
         else:
-            self.info("Lyrics not found: {}", item)
+            self.info("🔴 Lyrics not found: {}", item)
             fallback = self.config["fallback"].get()
             if fallback:
                 lyrics = fallback
@@ -925,7 +925,7 @@ class LyricsPlugin(RequestHandler, plugins.BeetsPlugin):
         """Fetch lyrics, trying each source in turn. Return a string or
         None if no lyrics were found.
         """
-        self.debug("Fetching lyrics for {} - {}", artist, title)
+        self.info("Fetching lyrics for {} - {}", artist, title)
         for backend in self.backends.values():
             with backend.handle_request():
                 if lyrics := backend.fetch(
