@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import ast
 import atexit
 import difflib
 import errno
@@ -30,7 +31,6 @@ from typing import Any, Iterator
 from urllib.parse import urlparse
 
 import requests
-from typing_extensions import TypedDict
 from unidecode import unidecode
 
 import beets
@@ -253,20 +253,6 @@ class Backend(RequestHandler, metaclass=BackendType):
 
     def fetch(self, artist, title, album=None, length=None):
         raise NotImplementedError
-
-
-class LRCLibItem(TypedDict):
-    """Definition of a single lyrics JSON object returned by the LRCLib API."""
-
-    id: int
-    name: str
-    trackName: str
-    artistName: str
-    albumName: str
-    duration: float
-    instrumental: bool
-    plainLyrics: str
-    syncedLyrics: str | None
 
 
 class LRCLib(Backend):
