@@ -579,6 +579,13 @@ def album_info(release: Dict) -> beets.autotag.hooks.AlbumInfo:
 
     # Release events.
     info.country, release_date = _preferred_release_event(release)
+    if info.country == "XW" and (artist_credit := release.get("artist-credit")):
+        artist = musicbrainzngs.get_artist_by_id(
+            artist_credit[0]["artist"]["id"],
+            musicbrainzngs.musicbrainz.VALID_INCLUDES["artist"],
+        )
+        if country := artist["artist"].get("country"):
+            info.country = country
     release_group_date = release["release-group"].get("first-release-date")
     if not release_date:
         # Fall back if release-specific date is not available.
