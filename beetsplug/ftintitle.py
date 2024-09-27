@@ -14,36 +14,9 @@
 
 """Moves "featured" artists to the title from the artist field."""
 
-import re
-
-from beets import plugins, ui
-from beets.util import displayable_path
-
-
-def split_on_feat(artist):
-    """Given an artist string, split the "main" artist from any artist
-    on the right-hand side of a string like "feat". Return the main
-    artist, which is always a string, and the featuring artist, which
-    may be a string or None if none is present.
-    """
-    # split on the first "feat".
-    regex = re.compile(plugins.feat_tokens(), re.IGNORECASE)
-    parts = [s.strip() for s in regex.split(artist, 1)]
-    if len(parts) == 1:
-        return parts[0], None
-    else:
-        return tuple(parts)
-
-
-def contains_feat(title):
-    """Determine whether the title contains a "featured" marker."""
-    return bool(
-        re.search(
-            plugins.feat_tokens(for_artist=False),
-            title,
-            flags=re.IGNORECASE,
-        )
-    )
+from beets import ui
+from beets.plugins import BeetsPlugin
+from beets.util import FT_TOKEN_RE, displayable_path, split_ft_artist
 
 
 def find_feat_part(artist, albumartist):
@@ -61,20 +34,20 @@ def find_feat_part(artist, albumartist):
     # featured artist.
     elif albumartist_split[1] != "":
         # Extract the featured artist from the right-hand side.
-        _, feat_part = split_on_feat(albumartist_split[1])
+        _, feat_part = split_ft_artist(albumartist_split[1])
         return feat_part
 
     # Otherwise, if there's nothing on the right-hand side, look for a
     # featuring artist on the left-hand side.
     else:
-        lhs, rhs = split_on_feat(albumartist_split[0])
+        lhs, rhs = split_ft_artist(albumartist_split[0])
         if lhs:
             return lhs
 
     return None
 
 
-class FtInTitlePlugin(plugins.BeetsPlugin):
+class FtInTitlePlugin(BeetsPlugin):
     def __init__(self):
         super().__init__()
 
@@ -145,11 +118,11 @@ class FtInTitlePlugin(plugins.BeetsPlugin):
 
         if item.artist_sort:
             # Just strip the featured artist from the sort name.
-            item.artist_sort, _ = split_on_feat(item.artist_sort)
+            item.artist_sort, _ = split_ft_artist(item.artist_sort)
 
         # Only update the title if it does not already contain a featured
         # artist and if we do not drop featuring information.
-        if not drop_feat and not contains_feat(item.title):
+        if not drop_feat and not FT_TOKEN_RE.search(item.title):
             feat_format = self.config["format"].as_str()
             new_format = feat_format.format(feat_part)
             new_title = f"{item.title} {new_format}"
@@ -166,7 +139,7 @@ class FtInTitlePlugin(plugins.BeetsPlugin):
         # Check whether there is a featured artist on this track and the
         # artist field does not exactly match the album artist field. In
         # that case, we attempt to move the featured artist to the title.
-        _, featured = split_on_feat(artist)
+        _, featured = split_ft_artist(artist)
         if featured and albumartist != artist and albumartist:
             self._log.info("{}", displayable_path(item.path))
 

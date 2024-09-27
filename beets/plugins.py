@@ -490,20 +490,6 @@ def send(event, **arguments):
     return results
 
 
-def feat_tokens(for_artist=True):
-    """Return a regular expression that matches phrases like "featuring"
-    that separate a main artist or a song title from secondary artists.
-    The `for_artist` option determines whether the regex should be
-    suitable for matching artist fields (the default) or title fields.
-    """
-    feat_words = ["ft", "featuring", "feat", "feat.", "ft."]
-    if for_artist:
-        feat_words += ["with", "vs", "and", "con", "&"]
-    return r"(?<=[\s(\[])(?:{})(?=\s)".format(
-        "|".join(re.escape(x) for x in feat_words)
-    )
-
-
 def sanitize_choices(choices, choices_all):
     """Clean up a stringlist configuration attribute: keep only choices
     elements present in choices_all, remove duplicate elements, expand '*'

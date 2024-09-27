@@ -33,6 +33,11 @@ import requests
 from typing_extensions import TypedDict
 from unidecode import unidecode
 
+import beets
+from beets import plugins, ui
+from beets.autotag.hooks import string_dist
+from beets.util import FT_TOKEN_RE, split_ft_artist
+
 try:
     from bs4 import BeautifulSoup
 
@@ -47,12 +52,10 @@ try:
 except ImportError:
     HAS_LANGDETECT = False
 
-
-import beets
-from beets import plugins, ui
-from beets.autotag.hooks import string_dist
-
 BREAK_RE = re.compile(r"\n?\s*<br([\s|/][^>]*)*>\s*\n?", re.I)
+PARENS_RE = re.compile(r"\s+[(].*[)]$")
+COLON_PART_RE = re.compile(r"\s*:.*")
+
 USER_AGENT = f"beets/{beets.__version__}"
 
 # The content for the base index.rst generated in ReST mode.
@@ -138,39 +141,17 @@ def search_pairs(item):
     The method also tries to split multiple titles separated with `/`.
     """
 
-    def generate_alternatives(string, patterns):
-        """Generate string alternatives by extracting first matching group for
-        each given pattern.
-        """
-        alternatives = [string]
-        for pattern in patterns:
-            match = re.search(pattern, string, re.IGNORECASE)
-            if match:
-                alternatives.append(match.group(1))
-        return alternatives
-
     title, artist, artist_sort = item.title, item.artist, item.artist_sort
 
-    patterns = [
-        # Remove any featuring artists from the artists name
-        rf"(.*?) {plugins.feat_tokens()}"
-    ]
-    artists = generate_alternatives(artist, patterns)
-    # Use the artist_sort as fallback only if it differs from artist to avoid
-    # repeated remote requests with the same search terms
-    if artist != artist_sort:
-        artists.append(artist_sort)
+    artists = {artist, split_ft_artist(artist)[0]}
+    if artist.lower() != artist_sort.lower():
+        artists.add(artist_sort)
 
-    patterns = [
-        # Remove a parenthesized suffix from a title string. Common
-        # examples include (live), (remix), and (acoustic).
-        r"(.+?)\s+[(].*[)]$",
-        # Remove any featuring artists from the title
-        r"(.*?) {}".format(plugins.feat_tokens(for_artist=False)),
-        # Remove part of title after colon ':' for songs with subtitles
-        r"(.+?)\s*:.*",
-    ]
-    titles = generate_alternatives(title, patterns)
+    titles = {
+        PARENS_RE.sub("", title),
+        FT_TOKEN_RE.split(title)[0],
+        COLON_PART_RE.sub("", title),
+    }
 
     # Check for a dual song (e.g. Pink Floyd - Speak to Me / Breathe)
     # and each of them.
@@ -180,7 +161,9 @@ def search_pairs(item):
         if "/" in title:
             multi_titles.append([x.strip() for x in title.split("/")])
 
-    return itertools.product(artists, multi_titles)
+    return itertools.product(
+        sorted(artists, key=lambda a: a != artist), multi_titles
+    )
 
 
 def slug(text: str) -> str:

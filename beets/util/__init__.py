@@ -68,6 +68,31 @@ PathLike = Union[BytesOrStr, Path]
 Replacements: TypeAlias = "Sequence[tuple[Pattern[str], str]]"
 
 
+def _any_word_ignore_case_re(words: Iterable[str]) -> re.Pattern[str]:
+    return re.compile(rf"[\[\s(]+(?:{'|'.join(words)})\s+", flags=re.I)
+
+
+_ft_tokens = ["ft[.]?", "featuring", "feat[.]?"]
+_artist_ft_tokens = [*_ft_tokens, "with", "vs", "and", "con", "[&]"]
+FT_TOKEN_RE = _any_word_ignore_case_re(_ft_tokens)
+ARTIST_FT_TOKEN_RE = _any_word_ignore_case_re(_artist_ft_tokens)
+
+
+def split_ft_artist(artist: str) -> tuple[str, str | None]:
+    """Split the given artist string into main and featuring artists.
+
+    If the featuring artist is not found, default to None.
+
+    >>> split_on_feat("Alice ft Bob")
+    ['Alice', 'Bob']
+    """
+    if len(artists := ARTIST_FT_TOKEN_RE.split(artist, 1)) == 2:
+        albumartist, ft_artist = artists
+        return albumartist, ft_artist
+
+    return artist, None
+
+
 class HumanReadableError(Exception):
     """An Exception that can include a human-readable error message to
     be logged without a traceback. Can preserve a traceback for

@@ -41,38 +41,6 @@ skip_ci = pytest.mark.skipif(
 
 
 class TestLyricsUtils:
-    def test_search_artist(self):
-        item = Item(artist="Alice ft. Bob", title="song")
-        assert ("Alice ft. Bob", ["song"]) in lyrics.search_pairs(item)
-        assert ("Alice", ["song"]) in lyrics.search_pairs(item)
-
-        item = Item(artist="Alice feat Bob", title="song")
-        assert ("Alice feat Bob", ["song"]) in lyrics.search_pairs(item)
-        assert ("Alice", ["song"]) in lyrics.search_pairs(item)
-
-        item = Item(artist="Alice feat. Bob", title="song")
-        assert ("Alice feat. Bob", ["song"]) in lyrics.search_pairs(item)
-        assert ("Alice", ["song"]) in lyrics.search_pairs(item)
-
-        item = Item(artist="Alice feats Bob", title="song")
-        assert ("Alice feats Bob", ["song"]) in lyrics.search_pairs(item)
-        assert ("Alice", ["song"]) not in lyrics.search_pairs(item)
-
-        item = Item(artist="Alice featuring Bob", title="song")
-        assert ("Alice featuring Bob", ["song"]) in lyrics.search_pairs(item)
-        assert ("Alice", ["song"]) in lyrics.search_pairs(item)
-
-        item = Item(artist="Alice & Bob", title="song")
-        assert ("Alice & Bob", ["song"]) in lyrics.search_pairs(item)
-        assert ("Alice", ["song"]) in lyrics.search_pairs(item)
-
-        item = Item(artist="Alice and Bob", title="song")
-        assert ("Alice and Bob", ["song"]) in lyrics.search_pairs(item)
-        assert ("Alice", ["song"]) in lyrics.search_pairs(item)
-
-        item = Item(artist="Alice and Bob", title="song")
-        assert ("Alice and Bob", ["song"]) == list(lyrics.search_pairs(item))[0]
-
     def test_search_artist_sort(self):
         item = Item(artist="CHVRCHΞS", title="song", artist_sort="CHVRCHES")
         assert ("CHVRCHΞS", ["song"]) in lyrics.search_pairs(item)

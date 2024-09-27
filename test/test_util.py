@@ -197,3 +197,25 @@ class PathTruncationTest(BeetsTestCase):
         with _common.platform_posix():
             p = util.truncate_path("abcde/fgh.ext", 5)
         assert p == "abcde/f.ext"
+
+
+@pytest.mark.parametrize(
+    "artist, main, featuring",
+    [
+        ("Alice ft. Bob", "Alice", "Bob"),
+        ("Alice feat Bob", "Alice", "Bob"),
+        ("Alice feat. Bob", "Alice", "Bob"),
+        ("Alice featuring Bob", "Alice", "Bob"),
+        ("Alice & Bob", "Alice", "Bob"),
+        ("Alice and Bob", "Alice", "Bob"),
+        ("Alice With Bob", "Alice", "Bob"),
+        ("Alice (ft. Bob)", "Alice", "Bob"),
+        ("Alice (feat. Bob)", "Alice", "Bob"),
+        ("Alice [ft. Bob]", "Alice", "Bob"),
+        ("Alice [feat. Bob]", "Alice", "Bob"),
+        ("Alice defeat Bob", "Alice defeat Bob", None),
+        ("Alice (defeat Bob)", "Alice (defeat Bob)", None),
+    ],
+)
+def test_split_ft_artist(artist, main, featuring):
+    assert util.split_ft_artist(artist) == [main, featuring]
