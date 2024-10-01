@@ -31,7 +31,7 @@ from string import ascii_lowercase
 from unicodedata import normalize
 
 import confuse
-from discogs_client import Client, Master, Release
+from discogs_client import Client, Master, Release, Track
 from discogs_client import __version__ as dc_string
 from discogs_client.exceptions import DiscogsAPIError
 from pycountry import countries, subdivisions
@@ -407,25 +407,6 @@ class DiscogsPlugin(BeetsPlugin):
 
     def get_album_info(self, result):
         """Returns an AlbumInfo object for a discogs Release object."""
-        # Explicitly reload the `Release` fields, as they might not be yet
-        # present if the result is from a `discogs_client.search()`.
-        if not result.data.get("artists"):
-            result.refresh()
-
-        # Sanity check for required fields. The list of required fields is
-        # defined at Guideline 1.3.1.a, but in practice some releases might be
-        # lacking some of these fields. This function expects at least:
-        # `artists` (>0), `title`, `id`, `tracklist` (>0)
-        # https://www.discogs.com/help/doc/submission-guidelines-general-rules
-        if not all(
-            [
-                result.data.get(k)
-                for k in ["artists", "title", "id", "tracklist"]
-            ]
-        ):
-            self._log.warning("Release does not contain the required fields")
-            return None
-
         artist, artist_id = MetadataSourcePlugin.get_artist(
             [a.data for a in result.artists], join_key="join"
         )
@@ -435,7 +416,7 @@ class DiscogsPlugin(BeetsPlugin):
         # convenient `.tracklist` property, which will strip out useful artist
         # information and leave us with skeleton `Artist` objects that will
         # each make an API call just to get the same data back.
-        tracks = self.get_tracks(result.data["tracklist"])
+        tracks = self.get_tracks(result.tracklist)
 
         # Extract information for the optional AlbumInfo fields, if possible.
         va = result.data["artists"][0].get("name", "").lower() == "various"
@@ -608,10 +589,10 @@ class DiscogsPlugin(BeetsPlugin):
         else:
             return None
 
-    def get_tracks(self, tracklist):
+    def get_tracks(self, tracklist: list[Track]) -> list[TrackInfo]:
         """Returns a list of TrackInfo objects for a discogs tracklist."""
         try:
-            clean_tracklist = self.coalesce_tracks(tracklist)
+            clean_tracklist = self.coalesce_tracks(tracklist or [])
         except Exception as exc:
             # FIXME: this is an extra precaution for making sure there are no
             # side effects after #2222. It should be removed after further
@@ -619,32 +600,33 @@ class DiscogsPlugin(BeetsPlugin):
             self._log.debug("{}", traceback.format_exc())
             self._log.error("uncaught exception in coalesce_tracks: {}", exc)
             clean_tracklist = tracklist
-        tracks = []
+        tracks: list[TrackInfo] = []
         index_tracks = {}
         index = 0
         # Distinct works and intra-work divisions, as defined by index tracks.
-        divisions, next_divisions = [], []
-        for track in clean_tracklist:
+        divisions: list[str] = []
+        next_divisions: list[str] = []
+        for raw_track in clean_tracklist:
             # Only real tracks have `position`. Otherwise, it's an index track.
-            if track["position"]:
+            if raw_track.position:
                 index += 1
                 if next_divisions:
                     # End of a block of index tracks: update the current
                     # divisions.
                     divisions += next_divisions
                     del next_divisions[:]
-                track_info = self.get_track_info(track, index, divisions)
-                track_info.track_alt = track["position"]
+                track_info = self.get_track_info(raw_track, index, divisions)
+                track_info.track_alt = raw_track.position
                 tracks.append(track_info)
             else:
-                next_divisions.append(track["title"])
+                next_divisions.append(raw_track.title)
                 # We expect new levels of division at the beginning of the
                 # tracklist (and possibly elsewhere).
                 try:
                     divisions.pop()
                 except IndexError:
                     pass
-                index_tracks[index + 1] = track["title"]
+                index_tracks[index + 1] = raw_track.title
 
         # Fix up medium and medium_index for each track. Discogs position is
         # unreliable, but tracks are in order.
@@ -655,7 +637,7 @@ class DiscogsPlugin(BeetsPlugin):
         # If a medium has two sides (ie. vinyl or cassette), each pair of
         # consecutive sides should belong to the same medium.
         if all([track.medium is not None for track in tracks]):
-            m = sorted({track.medium.lower() for track in tracks})
+            m = sorted({str(track.medium).lower() for track in tracks})
             # If all track.medium are single consecutive letters, assume it is
             # a 2-sided medium.
             if "".join(m) in ascii_lowercase:
@@ -672,10 +654,10 @@ class DiscogsPlugin(BeetsPlugin):
                 track.medium
                 and not track.medium_index
                 and (
-                    len(track.medium) != 1
+                    len(str(track.medium)) != 1
                     or
                     # Not within standard incremental medium values (A, B, C, ...).
-                    ord(track.medium) - 64 != side_count + 1
+                    ord(str(track.medium)) - 64 != side_count + 1
                 )
             )
 
@@ -709,43 +691,45 @@ class DiscogsPlugin(BeetsPlugin):
 
         return tracks
 
-    def coalesce_tracks(self, raw_tracklist):
+    def coalesce_tracks(self, raw_tracklist: list[Track]) -> list[Track]:
         """Pre-process a tracklist, merging subtracks into a single track. The
         title for the merged track is the one from the previous index track,
         if present; otherwise it is a combination of the subtracks titles.
         """
 
-        def add_merged_subtracks(tracklist, subtracks):
+        def add_merged_subtracks(
+            tracklist: list[Track], subtracks: list[Track]
+        ) -> None:
             """Modify `tracklist` in place, merging a list of `subtracks` into
             a single track into `tracklist`."""
             # Calculate position based on first subtrack, without subindex.
             idx, medium_idx, sub_idx = self.get_track_index(
-                subtracks[0]["position"]
+                subtracks[0].position
             )
-            position = "{}{}".format(idx or "", medium_idx or "")
+            position = f'{idx or ""}{medium_idx or ""}'
 
-            if tracklist and not tracklist[-1]["position"]:
+            if tracklist and not tracklist[-1].position:
                 # Assume the previous index track contains the track title.
                 if sub_idx:
                     # "Convert" the track title to a real track, discarding the
                     # subtracks assuming they are logical divisions of a
                     # physical track (12.2.9 Subtracks).
-                    tracklist[-1]["position"] = position
+                    tracklist[-1].data["position"] = position
                 else:
                     # Promote the subtracks to real tracks, discarding the
                     # index track, assuming the subtracks are physical tracks.
                     index_track = tracklist.pop()
                     # Fix artists when they are specified on the index track.
-                    if index_track.get("artists"):
+                    if track_artists := index_track.artists:
                         for subtrack in subtracks:
-                            if not subtrack.get("artists"):
-                                subtrack["artists"] = index_track["artists"]
+                            if not subtrack.artists:
+                                subtrack.data["artists"] = track_artists
                     # Concatenate index with track title when index_tracks
                     # option is set
                     if self.config["index_tracks"]:
                         for subtrack in subtracks:
-                            subtrack["title"] = "{}: {}".format(
-                                index_track["title"], subtrack["title"]
+                            subtrack.title = (
+                                f"{index_track.title}: {subtrack.title}"
                             )
                     tracklist.extend(subtracks)
             else:
@@ -755,13 +739,13 @@ class DiscogsPlugin(BeetsPlugin):
                 tracklist.append(track)
 
         # Pre-process the tracklist, trying to identify subtracks.
-        subtracks = []
-        tracklist = []
+        subtracks: list[Track] = []
+        tracklist: list[Track] = []
         prev_subindex = ""
         for track in raw_tracklist:
             # Regular subtrack (track with subindex).
-            if track["position"]:
-                _, _, subindex = self.get_track_index(track["position"])
+            if track.position:
+                _, _, subindex = self.get_track_index(track.position)
                 if subindex:
                     if subindex.rjust(len(raw_tracklist)) > prev_subindex:
                         # Subtrack still part of the current main track.
@@ -774,10 +758,12 @@ class DiscogsPlugin(BeetsPlugin):
                     continue
 
             # Index track with nested sub_tracks.
-            if not track["position"] and "sub_tracks" in track:
+            if not track.position and (
+                sub_tracks := getattr(track, "sub_tracks", [])
+            ):
                 # Append the index track, assuming it contains the track title.
                 tracklist.append(track)
-                add_merged_subtracks(tracklist, track["sub_tracks"])
+                add_merged_subtracks(tracklist, sub_tracks)
                 continue
 
             # Regular track or index track without nested sub_tracks.
@@ -793,19 +779,21 @@ class DiscogsPlugin(BeetsPlugin):
 
         return tracklist
 
-    def get_track_info(self, track, index, divisions):
+    def get_track_info(
+        self, track: Track, index: int, divisions: list[str]
+    ) -> TrackInfo:
         """Returns a TrackInfo object for a discogs track."""
-        title = track["title"]
+        title = track.title
         if self.config["index_tracks"]:
             prefix = ", ".join(divisions)
             if prefix:
                 title = f"{prefix}: {title}"
         track_id = None
-        medium, medium_index, _ = self.get_track_index(track["position"])
+        medium, medium_index, _ = self.get_track_index(track.position)
         artist, artist_id = MetadataSourcePlugin.get_artist(
-            track.get("artists", []), join_key="join"
+            (a.data for a in track.artists), join_key="join"
         )
-        length = self.get_track_length(track["duration"])
+        length = self.get_track_length(track.duration)
         track_info = TrackInfo(
             title=title,
             track_id=track_id,
@@ -814,19 +802,27 @@ class DiscogsPlugin(BeetsPlugin):
             artists_ids=[str(artist_id)],
             length=length,
             index=index,
-            medium=medium,
-            medium_index=medium_index,
+            medium=(
+                (int(medium) if medium.isdigit() else medium)
+                if medium
+                else None
+            ),
+            medium_index=(
+                (int(medium_index) if medium_index.isdigit() else medium_index)
+                if medium_index
+                else None
+            ),
         )
         if composers := (
-            ea["name"]
-            for ea in track.get("extraartists", [])
-            if ea["role"] == "Written-By"
+            ea.name for ea in (track.credits or []) if ea.role == "Written-By"
         ):
             track_info.composer = "/".join(composers)
 
         return track_info
 
-    def get_track_index(self, position):
+    def get_track_index(
+        self, position: str
+    ) -> tuple[str | None, str | None, str | None]:
         """Returns the medium, medium index and subtrack index for a discogs
         track position."""
         # Match the standard Discogs positions (12.2.9), which can have several
