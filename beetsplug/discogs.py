@@ -251,7 +251,7 @@ class DiscogsPlugin(BeetsPlugin):
             # attach artist info if not provided
             if not track_info["artist"]:
                 track_info["artist"] = album_info.artist
-                track_info["artist_id"] = album_info.artist_id
+                track_info["artist_id"] = str(album_info.artist_id)
             # attach album info
             track_info["album"] = album_info.album
 
@@ -522,7 +522,7 @@ class DiscogsPlugin(BeetsPlugin):
             if not track.artist:  # get_track_info often fails to find artist
                 track.artist = artist
             if not track.artist_id:
-                track.artist_id = artist_id
+                track.artist_id = str(artist_id)
             # Discogs does not have track IDs. Invent our own IDs as proposed in #2336.
             track.track_id = (
                 str(album_id) + "-" + (track.track_alt or str(track.index))
@@ -578,7 +578,9 @@ class DiscogsPlugin(BeetsPlugin):
 
         return AlbumInfo(
             artist=artist,
-            artist_id=artist_id,
+            artists=[artist],
+            artist_id=str(artist_id),
+            artists_ids=[str(artist_id)],
             tracks=tracks,
             va=va,
             albumstatus=albumstatus,
@@ -808,7 +810,8 @@ class DiscogsPlugin(BeetsPlugin):
             title=title,
             track_id=track_id,
             artist=artist,
-            artist_id=artist_id,
+            artist_id=str(artist_id),
+            artists_ids=[str(artist_id)],
             length=length,
             index=index,
             medium=medium,
