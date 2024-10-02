@@ -405,6 +405,5 @@ This way, the test will be run only in the integration test suite.
 .. _`https://github.com/beetbox/beets/blob/master/test/test_template.py#L224`: https://github.com/beetbox/beets/blob/master/test/test_template.py#L224
 .. _unittest: https://docs.python.org/3/library/unittest.html
 .. _integration test: https://github.com/beetbox/beets/actions?query=workflow%3A%22integration+tests%22
-.. _requests-mock: https://requests-mock.readthedocs.io/en/latest/response.html
 .. _documentation: https://beets.readthedocs.io/en/stable/
 .. _vim: https://www.vim.org/
