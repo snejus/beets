@@ -1413,7 +1413,10 @@ def main(args=None):
         _raw_main(args)
     except UserError as exc:
         message = exc.args[0] if exc.args else None
-        log.error("error: {}", message)
+        if "No matching" in message:
+            log.error("error: {}", message)
+        else:
+            console.print_exception(extra_lines=2, show_locals=True)
         sys.exit(1)
     except util.HumanReadableError as exc:
         exc.log(log)
