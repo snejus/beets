@@ -14,7 +14,6 @@
 
 """Parsing of strings into DBCore queries."""
 
-import itertools
 import re
 from typing import (
     TYPE_CHECKING,
@@ -28,6 +27,7 @@ from typing import (
 )
 
 from . import Model, query
+from .fields import TYPE_BY_FIELD
 from .query import Sort
 
 if TYPE_CHECKING:
@@ -139,11 +139,9 @@ def construct_query_part(
 
     # Use `model_cls` to build up a map from field (or query) names to
     # `Query` classes.
-    query_classes: Dict[str, Type[query.FieldQuery]] = {}
-    for k, t in itertools.chain(
-        model_cls._fields.items(), model_cls._types.items()
-    ):
-        query_classes[k] = t.query
+    query_classes: Dict[str, Type[query.FieldQuery]] = {
+        k: t.query for k, t in TYPE_BY_FIELD.items()
+    }
     query_classes.update(model_cls._queries)  # Non-field queries.
 
     # Parse the string.
