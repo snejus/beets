@@ -389,6 +389,8 @@ def bytestring_path(path: PathLike) -> bytes:
     # Pass through bytestrings.
     if isinstance(path, bytes):
         return path
+    elif isinstance(path, memoryview):
+        return bytes(path)
 
     str_path = str(path)
 

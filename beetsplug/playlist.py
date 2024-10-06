@@ -18,7 +18,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import beets
-from beets.dbcore.query import BLOB_TYPE, InQuery
+from beets.dbcore.query import InQuery
 from beets.util import path_as_posix
 
 
@@ -30,8 +30,8 @@ class PlaylistQuery(InQuery[bytes]):
     """Matches files listed by a playlist file."""
 
     @property
-    def subvals(self) -> Sequence[BLOB_TYPE]:
-        return [BLOB_TYPE(p) for p in self.pattern]
+    def subvals(self) -> Sequence[bytes]:
+        return [bytes(p) for p in self.pattern]
 
     def __init__(self, _, pattern: str, __):
         config = beets.config["playlist"]

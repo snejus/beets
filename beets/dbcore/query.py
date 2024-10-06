@@ -829,6 +829,8 @@ class DateQuery(NumericColumnQuery[str]):
 
     The value of a date field can be matched against a date interval by
     using an ellipsis interval syntax similar to that of NumericQuery.
+
+    TODO: Make this inherit NumericQuery and reuse its logic.
     """
 
     def __init__(self, field_name: str, pattern: str, fast: bool = True):
