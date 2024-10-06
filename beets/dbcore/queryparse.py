@@ -16,9 +16,10 @@
 
 from __future__ import annotations
 
-import itertools
 import re
 from typing import TYPE_CHECKING
+
+from beets.library.fields import TYPE_BY_FIELD
 
 from . import query
 
@@ -137,11 +138,9 @@ def construct_query_part(
 
     # Use `model_cls` to build up a map from field (or query) names to
     # `Query` classes.
-    query_classes: dict[str, FieldQueryType] = {}
-    for k, t in itertools.chain(
-        model_cls._fields.items(), model_cls._types.items()
-    ):
-        query_classes[k] = t.query
+    query_classes: dict[str, FieldQueryType] = {
+        k: t.query for k, t in TYPE_BY_FIELD.items()
+    }
     query_classes.update(model_cls._queries)  # Non-field queries.
 
     # Parse the string.
