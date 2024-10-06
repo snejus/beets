@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import unicodedata
 from abc import ABC, abstractmethod
@@ -774,6 +775,8 @@ class DateQuery(NumericColumnQuery[int]):
 
     The value of a date field can be matched against a date interval by
     using an ellipsis interval syntax similar to that of NumericQuery.
+
+    TODO: Make this inherit NumericQuery and reuse its logic.
     """
 
     def __init__(self, field_name: str, pattern: str, fast: bool = True):
@@ -839,6 +842,94 @@ class DurationQuery(NumericQuery):
                 raise InvalidQueryArgumentValueError(
                     s, "a M:SS string or a float"
                 )
+
+
+class PathQuery(FieldQuery):
+    """A query that matches all items under a given path.
+
+    Matching can either be case-insensitive or case-sensitive. By
+    default, the behavior depends on the OS: case-insensitive on Windows
+    and case-sensitive otherwise.
+    """
+
+    # For tests
+    force_implicit_query_detection = False
+
+    def __init__(self, field, pattern, fast=True, case_sensitive=None):
+        """Create a path query.
+
+        `pattern` must be a path, either to a file or a directory.
+
+        `case_sensitive` can be a bool or `None`, indicating that the
+        behavior should depend on the filesystem.
+        """
+        super().__init__(field, pattern, fast)
+
+        path = util.normpath(pattern)
+
+        # By default, the case sensitivity depends on the filesystem
+        # that the query path is located on.
+        if case_sensitive is None:
+            case_sensitive = util.case_sensitive(path)
+        self.case_sensitive = case_sensitive
+
+        # Use a normalized-case pattern for case-insensitive matches.
+        if not case_sensitive:
+            # We need to lowercase the entire path, not just the pattern.
+            # In particular, on Windows, the drive letter is otherwise not
+            # lowercased.
+            # This also ensures that the `match()` method below and the SQL
+            # from `col_clause()` do the same thing.
+            path = path.lower()
+
+        # Match the path as a single file.
+        self.file_path = path
+        # As a directory (prefix).
+        self.dir_path = os.path.join(path, b"")
+
+    @classmethod
+    def is_path_query(cls, query_part):
+        """Try to guess whether a unicode query part is a path query.
+
+        Condition: separator precedes colon and the file exists.
+        """
+        colon = query_part.find(":")
+        if colon != -1:
+            query_part = query_part[:colon]
+
+        # Test both `sep` and `altsep` (i.e., both slash and backslash on
+        # Windows).
+        if not (
+            os.sep in query_part or (os.altsep and os.altsep in query_part)
+        ):
+            return False
+
+        if cls.force_implicit_query_detection:
+            return True
+        return os.path.exists(util.syspath(util.normpath(query_part)))
+
+    def match(self, item):
+        path = item.path if self.case_sensitive else item.path.lower()
+        return (path == self.file_path) or path.startswith(self.dir_path)
+
+    def col_clause(self):
+        if self.case_sensitive:
+            query_part = "({0} = ?) || (substr({0}, 1, ?) = ?)"
+        else:
+            query_part = "(BYTELOWER({0}) = BYTELOWER(?)) || \
+                         (substr(BYTELOWER({0}), 1, ?) = BYTELOWER(?))"
+
+        return query_part.format(self.field), (
+            self.file_path,
+            len(self.dir_path),
+            self.dir_path,
+        )
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}({self.field!r}, {self.pattern!r}, "
+            f"fast={self.fast}, case_sensitive={self.case_sensitive})"
+        )
 
 
 # Sorting.
