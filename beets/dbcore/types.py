@@ -32,6 +32,11 @@ SQLiteType = query.SQLiteType
 BLOB_TYPE = query.BLOB_TYPE
 MULTI_VALUE_DELIMITER = "\\␀"
 
+# To use the SQLite "blob" type, it doesn't suffice to provide a byte
+# string; SQLite treats that as encoded text. Wrapping it in a
+# `memoryview` tells it that we actually mean non-text data.
+BLOB_TYPE = memoryview
+
 
 class ModelType(typing.Protocol):
     """Protocol that specifies the required constructor for model types,
@@ -453,7 +458,6 @@ class DurationType(Float):
                 return float(string)
             except ValueError:
                 return self.null
-
 
 # Shared instances of common types.
 DEFAULT = Default()
