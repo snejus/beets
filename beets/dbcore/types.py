@@ -16,19 +16,29 @@
 
 from __future__ import annotations
 
+import re
+import time
 import typing
 from abc import ABC
 from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
-from beets.util import str2bool
+from beets import config, util
 
 from .query import (
     BooleanQuery,
+    DateQuery,
+    DurationQuery,
     FieldQueryType,
     NumericQuery,
+    PathQuery,
     SQLiteType,
     SubstringQuery,
 )
+
+# To use the SQLite "blob" type, it doesn't suffice to provide a byte
+# string; SQLite treats that as encoded text. Wrapping it in a
+# `memoryview` tells it that we actually mean non-text data.
+BLOB_TYPE = memoryview
 
 
 class ModelType(typing.Protocol):
@@ -319,7 +329,129 @@ class Boolean(Type):
         return str(bool(value))
 
     def parse(self, string: str) -> bool:
-        return str2bool(string)
+        return util.str2bool(string)
+
+
+class PathType(Type):
+    """A dbcore type for filesystem paths.
+
+    These are represented as `bytes` objects, in keeping with
+    the Unix filesystem abstraction.
+    """
+
+    sql = "BLOB"
+    query = PathQuery
+    model_type = bytes
+
+    def __init__(self, nullable=False):
+        """Create a path type object.
+
+        `nullable` controls whether the type may be missing, i.e., None.
+        """
+        self.nullable = nullable
+
+    @property
+    def null(self):
+        if self.nullable:
+            return None
+        else:
+            return b""
+
+    def format(self, value):
+        return util.displayable_path(value)
+
+    def parse(self, string):
+        return util.normpath(util.bytestring_path(string))
+
+    def normalize(self, value):
+        return util.bytestring_path(value)
+
+    def from_sql(self, sql_value):
+        return self.normalize(sql_value)
+
+    def to_sql(self, value):
+        if isinstance(value, bytes):
+            value = BLOB_TYPE(value)
+        return value
+
+
+class MusicalKey(String):
+    """String representing the musical key of a song.
+
+    The standard format is C, Cm, C#, C#m, etc.
+    """
+
+    ENHARMONIC = {
+        r"db": "c#",
+        r"eb": "d#",
+        r"gb": "f#",
+        r"ab": "g#",
+        r"bb": "a#",
+    }
+
+    null = None
+
+    def parse(self, key):
+        key = key.lower()
+        for flat, sharp in self.ENHARMONIC.items():
+            key = re.sub(flat, sharp, key)
+        key = re.sub(r"[\W\s]+minor", "m", key)
+        key = re.sub(r"[\W\s]+major", "", key)
+        return key.capitalize()
+
+    def normalize(self, key):
+        if key is None:
+            return None
+        else:
+            return self.parse(key)
+
+
+class DurationType(Float):
+    """Human-friendly (M:SS) representation of a time interval."""
+
+    query = DurationQuery
+
+    def format(self, value):
+        if not config["format_raw_length"].get(bool):
+            interval = int(value or 0.0)
+            return "%i:%02i" % (interval // 60, interval % 60)
+        else:
+            return value
+
+    def parse(self, string):
+        try:
+            # Try to format back hh:ss to seconds.
+            return util.raw_seconds_short(string)
+        except ValueError:
+            # Fall back to a plain float.
+            try:
+                return float(string)
+            except ValueError:
+                return self.null
+
+
+class DateType(Float):
+    # TODO representation should be `datetime` object
+    # TODO distinguish between date and time types
+    query = DateQuery
+
+    def format(self, value):
+        return time.strftime(
+            config["time_format"].as_str(), time.localtime(value or 0)
+        )
+
+    def parse(self, string):
+        try:
+            # Try a formatted date string.
+            return time.mktime(
+                time.strptime(string, config["time_format"].as_str())
+            )
+        except ValueError:
+            # Fall back to a plain timestamp number.
+            try:
+                return float(string)
+            except ValueError:
+                return self.null
 
 
 # Shared instances of common types.
