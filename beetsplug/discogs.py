@@ -201,16 +201,32 @@ class DiscogsPlugin(BeetsPlugin):
         if not self.discogs_client:
             return ()
 
-        artist = re.sub(r"va\b|various artists", "", artist, flags=re.I).strip()
-        if album:
-            album = re.sub(r" *\([^)]*\)", "", album)
-        query = f"{artist} {album.split(' - ')[-1]}".strip()
+        query = re.sub(
+            r"va\b|various artists|\bf(ea)?t.*", "", artist, flags=re.I
+        ).strip()
+        results = []
+        if barcode := items[0].barcode:
+            results.extend(self.get_albums(query, barcode=barcode))
 
+        kwargs = {"artist": query}
+        if album == items[0].title:
+            kwargs["track"] = re.sub(
+                r" *\((?!.*remix)[^)]*\)", "", album, flags=re.I
+            )
+        else:
+            kwargs["title"] = album
+
+        if getattr(items[0], "data_source", "").lower() == "discogs":
+            results.append(
+                self.get_album_info(
+                    self.discogs_client.release(items[0].mb_albumid)
+                )
+            )
         try:
-            results = self.get_albums(query)
+            results.extend(self.get_albums(query, **kwargs))
             if not results and items and (item := items[0]) and item.label:
                 query = f"{item.label} {item.album}"
-                results = self.get_albums(query)
+                results.extend(self.get_albums(query))
         except DiscogsAPIError as e:
             self._log.debug("API Error: {0} (query: {1})", e, query)
             if e.status_code == 401:
@@ -339,20 +355,19 @@ class DiscogsPlugin(BeetsPlugin):
             return None
         return self.get_album_info(result)
 
-    @lru_cache
-    def get_albums(self, query):
+    def get_albums(self, query, **kwargs):
         """Returns a list of AlbumInfo objects for a discogs search query."""
         # Strip non-word characters from query. Things like "!" and "-" can
         # cause a query to return no results, even if they match the artist or
         # album title. Use `re.UNICODE` flag to avoid stripping non-english
         # word characters.
-        self._log.debug("Searching for '{}'", query)
         query = re.sub(r"(?u)\W+", " ", query, re.UNICODE)
         # Strip medium information from query, Things like "CD1" and "disk 1"
         # can also negate an otherwise positive result.
         query = re.sub(r"(?i)\b(CD|disc|vinyl)\s*\d+", "", query)
+        self._log.debug("Searching for '{}', {}", query, kwargs)
 
-        results = self.discogs_client.search(query, type="release")
+        results = self.discogs_client.search(query, type="release", **kwargs)
         max_count = self.config["results_count"].as_number()
         try:
             releases = islice(iter(results), max_count)
@@ -363,7 +378,15 @@ class DiscogsPlugin(BeetsPlugin):
                 exc_info=True,
             )
             return []
-        return list(filter(None, map(self.get_album_info, releases)))
+        return filter(
+            None,
+            map(
+                self.get_album_info,
+                sorted(
+                    releases, key=lambda r: "file" not in str(r.data["formats"])
+                ),
+            ),
+        )
 
     @lru_cache
     def get_master_year(self, master_id):
