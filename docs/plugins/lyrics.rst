@@ -38,7 +38,7 @@ configuration file. Default configuration:
 
     lyrics:
         auto: yes
-        bing_client_secret: null
+        bing_api_key: null
         bing_lang_from: []
         bing_lang_to: null
         dist_thresh: 0.11
@@ -52,7 +52,7 @@ configuration file. Default configuration:
 The available options are:
 
 - **auto**: Fetch lyrics automatically during import.
-- **bing_client_secret**: Your Bing Translation application password
+- **bing_api_key**: Your Bing Translation application password
   (see :ref:`lyrics-translation`)
 - **bing_lang_from**: By default all lyrics with a language other than
   ``bing_lang_to`` are translated. Use a list of lang codes to restrict the set
@@ -169,10 +169,8 @@ These backends are enabled by default.
 Activate On-the-Fly Translation
 -------------------------------
 
-You need to register for a Microsoft Azure Marketplace free account and
-to the `Microsoft Translator API`_. Follow the four steps process, specifically
-at step 3 enter ``beets`` as *Client ID* and copy/paste the generated
-*Client secret* into your ``bing_client_secret`` configuration, alongside
-``bing_lang_to`` target ``language code``.
+You need to register for a free Microsoft Azure Marketplace to the `Create
+a Translator resource`_. Then, you can grab the Authentication key and add it
+to your configuration as ``bing_api_key``.
 
-.. _Microsoft Translator API: https://docs.microsoft.com/en-us/azure/cognitive-services/translator/translator-how-to-signup
+.. _Create a Translator resource: https://learn.microsoft.com/en-us/azure/ai-services/translator/create-translator-resource
