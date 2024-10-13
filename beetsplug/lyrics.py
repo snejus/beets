@@ -40,7 +40,7 @@ from beets.autotag.hooks import string_dist
 
 if TYPE_CHECKING:
     from beets.importer import ImportTask
-    from beets.library import Item
+    from beets.library import Item, Library
 
     from ._typing import (
         GeniusAPI,
@@ -928,7 +928,6 @@ class LyricsPlugin(RequestHandler, plugins.BeetsPlugin):
 
     def __init__(self):
         super().__init__()
-        self.import_stages = [self.imported]
         self.config.add(
             {
                 "auto": True,
@@ -956,12 +955,14 @@ class LyricsPlugin(RequestHandler, plugins.BeetsPlugin):
         self.config["google_engine_ID"].redact = True
         self.config["genius_api_key"].redact = True
 
+        if self.config["auto"]:
+            self.import_stages = [self.imported]
+
     def commands(self):
         cmd = ui.Subcommand("lyrics", help="fetch song lyrics")
         cmd.parser.add_option(
             "-p",
             "--print",
-            dest="printlyr",
             action="store_true",
             default=False,
             help="print lyrics to console",
@@ -978,33 +979,27 @@ class LyricsPlugin(RequestHandler, plugins.BeetsPlugin):
         cmd.parser.add_option(
             "-f",
             "--force",
-            dest="force_refetch",
             action="store_true",
-            default=False,
-            help="always re-download lyrics",
+            default=self.config["force"],
+            help=f"always re-download lyrics (default: {self.config['force']})",
         )
         cmd.parser.add_option(
             "-l",
             "--local",
-            dest="local_only",
             action="store_true",
-            default=False,
-            help="do not fetch missing lyrics",
+            default=self.config["local"],
+            help=f"do not fetch missing lyrics (default: {self.config['local']})",
         )
 
-        def func(lib, opts, args):
+        def func(lib: Library, opts, args) -> None:
             # The "write to files" option corresponds to the
             # import_write config value.
             items = list(lib.items(ui.decargs(args)))
             for item in items:
-                if not opts.local_only and not self.config["local"]:
-                    self.fetch_item_lyrics(
-                        item,
-                        ui.should_write(),
-                        opts.force_refetch or self.config["force"],
-                    )
+                if not opts.local:
+                    self.fetch_item_lyrics(item, ui.should_write(), opts.force)
                 if item.lyrics:
-                    if opts.printlyr:
+                    if opts.print:
                         ui.print_(item.lyrics)
 
             if opts.rest_directory and (
@@ -1017,9 +1012,8 @@ class LyricsPlugin(RequestHandler, plugins.BeetsPlugin):
 
     def imported(self, _, task: ImportTask) -> None:
         """Import hook for fetching lyrics automatically."""
-        if self.config["auto"]:
-            for item in task.imported_items():
-                self.fetch_item_lyrics(item, False, self.config["force"])
+        for item in task.imported_items():
+            self.fetch_item_lyrics(item, False, self.config["force"])
 
     def fetch_item_lyrics(self, item: Item, write: bool, force: bool) -> None:
         """Fetch and store lyrics for a single item. If ``write``, then the
