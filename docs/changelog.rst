@@ -26,6 +26,10 @@ New features:
 * Ability to query albums with track **flexible** fields and vice versa.
 * Queries have been made faster, and their speed is constant regardless of
   their complexity or the type of queried fields.
+* :doc:`plugins/lyrics`: Add new configuration option ``dist_thresh`` to
+  control the maximum allowed distance between the lyrics search result and the
+  tagged item's artist and title. This is useful for preventing false positives
+  when fetching lyrics.
 
 Bug fixes:
 
@@ -45,11 +49,28 @@ Bug fixes:
   issues in the future.
   :bug:`5289`
 * :doc:`plugins/discogs`: Fix the ``TypeError`` when there is no description.
-* Remove single quotes from all SQL queries
+* Use single quotes in all SQL queries.
   :bug:`4709`
 * :doc:`plugins/lyrics`: Update ``tekstowo`` backend to fetch lyrics directly
   since recent updates to their website made it unsearchable.
   :bug:`5456`
+* :doc:`plugins/lyrics`: Rewrite lyrics tests using pytest to provide isolated
+  configuration for each test case. This fixes the issue where some tests
+  failed because they read developer's local lyrics configuration.
+  :bug:`5133`
+* :doc:`plugins/lyrics`: Do not attempt to search for lyrics if either the
+  artist or title is missing and ignore ``artist_sort`` value if it is empty.
+  :bug:`2635`
+* :doc:`plugins/lyrics`: Fix fetching lyrics from ``lrclib`` source. If we
+  cannot find lyrics for a specific album, artist, title combination, the
+  plugin now tries to search for the artist and title and picks the most
+  relevant result. Update the default ``sources`` configuration to prioritize
+  ``lrclib`` over other sources since it returns reliable results quicker than
+  others.
+  :bug:`5102`
+* :doc:`plugins/lyrics`: Fix the issue with ``genius`` backend not being able
+  to match lyrics when there was a slight variation in the artist name.
+  :bug:`4791`
 
 For packagers:
 
