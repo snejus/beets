@@ -59,6 +59,9 @@ def import_files(lib, paths: list[bytes], query):
         logpath = syspath(config["import"]["log"].as_filename())
         try:
             loghandler = logging.FileHandler(logpath, encoding="utf-8")
+            loghandler.setFormatter(
+                logging.Formatter("%(asctime)s | %(message)s")
+            )
         except OSError:
             raise ui.UserError(
                 "Could not open log file for writing:"
