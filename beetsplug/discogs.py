@@ -31,6 +31,7 @@ from string import ascii_lowercase
 from unicodedata import normalize
 
 import confuse
+import requests
 from discogs_client import Client, Master, Release, Track
 from discogs_client import __version__ as dc_string
 from discogs_client.exceptions import DiscogsAPIError
@@ -224,9 +225,19 @@ class DiscogsPlugin(BeetsPlugin):
                 else item.mb_albumid
             )
 
-            results.append(
-                self.get_album_info(self.discogs_client.release(album_id))
-            )
+            try:
+                results.append(
+                    self.get_album_info(self.discogs_client.release(album_id))
+                )
+            except Exception as exc:
+                if "404" in str(exc):
+                    album_id = album_id.replace("-1", "")
+                    results.append(
+                        self.get_album_info(
+                            self.discogs_client.release(album_id)
+                        )
+                    )
+
         try:
             results.extend(self.get_albums(query, **kwargs))
             if not results and items and (item := items[0]) and item.label:
