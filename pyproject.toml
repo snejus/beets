@@ -81,6 +81,7 @@ soco = { version = "*", optional = true }
 
 pydata-sphinx-theme = { version = "*", optional = true }
 sphinx = { version = "*", optional = true }
+ruamel-yaml = ">=0.18.10"
 
 [tool.poetry.group.test.dependencies]
 beautifulsoup4 = "*"
