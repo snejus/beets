@@ -38,6 +38,15 @@ class ParseError(Exception):
     """
 
 
+def str_presenter(dumper, data):
+    if "\n" in data:
+        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data)
+
+
+yaml.add_representer(str, str_presenter, Dumper=yaml.SafeDumper)
+
+
 def edit(filename, log):
     """Open `filename` in a text editor."""
     cmd = shlex.split(util.editor_command())
