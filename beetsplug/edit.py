@@ -7,10 +7,11 @@ import os
 import shlex
 import subprocess
 from collections import Counter
+from io import StringIO
 from tempfile import NamedTemporaryFile
 from typing import TYPE_CHECKING, Protocol, cast
 
-import yaml
+from ruamel.yaml import YAML, YAMLError
 
 from beets import plugins, ui, util
 from beets.dbcore import types
@@ -27,6 +28,16 @@ if TYPE_CHECKING:
     from beets.logging import BeetsLogger as Logger
 
     from ._typing import JSONDict
+
+
+def str_presenter(dumper, data):
+    if "\n" in data:
+        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data)
+
+
+yaml = YAML(typ="unsafe", pure=True)
+yaml.Representer.add_representer(str, str_presenter)
 
 # These "safe" types can avoid the format/parse cycle that most fields go
 # through: they are safe to edit with native YAML types.
@@ -69,7 +80,9 @@ def edit(filename: str, log: Logger) -> None:
 
 def dump(arg: Sequence[JSONDict]) -> str:
     """Dump a sequence of dictionaries as YAML for editing."""
-    return yaml.safe_dump_all(arg, allow_unicode=True, default_flow_style=False)
+    stream = StringIO()
+    yaml.dump_all(arg, stream)
+    return stream.getvalue()
 
 
 def load(s: str) -> list[JSONDict]:
@@ -80,7 +93,7 @@ def load(s: str) -> list[JSONDict]:
     """
     try:
         out = []
-        for d in yaml.safe_load_all(s):
+        for d in yaml.load_all(s):
             if not isinstance(d, dict):
                 raise ParseError(
                     f"each entry must be a dictionary; found {type(d).__name__}"
@@ -90,7 +103,7 @@ def load(s: str) -> list[JSONDict]:
             # but the user may have inadvertently messed this up.
             out.append({str(k): v for k, v in d.items()})
 
-    except yaml.YAMLError as e:
+    except YAMLError as e:
         raise ParseError(f"invalid YAML: {e}")
     return out
 

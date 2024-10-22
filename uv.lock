@@ -337,6 +337,7 @@ dependencies = [
     { name = "requests" },
     { name = "requests-ratelimiter" },
     { name = "rich-tables" },
+    { name = "ruamel-yaml" },
     { name = "typing-extensions" },
     { name = "unidecode" },
 ]
@@ -578,6 +579,7 @@ requires-dist = [
     { name = "requests-ratelimiter", specifier = ">=0.7.0" },
     { name = "resampy", marker = "extra == 'autobpm'", specifier = ">=0.4.3" },
     { name = "rich-tables", editable = "../rich-tables" },
+    { name = "ruamel-yaml", specifier = ">=0.18.10" },
     { name = "soco", marker = "extra == 'sonosupdate'" },
     { name = "titlecase", marker = "extra == 'titlecase'" },
     { name = "typing-extensions" },
