@@ -20,7 +20,7 @@ import shlex
 import subprocess
 from tempfile import NamedTemporaryFile
 
-import yaml
+from ruamel.yaml import YAML, YAMLError
 
 from beets import plugins, ui, util
 from beets.dbcore import types
@@ -28,6 +28,16 @@ from beets.exceptions import UserError
 from beets.importer import Action
 from beets.ui.commands.utils import do_query
 from beets.util import PromptChoice
+
+
+def str_presenter(dumper, data):
+    if "\n" in data:
+        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data)
+
+
+yaml = YAML(typ="unsafe", pure=True)
+yaml.Representer.add_representer(str, str_presenter)
 
 # These "safe" types can avoid the format/parse cycle that most fields go
 # through: they are safe to edit with native YAML types.
@@ -56,13 +66,9 @@ def edit(filename, log):
         raise UserError(f"could not run editor command {cmd[0]!r}: {exc}")
 
 
-def dump(arg):
+def dump(arg, stream):
     """Dump a sequence of dictionaries as YAML for editing."""
-    return yaml.safe_dump_all(
-        arg,
-        allow_unicode=True,
-        default_flow_style=False,
-    )
+    return yaml.dump_all(arg, stream)
 
 
 def load(s):
@@ -73,7 +79,7 @@ def load(s):
     """
     try:
         out = []
-        for d in yaml.safe_load_all(s):
+        for d in yaml.load_all(s):
             if not isinstance(d, dict):
                 raise ParseError(
                     f"each entry must be a dictionary; found {type(d).__name__}"
@@ -83,7 +89,7 @@ def load(s):
             # but the user may have inadvertently messed this up.
             out.append({str(k): v for k, v in d.items()})
 
-    except yaml.YAMLError as e:
+    except YAMLError as e:
         raise ParseError(f"invalid YAML: {e}")
     return out
 
@@ -241,8 +247,7 @@ class EditPlugin(plugins.BeetsPlugin):
         new = NamedTemporaryFile(
             mode="w", suffix=".yaml", delete=False, encoding="utf-8"
         )
-        old_str = dump(old_data)
-        new.write(old_str)
+        old_str = dump(old_data, new)
         new.close()
 
         # Loop until we have parseable data and the user confirms.
