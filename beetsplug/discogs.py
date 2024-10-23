@@ -26,12 +26,11 @@ import socket
 import time
 import traceback
 from functools import lru_cache
-from itertools import islice
+from itertools import groupby, islice
 from string import ascii_lowercase
 from unicodedata import normalize
 
 import confuse
-import requests
 from discogs_client import Client, Master, Release, Track
 from discogs_client import __version__ as dc_string
 from discogs_client.exceptions import DiscogsAPIError
@@ -65,6 +64,8 @@ COUNTRY_OVERRIDES = {
     "D.C.": "US",
     "South Korea": "KR",  # pycountry: Korea, Republic of
 }
+
+REMOVE_IDX = re.compile(r" +\(\d+\)")
 
 
 class ReleaseFormat(TypedDict):
@@ -455,6 +456,9 @@ class DiscogsPlugin(BeetsPlugin):
         # convenient `.tracklist` property, which will strip out useful artist
         # information and leave us with skeleton `Artist` objects that will
         # each make an API call just to get the same data back.
+        for track in result.tracklist:
+            track.data["albumartist"] = artist
+            track.data["albumartist_id"] = artist_id
         tracks = self.get_tracks(result.tracklist)
 
         # Extract information for the optional AlbumInfo fields, if possible.
@@ -827,8 +831,12 @@ class DiscogsPlugin(BeetsPlugin):
         track_info = TrackInfo(
             title=title,
             track_id=track_id,
-            artist=artist,
-            artist_id=str(artist_id),
+            artist=artist or track.data["albumartist"],
+            artist_id=(
+                str(artist_id)
+                if artist_id
+                else str(track.data["albumartist_id"])
+            ),
             artists_ids=[str(artist_id)],
             length=length,
             index=index,
@@ -843,11 +851,33 @@ class DiscogsPlugin(BeetsPlugin):
                 else None
             ),
         )
-        if composers := (
-            ea.name for ea in (track.credits or []) if ea.role == "Written-By"
-        ):
-            track_info.composer = "/".join(composers)
+        credits_by_role = {
+            a: list(cs)
+            for a, cs in groupby(
+                sorted(track.credits, key=lambda a: a.role), lambda a: a.role
+            )
+        }
+        if composers := credits_by_role.get("Written-By"):
+            track_info.composer = "/".join(
+                c.data["anv"] or c.name for c in composers
+            )
 
+        if featuring := [
+            name
+            for c in track.credits
+            if (
+                (name := c.data["anv"] or c.name)
+                and name.lower() not in track_info.artist.lower()
+                and (
+                    (role := c.role.lower())
+                    and ("featuring" in role or "vocals" in role)
+                )
+            )
+        ]:
+            track_info.artist = (
+                f'{track_info.artist} feat. {" & ".join(featuring)}'
+            )
+        track_info.artist = REMOVE_IDX.sub("", track_info.artist)
         return track_info
 
     def get_track_index(
