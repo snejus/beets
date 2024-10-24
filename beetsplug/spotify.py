@@ -331,6 +331,7 @@ class SpotifyPlugin(
         for track in tracks:
             track.medium_total = medium_totals[track.medium]
 
+        album_type = album_data["album_type"]
         return AlbumInfo(
             album=album_data["name"],
             album_id=spotify_id,
@@ -339,7 +340,8 @@ class SpotifyPlugin(
             artist_id=artist_id,
             spotify_artist_id=artist_id,
             tracks=tracks,
-            albumtype=album_data["album_type"],
+            albumtype=album_type,
+            albumtypes=[album_type],
             va=len(album_data["artists"]) == 1
             and artist.lower() == "various artists",
             year=year,
