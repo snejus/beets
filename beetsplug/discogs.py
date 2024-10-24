@@ -25,7 +25,7 @@ import re
 import socket
 import time
 import traceback
-from functools import lru_cache
+from functools import lru_cache, partial
 from itertools import groupby, islice
 from string import ascii_lowercase
 from unicodedata import normalize
@@ -65,7 +65,7 @@ COUNTRY_OVERRIDES = {
     "South Korea": "KR",  # pycountry: Korea, Republic of
 }
 
-REMOVE_IDX = re.compile(r" +\(\d+\)")
+remove_idx = partial(re.compile(r" +\(\d+\)").sub, "")
 
 
 class ReleaseFormat(TypedDict):
@@ -569,7 +569,7 @@ class DiscogsPlugin(BeetsPlugin):
             albumtype=albumtype,
             year=year,
             label=label,
-            artist_sort=result.data.get("artists_sort"),
+            artist_sort=remove_idx(result.data.get("artists_sort")),
             comments=comments,
             albumtypes=sorted(albumtypes),
             month=month,
@@ -877,7 +877,7 @@ class DiscogsPlugin(BeetsPlugin):
             track_info.artist = (
                 f'{track_info.artist} feat. {" & ".join(featuring)}'
             )
-        track_info.artist = REMOVE_IDX.sub("", track_info.artist)
+        track_info.artist = remove_idx(track_info.artist)
         return track_info
 
     def get_track_index(
