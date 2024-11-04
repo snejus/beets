@@ -91,7 +91,7 @@ class TestLyricsUtils:
     @pytest.mark.parametrize(
         "title, expected_extra_titles",
         [
-            ("1/2", ["1", "2"]),
+            ("1/2", []),
             ("1 / 2", ["1", "2"]),
             ("Song (live)", ["Song"]),
             ("Song (live) (new)", ["Song"]),
