@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from functools import cached_property, partial, total_ordering
 from html import unescape
 from http import HTTPStatus
-from itertools import groupby
+from itertools import filterfalse, groupby
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Iterable, Iterator, NamedTuple
 from urllib.parse import quote, urlparse
@@ -39,10 +39,12 @@ from unidecode import unidecode
 import beets
 from beets import plugins, ui
 from beets.autotag.hooks import string_dist
+from beets.dbcore.query import FalseQuery
+from beets.library import Item, parse_query_string
 
 if TYPE_CHECKING:
     from beets.importer import ImportTask
-    from beets.library import Item, Library
+    from beets.library import Library
 
     from ._typing import (
         GeniusAPI,
@@ -970,6 +972,7 @@ class LyricsPlugin(RequestHandler, plugins.BeetsPlugin):
         self.config.add(
             {
                 "auto": True,
+                "auto_ignore": [],
                 "translate": {
                     "api_key": None,
                     "from_languages": [],
@@ -1055,7 +1058,12 @@ class LyricsPlugin(RequestHandler, plugins.BeetsPlugin):
 
     def imported(self, _, task: ImportTask) -> None:
         """Import hook for fetching lyrics automatically."""
-        for item in task.imported_items():
+        if query_str := self.config["auto_ignore"].get():
+            query, _ = parse_query_string(query_str, Item)
+        else:
+            query = FalseQuery()
+
+        for item in filterfalse(query.match, task.imported_items()):
             self.add_item_lyrics(item, False)
 
     def find_lyrics(self, item: Item) -> str:
