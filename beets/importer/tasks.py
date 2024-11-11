@@ -545,7 +545,6 @@ class ImportTask(BaseImportTask):
                 k
                 for k in existing_fields
                 if k in overwrite_keys
-                and new_obj.get(k)
                 and existing_fields.get(k) != new_obj.get(k)
             ]
             if overwritten_fields:
