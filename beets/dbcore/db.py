@@ -25,7 +25,8 @@ import sys
 import threading
 import time
 from abc import ABC
-from collections import defaultdict
+from collections import UserDict, defaultdict
+from copy import deepcopy
 from sqlite3 import Connection, sqlite_version
 from types import TracebackType
 from typing import (
@@ -42,6 +43,7 @@ from typing import (
     Mapping,
     Optional,
     Sequence,
+    Set,
     Tuple,
     Type,
     TypeVar,
@@ -53,6 +55,7 @@ from mediafile import MediaFile
 from packaging.version import Version
 from rich import print
 from rich_tables.generic import flexitable
+from typing_extensions import Self
 from unidecode import unidecode
 
 import beets
@@ -74,7 +77,7 @@ def print_query(sql, subvals=None):
     topr = sql
     for val in subvals or []:
         topr = topr.replace("?", str(val), 1)
-    print(flexitable({"sql": topr}), file=sys.stderr)
+    print(*flexitable({"sql": topr}), file=sys.stderr)
 
 
 class DBAccessError(Exception):
@@ -159,107 +162,41 @@ class FormattedMapping(Mapping[str, str]):
         return value
 
 
-# NOTE: This seems like it should be a `Mapping`, i.e.
-# ```
-# class LazyConvertDict(Mapping[str, Any])
-# ```
-# but there are some conflicts with the `Mapping` protocol such that we
-# can't do this without changing behaviour: In particular, iterators returned
-# by some methods build intermediate lists, such that modification of the
-# `LazyConvertDict` becomes safe during iteration. Some code does in fact rely
-# on this.
-class LazyConvertDict:
-    """Lazily convert types for attributes fetched from the database"""
+class LazyDict(UserDict[str, Any]):
+    def __init__(self, data, convert):
+        super().__init__()
+        self._raw = data
+        self._convert = convert
 
-    def __init__(self, model_cls: "Model"):
-        """Initialize the object empty"""
-        # FIXME: Dict[str, SQLiteType]
-        self._data: Dict[str, Any] = {}
-        self.model_cls = model_cls
-        self._converted: Dict[str, Any] = {}
-
-    def init(self, data: Dict[str, Any]):
-        """Set the base data that should be lazily converted"""
-        self._data = data
-
-    def _convert(self, key: str, value: Any):
-        """Convert the attribute type according to the SQL type"""
-        return self.model_cls._type(key).from_sql(value)
-
-    def __setitem__(self, key: str, value: Any):
-        """Set an attribute value, assume it's already converted"""
-        self._converted[key] = value
-
-    def __getitem__(self, key: str) -> Any:
-        """Get an attribute value, converting the type on demand
-        if needed
-        """
-        if key in self._converted:
-            return self._converted[key]
-        elif key in self._data:
-            value = self._convert(key, self._data[key])
-            self._converted[key] = value
+    def __missing__(self, key: str):
+        if key in self._raw:
+            value = self._convert(key, self._raw[key])
+            self.data[key] = value
             return value
 
     def __delitem__(self, key: str):
         """Delete both converted and base data"""
-        if key in self._converted:
-            del self._converted[key]
-        if key in self._data:
-            del self._data[key]
+        if key in self.data:
+            del self.data[key]
+        if key in self._raw:
+            del self._raw[key]
 
-    def keys(self) -> List[str]:
-        """Get a list of available field names for this object."""
-        return list(self._converted.keys()) + list(self._data.keys())
+    def keys(self):
+        return dict.fromkeys((*self._raw.keys(), *self.data.keys())).keys()
 
-    def copy(self) -> LazyConvertDict:
-        """Create a copy of the object."""
-        new = self.__class__(self.model_cls)
-        new._data = self._data.copy()
-        new._converted = self._converted.copy()
-        return new
-
-    # Act like a dictionary.
-
-    def update(self, values: Mapping[str, Any]):
-        """Assign all values in the given dict."""
-        for key, value in values.items():
-            self[key] = value
-
-    def items(self) -> Iterable[Tuple[str, Any]]:
-        """Iterate over (key, value) pairs that this object contains.
-        Computed fields are not included.
-        """
-        for key in self:
-            yield key, self[key]
-
-    def get(self, key: str, default: Optional[Any] = None):
-        """Get the value for a given key or `default` if it does not
-        exist.
-        """
-        if key in self:
-            return self[key]
-        else:
-            return default
+    def copy(self) -> Self:
+        return deepcopy(self)
 
     def __contains__(self, key: Any) -> bool:
         """Determine whether `key` is an attribute on this object."""
-        return key in self._converted or key in self._data
+        return key in self.data or key in self._raw
 
-    def __iter__(self) -> Iterator[str]:
-        """Iterate over the available field names (excluding computed
-        fields).
-        """
-        # NOTE: It would be nice to use the following:
-        # yield from self._converted
-        # yield from self._data
-        # but that won't work since some code relies on modifying `self`
-        # during iteration.
+    def __iter__(self):
+        """Iterate over the available field names (excluding computed fields)."""
         return iter(self.keys())
 
     def __len__(self) -> int:
-        # FIXME: This is incorrect due to duplication of keys
-        return len(self._converted) + len(self._data)
+        return len(self.keys())
 
 
 # Abstract base for model classes.
@@ -425,37 +362,26 @@ class Model(ABC):
 
     # Basic operation.
 
-    def __init__(self, db: Optional[Database] = None, **values):
-        """Create a new object with an optional Database association and
-        initial field values.
-        """
-        self._db = db
-        self._dirty: set[str] = set()
-        self._values_fixed = LazyConvertDict(self)
-        self._values_flex = LazyConvertDict(self)
-
-        # Initial contents.
-        self.update(values)
-        self.clear_dirty()
-
-    @classmethod
-    def _awaken(
-        cls: Type[AnyModel],
+    def __init__(
+        self,
         db: Optional[Database] = None,
-        fixed_values: Dict[str, Any] = {},
-        flex_values: Dict[str, Any] = {},
-    ) -> AnyModel:
+        fixed_values: Dict[str, Any] | None = None,
+        flex_values: Dict[str, Any] | None = None,
+        **kwargs,
+    ) -> None:
         """Create an object with values drawn from the database.
 
         This is a performance optimization: the checks involved with
         ordinary construction are bypassed.
         """
-        obj = cls(db)
+        self._db = db
+        self._dirty: set[str] = set()
+        self._values_fixed = LazyDict(fixed_values or {}, self._convert)
+        self._values_flex = LazyDict(flex_values or {}, self._convert)
 
-        obj._values_fixed.init(fixed_values)
-        obj._values_flex.init(flex_values)
-
-        return obj
+        # Initial contents.
+        self.update(kwargs)
+        self.clear_dirty()
 
     def __repr__(self) -> str:
         return "{}({})".format(
@@ -508,6 +434,11 @@ class Model(ABC):
         which does no conversion.
         """
         return cls._fields.get(key) or cls._types.get(key) or types.DEFAULT
+
+    @classmethod
+    def _convert(cls, key: str, value: Any):
+        """Convert the attribute type according to the SQL type"""
+        return cls._type(key).from_sql(value)
 
     def _get(self, key, default: Any = None, raise_: bool = False):
         """Get the value for a field, or `default`. Alternatively,
@@ -699,10 +630,8 @@ class Model(ABC):
         if not self._dirty and db.revision == self._revision:
             # Exit early
             return
-        stored_obj = db._get(type(self), self.id)
+        stored_obj = db._get(self.__class__, self.id)
         assert stored_obj is not None, f"object {self.id} not in DB"
-        self._values_fixed = LazyConvertDict(self)
-        self._values_flex = LazyConvertDict(self)
         self.update(dict(stored_obj))
         self.clear_dirty()
 
@@ -878,8 +807,7 @@ class Results(Generic[AnyModel]):
         flex_values = values.pop("flex_attrs") or {}
 
         # Construct the Python object
-        obj = self.model_class._awaken(self.db, values, flex_values)
-        return obj
+        return self.model_class(self.db, values, flex_values)
 
     def __len__(self) -> int:
         """Get the number of matching objects."""
