@@ -532,7 +532,8 @@ class DiscogsPlugin(BeetsPlugin):
                     albumtype = desc.lower()
                     albumtypes.add(albumtype)
                 elif desc == "Compilation":
-                    albumtype = "album"
+                    albumtype = "compilation"
+                    albumtypes.add("album")
                     albumtypes.add("compilation")
                 elif albumtype == "Single":
                     albumtypes.add("single")
