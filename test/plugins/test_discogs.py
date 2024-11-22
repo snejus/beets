@@ -369,7 +369,12 @@ class DGAlbumInfoTest(BeetsTestCase):
                     "type_": "track",
                     "duration": "5:44",
                     "artists": [
-                        {"name": "TEST ARTIST (5)", "tracks": "", "id": 11146}
+                        {
+                            "name": "TEST ARTIST (5)",
+                            "tracks": "",
+                            "join": "",
+                            "id": 11146,
+                        }
                     ],
                 }
             ],
@@ -404,7 +409,12 @@ class DGAlbumInfoTest(BeetsTestCase):
                     "type_": "track",
                     "duration": "5:44",
                     "artists": [
-                        {"name": "TEST ARTIST (5)", "tracks": "", "id": 11146}
+                        {
+                            "name": "TEST ARTIST (5)",
+                            "tracks": "",
+                            "join": "",
+                            "id": 11146,
+                        }
                     ],
                 }
             ],

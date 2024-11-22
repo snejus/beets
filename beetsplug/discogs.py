@@ -411,9 +411,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
         if not artists:
             return {}
 
-        artist, artist_id = self.get_artist(
-            [a.data for a in artists], join_key="join"
-        )
+        artist, artist_id = self.get_artist([a.data for a in artists])
         return {
             "artist_id": artist_id,
             "artist": self.strip_disambiguation(artist),
@@ -492,7 +490,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
         label = labels[0] if (labels := result.data.get("labels")) else None
         data = dict(
             album=album,
-            album_id=album_id,
+            album_id=str(album_id),
             albumstatus=albumstatus,
             albumtype=albumtype,
             albumtypes=sorted(albumtypes),

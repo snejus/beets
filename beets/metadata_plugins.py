@@ -24,9 +24,16 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from confuse import ConfigView
+    from typing_extensions import NotRequired
 
     from .autotag import Distance
     from .autotag.hooks import AlbumInfo, Item, TrackInfo
+
+
+class ArtistData(TypedDict):
+    id: int | str
+    name: str
+    join: NotRequired[str]
 
 
 def find_metadata_source_plugins() -> list[MetadataSourcePlugin]:
@@ -262,12 +269,7 @@ class MetadataSourcePlugin(BeetsPlugin, metaclass=abc.ABCMeta):
         return extract_release_id(self.data_source, url)
 
     @staticmethod
-    def get_artist(
-        artists: Iterable[dict[str | int, str]],
-        id_key: str | int = "id",
-        name_key: str | int = "name",
-        join_key: str | int | None = None,
-    ) -> tuple[str, str | None]:
+    def get_artist(artists: Iterable[ArtistData]) -> tuple[str, str]:
         """Returns an artist string (all artists) and an artist_id (the main
         artist) for a list of artist object dicts.
 
@@ -289,25 +291,18 @@ class MetadataSourcePlugin(BeetsPlugin, metaclass=abc.ABCMeta):
             which keeps the default behaviour (comma-separated).
         :return: Normalized artist string.
         """
-        artist_id = None
-        artist_string = ""
         artists = list(artists)  # In case a generator was passed.
-        total = len(artists)
-        for idx, artist in enumerate(artists):
-            if not artist_id:
-                artist_id = artist[id_key]
-            name = artist[name_key]
+        artist_parts = []
+        for artist in artists:
+            name = artist["name"]
             # Move articles to the front.
             name = re.sub(r"^(.*?), (a|an|the)$", r"\2 \1", name, flags=re.I)
+            artist_parts.append(name)
             # Use a join keyword if requested and available.
-            if idx < (total - 1):  # Skip joining on last.
-                if join_key and artist.get(join_key, None):
-                    name += f" {artist[join_key]} "
-                else:
-                    name += ", "
-            artist_string += name
+            if join := artist.get("join", ", "):
+                artist_parts.append(f" {join} ")
 
-        return artist_string, artist_id
+        return "".join(artist_parts).replace(" ,", ","), str(artists[0]["id"])
 
 
 class IDResponse(TypedDict):
