@@ -78,7 +78,41 @@ class AttrDict(Dict[str, V]):
         return id(self)
 
 
-class AlbumInfo(AttrDict):
+class Info(AttrDict[Any]):
+    def __init__(
+        self,
+        album: Optional[str] = None,
+        artist_credit: Optional[str] = None,
+        artist_id: Optional[str] = None,
+        artist: Optional[str] = None,
+        artists_credit: Optional[List[str]] = None,
+        artists_ids: Optional[List[str]] = None,
+        artists: Optional[List[str]] = None,
+        artist_sort: Optional[str] = None,
+        artists_sort: Optional[List[str]] = None,
+        data_source: Optional[str] = None,
+        data_url: Optional[str] = None,
+        genre: Optional[str] = None,
+        media: Optional[str] = None,
+        **kwargs,
+    ) -> None:
+        self.album = album
+        self.artist = artist
+        self.artist_credit = artist_credit
+        self.artist_id = artist_id
+        self.artists = artists or []
+        self.artists_credit = artists_credit or []
+        self.artists_ids = artists_ids or []
+        self.artist_sort = artist_sort
+        self.artists_sort = artists_sort or []
+        self.data_source = data_source
+        self.data_url = data_url
+        self.genre = genre
+        self.media = media
+        self.update(kwargs)
+
+
+class AlbumInfo(Info):
     """Describes a canonical release that may be used to match a release
     in the library. Consists of these data members:
 
@@ -91,17 +125,11 @@ class AlbumInfo(AttrDict):
     ``mediums`` along with the fields up through ``tracks`` are required.
     The others are optional and may be None.
     """
-
     # TYPING: are all of these correct? I've assumed optional strings
     def __init__(
         self,
         tracks: List[TrackInfo],
-        album: Optional[str] = None,
         album_id: Optional[str] = None,
-        artist: Optional[str] = None,
-        artist_id: Optional[str] = None,
-        artists: Optional[List[str]] = None,
-        artists_ids: Optional[List[str]] = None,
         asin: Optional[str] = None,
         albumtype: Optional[str] = None,
         albumtypes: Optional[List[str]] = None,
@@ -112,8 +140,6 @@ class AlbumInfo(AttrDict):
         label: Optional[str] = None,
         barcode: Optional[str] = None,
         mediums: Optional[int] = None,
-        artist_sort: Optional[str] = None,
-        artists_sort: Optional[List[str]] = None,
         releasegroup_id: Optional[str] = None,
         release_group_title: Optional[str] = None,
         catalognum: Optional[str] = None,
@@ -121,29 +147,18 @@ class AlbumInfo(AttrDict):
         language: Optional[str] = None,
         country: Optional[str] = None,
         style: Optional[str] = None,
-        genre: Optional[str] = None,
         albumstatus: Optional[str] = None,
-        media: Optional[str] = None,
         albumdisambig: Optional[str] = None,
         releasegroupdisambig: Optional[str] = None,
-        artist_credit: Optional[str] = None,
-        artists_credit: Optional[List[str]] = None,
         original_year: Optional[int] = None,
         original_month: Optional[int] = None,
         original_day: Optional[int] = None,
-        data_source: Optional[str] = None,
-        data_url: Optional[str] = None,
         discogs_albumid: Optional[str] = None,
         discogs_labelid: Optional[str] = None,
         discogs_artistid: Optional[str] = None,
         **kwargs,
     ):
-        self.album = album
         self.album_id = album_id
-        self.artist = artist
-        self.artist_id = artist_id
-        self.artists = artists or []
-        self.artists_ids = artists_ids or []
         self.tracks = tracks
         self.asin = asin
         self.albumtype = albumtype
@@ -155,8 +170,6 @@ class AlbumInfo(AttrDict):
         self.label = label
         self.barcode = barcode
         self.mediums = mediums
-        self.artist_sort = artist_sort
-        self.artists_sort = artists_sort or []
         self.releasegroup_id = releasegroup_id
         self.release_group_title = release_group_title
         self.catalognum = catalognum
@@ -164,29 +177,23 @@ class AlbumInfo(AttrDict):
         self.language = language
         self.country = country
         self.style = style
-        self.genre = genre
         self.albumstatus = albumstatus
-        self.media = media
         self.albumdisambig = albumdisambig
         self.releasegroupdisambig = releasegroupdisambig
-        self.artist_credit = artist_credit
-        self.artists_credit = artists_credit or []
         self.original_year = original_year
         self.original_month = original_month
         self.original_day = original_day
-        self.data_source = data_source
-        self.data_url = data_url
         self.discogs_albumid = discogs_albumid
         self.discogs_labelid = discogs_labelid
         self.discogs_artistid = discogs_artistid
-        self.update(kwargs)
+        super().__init__(**kwargs)
 
     @property
     def name(self) -> Optional[str]:
         return self.album
 
 
-class TrackInfo(AttrDict):
+class TrackInfo(Info):
     """Describes a canonical track present on a release. Appears as part
     of an AlbumInfo's ``tracks`` list. Consists of these data members:
 
@@ -204,23 +211,12 @@ class TrackInfo(AttrDict):
         title: Optional[str] = None,
         track_id: Optional[str] = None,
         release_track_id: Optional[str] = None,
-        artist: Optional[str] = None,
-        artist_id: Optional[str] = None,
-        artists: Optional[List[str]] = None,
-        artists_ids: Optional[List[str]] = None,
         length: Optional[float] = None,
         index: Optional[int] = None,
         medium: Optional[int] = None,
         medium_index: Optional[int] = None,
         medium_total: Optional[int] = None,
-        artist_sort: Optional[str] = None,
-        artists_sort: Optional[List[str]] = None,
         disctitle: Optional[str] = None,
-        artist_credit: Optional[str] = None,
-        artists_credit: Optional[List[str]] = None,
-        data_source: Optional[str] = None,
-        data_url: Optional[str] = None,
-        media: Optional[str] = None,
         lyricist: Optional[str] = None,
         composer: Optional[str] = None,
         composer_sort: Optional[str] = None,
@@ -231,30 +227,17 @@ class TrackInfo(AttrDict):
         work_disambig: Optional[str] = None,
         bpm: Optional[str] = None,
         initial_key: Optional[str] = None,
-        genre: Optional[str] = None,
-        album: Optional[str] = None,
         **kwargs,
     ):
         self.title = title
         self.track_id = track_id
         self.release_track_id = release_track_id
-        self.artist = artist
-        self.artist_id = artist_id
-        self.artists = artists or []
-        self.artists_ids = artists_ids or []
         self.length = length
         self.index = index
-        self.media = media
         self.medium = medium
         self.medium_index = medium_index
         self.medium_total = medium_total
-        self.artist_sort = artist_sort
-        self.artists_sort = artists_sort or []
         self.disctitle = disctitle
-        self.artist_credit = artist_credit
-        self.artists_credit = artists_credit or []
-        self.data_source = data_source
-        self.data_url = data_url
         self.lyricist = lyricist
         self.composer = composer
         self.composer_sort = composer_sort
@@ -265,9 +248,7 @@ class TrackInfo(AttrDict):
         self.work_disambig = work_disambig
         self.bpm = bpm
         self.initial_key = initial_key
-        self.genre = genre
-        self.album = album
-        self.update(kwargs)
+        super().__init__(**kwargs)
 
     @property
     def name(self) -> Optional[str]:
@@ -610,7 +591,7 @@ class Distance:
 class Match:
     disambig_fields_key: ClassVar[str]
     distance: Distance
-    info: AttrDict
+    info: Info
 
     @cached_classproperty
     def disambig_fields(cls) -> Iterable[str]:
@@ -679,6 +660,8 @@ class Match:
 @dataclass
 class TrackMatch(Match):
     disambig_fields_key = "singleton_disambig_fields"
+    info: TrackInfo
+    item: Item
 
 
 @dataclass
