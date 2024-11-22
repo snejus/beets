@@ -176,14 +176,16 @@ class DGAlbumInfoTest(BeetsTestCase):
         positions = [
             ("1", (None, "1", None)),
             ("A12", ("A", "12", None)),
-            ("12-34", ("12-", "34", None)),
-            ("CD1-1", ("CD1-", "1", None)),
+            ("12-34", ("12", "34", None)),
+            ("CD1-1", ("CD1", "1", None)),
             ("1.12", (None, "1", "12")),
             ("12.a", (None, "12", "A")),
             ("12.34", (None, "12", "34")),
             ("1ab", (None, "1", "AB")),
             # Non-standard
             ("IV", ("IV", None, None)),
+            ("LP-A1", ("A", "1", None)),
+            ("A", ("A", None, None)),
         ]
 
         d = DiscogsPlugin()

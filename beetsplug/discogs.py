@@ -67,6 +67,24 @@ COUNTRY_OVERRIDES = {
 
 remove_idx = partial(re.compile(r" +\(\d+\)").sub, "")
 
+TRACK_INDEX_PAT = re.compile(
+    r"""
+    (?:LP-|DVD[0-9]?|Video-)?
+    (.{,3}?)           # medium: everything before medium_index.
+    [-]?
+    ((?<!\d)\d+?)?     # medium_index: a number at the end of `position`, except
+                       # when followed by a subtrack index.
+    \.?
+    (                  # subtrack_index: can only be matched if medium or
+                       # medium_index have been matched, and can be
+        (?<=\w\.)\w+   # a dot followed by a string (A.1, 2.A)
+      | (?<=\d)[A-Z]+  # a string that follows a number (1A, B2A)
+    )?
+    """,
+    re.VERBOSE,
+)
+
+
 
 class ReleaseFormat(TypedDict):
     name: str
@@ -901,29 +919,15 @@ class DiscogsPlugin(BeetsPlugin):
         track position."""
         # Match the standard Discogs positions (12.2.9), which can have several
         # forms (1, 1-1, A1, A1.1, A1a, ...).
-        match = re.match(
-            r"^(.*?)"  # medium: everything before medium_index.
-            r"(\d*?)"  # medium_index: a number at the end of
-            # `position`, except if followed by a subtrack
-            # index.
-            # subtrack_index: can only be matched if medium
-            # or medium_index have been matched, and can be
-            r"((?<=\w)\.[\w]+"  # - a dot followed by a string (A.1, 2.A)
-            r"|(?<=\d)[A-Z]+"  # - a string that follows a number (1A, B2a)
-            r")?"
-            r"$",
-            position.upper(),
-        )
+        match = TRACK_INDEX_PAT.fullmatch(position.upper())
 
         if match:
-            medium, index, subindex = match.groups()
-
-            if subindex and subindex.startswith("."):
-                subindex = subindex[1:]
+            medium, index, subindex = (g or None for g in match.groups())
         else:
             self._log.debug("Invalid position: {0}", position)
             medium = index = subindex = None
-        return medium or None, index or None, subindex or None
+
+        return medium, index, subindex
 
     def get_track_length(self, duration):
         """Returns the track length in seconds for a discogs duration."""
