@@ -66,6 +66,7 @@ COUNTRY_OVERRIDES = {
 }
 
 remove_idx = partial(re.compile(r" +\(\d+\)").sub, "")
+remove_year = partial(re.compile(r" +\((19|20)\d\d\)").sub, "")
 
 TRACK_INDEX_PAT = re.compile(
     r"""
@@ -474,16 +475,16 @@ class DiscogsPlugin(BeetsPlugin):
         artist, artist_id = MetadataSourcePlugin.get_artist(
             [a.data for a in result.artists], join_key="join"
         )
+        artist_id = str(artist_id)
         album = re.sub(r" +", " ", result.title)
-        album_id = result.data["id"]
+        album_id = str(result.data["id"])
         # Use `.data` to access the tracklist directly instead of the
         # convenient `.tracklist` property, which will strip out useful artist
         # information and leave us with skeleton `Artist` objects that will
         # each make an API call just to get the same data back.
-        for track in result.tracklist:
-            track.data["albumartist"] = artist
-            track.data["albumartist_id"] = artist_id
-        tracks = self.get_tracks(result.tracklist)
+        tracks = self.get_tracks(
+            result.tracklist, remove_idx(artist), artist_id
+        )
 
         # Extract information for the optional AlbumInfo fields, if possible.
         va = result.data["artists"][0].get("name", "").lower() == "various"
@@ -573,11 +574,7 @@ class DiscogsPlugin(BeetsPlugin):
             if not track.artist_id:
                 track.artist_id = str(artist_id)
             # Discogs does not have track IDs. Invent our own IDs as proposed in #2336.
-            track.track_id = (
-                str(album_id) + "-" + (track.track_alt or str(track.index))
-            )
-            track.data_url = data_url
-            track.data_source = "Discogs"
+            track.track_id = f"{album_id}-{track.track_alt or track.index}"
 
         # Retrieve master release id (returns None if there isn't one).
         master_id = result.data.get("master_id")
@@ -592,13 +589,15 @@ class DiscogsPlugin(BeetsPlugin):
             label = re.sub(r" \([0-9]+\)", "", label)
         comments = result.data.get("notes") or None
 
+        if artist_sort := result.data.get("artists_sort"):
+            artist_sort = remove_idx(artist_sort)
         data = dict(
             album=album,
-            album_id=str(album_id),
+            album_id=album_id,
             albumtype=albumtype,
             year=year,
             label=label,
-            artist_sort=remove_idx(result.data.get("artists_sort")),
+            artist_sort=artist_sort,
             comments=comments,
             albumtypes=sorted(albumtypes),
             month=month,
@@ -628,8 +627,8 @@ class DiscogsPlugin(BeetsPlugin):
         return AlbumInfo(
             artist=artist,
             artists=[artist],
-            artist_id=str(artist_id),
-            artists_ids=[str(artist_id)],
+            artist_id=artist_id,
+            artists_ids=[artist_id],
             tracks=tracks,
             va=va,
             albumstatus=albumstatus,
@@ -657,7 +656,9 @@ class DiscogsPlugin(BeetsPlugin):
         else:
             return None
 
-    def get_tracks(self, tracklist: list[Track]) -> list[TrackInfo]:
+    def get_tracks(
+        self, tracklist: list[Track], *args, **kwargs
+    ) -> list[TrackInfo]:
         """Returns a list of TrackInfo objects for a discogs tracklist."""
         try:
             clean_tracklist = self.coalesce_tracks(tracklist or [])
@@ -668,6 +669,12 @@ class DiscogsPlugin(BeetsPlugin):
             self._log.debug("{}", traceback.format_exc())
             self._log.error("uncaught exception in coalesce_tracks: {}", exc)
             clean_tracklist = tracklist
+        if not self.config["index_tracks"]:
+            return [
+                self.get_track_info(t, i, *args, **kwargs)
+                for i, t in enumerate(clean_tracklist, 1)
+            ]
+
         tracks: list[TrackInfo] = []
         index_tracks = {}
         index = 0
@@ -682,9 +689,12 @@ class DiscogsPlugin(BeetsPlugin):
                     # End of a block of index tracks: update the current
                     # divisions.
                     divisions += next_divisions
-                    del next_divisions[:]
-                track_info = self.get_track_info(raw_track, index, divisions)
-                tracks.append(track_info)
+                    next_divisions = []
+                    if self.config["index_tracks"]:
+                        kwargs["prefix"] = ", ".join(divisions)
+                tracks.append(
+                    self.get_track_info(raw_track, index, *args, **kwargs)
+                )
             else:
                 next_divisions.append(raw_track.title)
                 # We expect new levels of division at the beginning of the
@@ -785,31 +795,64 @@ class DiscogsPlugin(BeetsPlugin):
         return tracklist
 
     def get_track_info(
-        self, track: Track, index: int, divisions: list[str]
+        self,
+        track: Track,
+        index: int,
+        albumartist: str,
+        albumartist_id: str,
+        prefix: str | None = None,
     ) -> TrackInfo:
         """Returns a TrackInfo object for a discogs track."""
-        title = track.title
-        if self.config["index_tracks"]:
-            prefix = ", ".join(divisions)
-            if prefix:
-                title = f"{prefix}: {title}"
-        track_id = None
         medium, medium_index, _ = self.get_track_index(track.position)
+        credits_by_role = {
+            a: list(cs)
+            for a, cs in groupby(
+                sorted(track.credits, key=lambda a: a.role), lambda a: a.role
+            )
+        }
+        if composers := credits_by_role.get("Written-By"):
+            composer = " / ".join(
+                remove_idx(c.data["anv"] or c.name) for c in composers
+            )
+        else:
+            composer = None
+
         artist, artist_id = MetadataSourcePlugin.get_artist(
             (a.data for a in track.artists), join_key="join"
         )
-        length = self.get_track_length(track.duration)
-        track_info = TrackInfo(
-            title=title,
-            track_id=track_id,
-            artist=artist or track.data["albumartist"],
-            artist_id=(
-                str(artist_id)
-                if artist_id
-                else str(track.data["albumartist_id"])
-            ),
-            artists_ids=[str(artist_id)],
-            length=length,
+        artist = remove_idx(artist) if artist else albumartist
+        artist_id = str(artist_id) if artist_id else albumartist_id
+        artists = [artist]
+        artist_ids = [artist_id]
+        featuring = []
+        for credit in [*track.artists, *track.credits]:
+            artist_ids.append(str(credit.id))
+            name = remove_idx(credit.data["anv"] or credit.name)
+            artists.append(name)
+
+            if name.lower() not in artist.lower() and (
+                (role := credit.role.lower())
+                and (
+                    "featuring" in role
+                    or "vocals" in role
+                    or "music by" in role
+                    or "lyrics by" in role
+                )
+            ):
+                featuring.append(name)
+
+        if feat := " & ".join(featuring):
+            artist += f" feat. {feat}"
+
+        return TrackInfo(
+            title=(f"{prefix}: " if prefix else "") + remove_year(track.title),
+            track_id=None,
+            artist=artist,
+            artists=list(dict.fromkeys(artists)),
+            artist_id=artist_id,
+            artists_ids=list(dict.fromkeys(artist_ids)),
+            composer=composer,
+            length=self.get_track_length(track.duration),
             index=index,
             medium=get_medium(medium) if medium else None,
             medium_index=int(medium_index) if medium_index else None,
@@ -819,39 +862,6 @@ class DiscogsPlugin(BeetsPlugin):
                 else None
             ),
         )
-        credits_by_role = {
-            a: list(cs)
-            for a, cs in groupby(
-                sorted(track.credits, key=lambda a: a.role), lambda a: a.role
-            )
-        }
-        if composers := credits_by_role.get("Written-By"):
-            track_info.composer = "/".join(
-                c.data["anv"] or c.name for c in composers
-            )
-
-        if featuring := [
-            name
-            for c in track.credits
-            if (
-                (c.data["anv"] or c.name).lower()
-                not in track_info.artist.lower()
-                and (
-                    (role := c.role.lower())
-                    and (
-                        "featuring" in role
-                        or "vocals" in role
-                        or "music by" in role
-                        or "lyrics by" in role
-                    )
-                )
-            )
-        ]:
-            track_info.artist = (
-                f'{track_info.artist} feat. {" & ".join(featuring)}'
-            )
-        track_info.artist = remove_idx(track_info.artist)
-        return track_info
 
     def get_track_index(
         self, position: str
