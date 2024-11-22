@@ -618,7 +618,7 @@ class DiscogsPlugin(BeetsPlugin):
             data.update(
                 discogs_albumid=discogs_albumid,
                 album=album,
-                album_id=album_id,
+                album_id=str(album_id),
             )
 
         return AlbumInfo(
@@ -630,7 +630,7 @@ class DiscogsPlugin(BeetsPlugin):
             va=va,
             albumstatus=albumstatus,
             mediums=len(set(mediums)),
-            releasegroup_id=master_id,
+            releasegroup_id=str(master_id) if master_id else None,
             media=media,
             **data,
         )
