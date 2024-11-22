@@ -23,7 +23,15 @@ from .plugins import BeetsPlugin, find_plugins, notify_info_yielded, send
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
+    from typing_extensions import NotRequired
+
     from .autotag.hooks import AlbumInfo, Item, TrackInfo
+
+
+class ArtistData(TypedDict):
+    id: str
+    name: str
+    join: NotRequired[str]
 
 
 @cache
@@ -199,47 +207,32 @@ class MetadataSourcePlugin(BeetsPlugin, metaclass=abc.ABCMeta):
         return extract_release_id(self.data_source, url)
 
     @staticmethod
-    def get_artist(
-        artists: Iterable[dict[str | int, str]],
-        id_key: str | int = "id",
-        name_key: str | int = "name",
-        join_key: str | int | None = None,
-    ) -> tuple[str, str | None]:
+    def get_artist(artists: Iterable[ArtistData]) -> tuple[str, str]:
         """Returns an artist string (all artists) and an artist_id (the main
         artist) for a list of artist object dicts.
 
         For each artist, this function moves articles (such as 'a', 'an', and 'the')
         to the front. It returns a tuple containing the comma-separated string
         of all normalized artists and the ``id`` of the main/first artist.
-        Alternatively a keyword can be used to combine artists together into a
-        single string by passing the join_key argument.
 
         :param artists: Iterable of artist dicts or lists returned by API.
-        :param join_key: Key or index corresponding to a field containing a
-            keyword to use for combining artists into a single string, for
-            example "Feat.", "Vs.", "And" or similar. The default is None
-            which keeps the default behaviour (comma-separated).
         :return: Normalized artist string.
         """
-        artist_id = None
-        artist_string = ""
         artists = list(artists)  # In case a generator was passed.
+        artist_parts = []
         total = len(artists)
         for idx, artist in enumerate(artists):
-            if not artist_id:
-                artist_id = artist[id_key]
-            name = artist[name_key]
+            name = artist["name"]
             # Move articles to the front.
             name = re.sub(r"^(.*?), (a|an|the)$", r"\2 \1", name, flags=re.I)
+            artist_parts.append(name)
             # Use a join keyword if requested and available.
             if idx < (total - 1):  # Skip joining on last.
-                if join_key and artist.get(join_key, None):
-                    name += f" {artist[join_key]} "
-                else:
-                    name += ", "
-            artist_string += name
+                artist_parts.append(
+                    f" {join} " if (join := artist.get("join", ", ")) else ", "
+                )
 
-        return artist_string, artist_id
+        return "".join(artist_parts), artists[0]["id"]
 
 
 class IDResponse(TypedDict):

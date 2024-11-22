@@ -44,7 +44,7 @@ from beets import config
 from beets.autotag.distance import string_dist
 from beets.autotag.hooks import AlbumInfo, TrackInfo
 from beets.exceptions import UserError
-from beets.metadata_plugins import MetadataSourcePlugin
+from beets.metadata_plugins import ArtistData, MetadataSourcePlugin
 from beets.util import cached_classproperty, unique_list
 
 if TYPE_CHECKING:
@@ -110,7 +110,7 @@ class Artist(TypedDict):
     join: str
     role: str
     tracks: str
-    id: str
+    id: int
     resource_url: str
 
 
@@ -448,9 +448,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
 
         return country
 
-    def get_artist_with_anv(
-        self, artist: Artist, use_anv: bool
-    ) -> dict[str | int, str]:
+    def get_artist_with_anv(self, artist: Artist, use_anv: bool) -> ArtistData:
         """Iterates through a discogs result, fetching data
         if the artist anv is to be used, maps that to the name.
         Calls the parent class get_artist method."""
@@ -460,7 +458,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
                 if use_anv and (anv := artist.get("anv"))
                 else artist["name"]
             ),
-            "id": artist["id"],
+            "id": str(artist["id"]),
             "join": artist.get("join", ""),
         }
 
@@ -471,7 +469,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
         parsed_artists = [
             self.get_artist_with_anv(a, use_artist_anv) for a in artists
         ]
-        artist, artist_id = self.get_artist(parsed_artists, join_key="join")
+        artist, artist_id = self.get_artist(parsed_artists)
         return {
             "artist_id": str(artist_id),
             "artist": artist,
@@ -484,8 +482,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
                     [
                         self.get_artist_with_anv(a, use_acredit_anv)
                         for a in artists
-                    ],
-                    join_key="join",
+                    ]
                 )[0]
             ),
         }
@@ -564,7 +561,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
         label = labels[0] if (labels := result.data.get("labels")) else None
         data = dict(
             album=album,
-            album_id=album_id,
+            album_id=str(album_id),
             albumstatus=albumstatus,
             albumtype=albumtype,
             albumtypes=sorted(albumtypes),
