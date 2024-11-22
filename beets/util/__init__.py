@@ -40,6 +40,7 @@ from typing import (
     Callable,
     Iterator,
     NamedTuple,
+    NoReturn,
     Pattern,
     Sequence,
     TypeVar,
@@ -84,13 +85,15 @@ class HumanReadableError(Exception):
 
     error_kind = "Error"  # Human-readable description of error type.
 
-    def __init__(self, reason, verb, tb=None):
+    def __init__(
+        self, reason: str | Exception, verb: str, tb: str | None = None
+    ) -> None:
         self.reason = reason
         self.verb = verb
         self.tb = tb
         super().__init__(self.get_message())
 
-    def _gerund(self):
+    def _gerund(self) -> str:
         """Generate a (likely) gerund form of the English verb."""
         if " " in self.verb:
             return self.verb
@@ -98,24 +101,24 @@ class HumanReadableError(Exception):
         gerund += "ing"
         return gerund
 
-    def _reasonstr(self):
+    def _reasonstr(self) -> str:
         """Get the reason as a string."""
         if isinstance(self.reason, str):
             return self.reason
         elif isinstance(self.reason, bytes):
             return self.reason.decode("utf-8", "ignore")
-        elif hasattr(self.reason, "strerror"):  # i.e., EnvironmentError
+        elif isinstance(self.reason, OSError):  # i.e., EnvironmentError
             return self.reason.strerror
         else:
             return '"{}"'.format(str(self.reason))
 
-    def get_message(self):
+    def get_message(self) -> str:
         """Create the human-readable description of the error, sans
         introduction.
         """
         raise NotImplementedError
 
-    def log(self, logger):
+    def log(self, logger: Logger) -> None:
         """Log to the provided `logger` a human-readable message as an
         error and a verbose traceback as a debug message.
         """
@@ -130,11 +133,17 @@ class FilesystemError(HumanReadableError):
     pathnames involved in the operation.
     """
 
-    def __init__(self, reason, verb, paths, tb=None):
+    def __init__(
+        self,
+        reason: str | Exception,
+        verb: str,
+        paths: Sequence[bytes | str],
+        tb: str | None = None,
+    ) -> None:
         self.paths = paths
         super().__init__(reason, verb, tb)
 
-    def get_message(self):
+    def get_message(self) -> str:
         # Use a nicer English phrasing for some specific verbs.
         if self.verb in ("move", "copy", "rename"):
             clause = "while {} {} to {}".format(
@@ -268,7 +277,7 @@ def path_as_posix(path: bytes) -> bytes:
     return path.replace(b"\\", b"/")
 
 
-def mkdirall(path: bytes):
+def mkdirall(path: bytes) -> None:
     """Make all the enclosing directories of path (like mkdir -p on the
     parent).
     """
@@ -301,7 +310,7 @@ def prune_dirs(
     path: bytes,
     root: bytes | None = None,
     clutter: Sequence[str] = (".DS_Store", "Thumbs.db"),
-):
+) -> None:
     """If path is an empty directory, then remove it. Recursively remove
     path's ancestry up to root (which is never removed) where there are
     empty directories. If path is not contained in root, then nothing is
@@ -473,7 +482,7 @@ def samefile(p1: bytes, p2: bytes) -> bool:
     return False
 
 
-def remove(path: bytes, soft: bool = True):
+def remove(path: bytes, soft: bool = True) -> None:
     """Remove the file. If `soft`, then no error will be raised if the
     file does not exist.
     """
@@ -488,7 +497,7 @@ def remove(path: bytes, soft: bool = True):
         )
 
 
-def copy(path: bytes, dest: bytes, replace: bool = False):
+def copy(path: bytes, dest: bytes, replace: bool = False) -> None:
     """Copy a plain file. Permissions are not copied. If `dest` already
     exists, raises a FilesystemError unless `replace` is True. Has no
     effect if `path` is the same as `dest`. Paths are translated to
@@ -508,7 +517,7 @@ def copy(path: bytes, dest: bytes, replace: bool = False):
         )
 
 
-def move(path: bytes, dest: bytes, replace: bool = False):
+def move(path: bytes, dest: bytes, replace: bool = False) -> None:
     """Rename a file. `dest` may not be a directory. If `dest` already
     exists, raises an OSError unless `replace` is True. Has no effect if
     `path` is the same as `dest`. If the paths are on different
@@ -545,7 +554,7 @@ def move(path: bytes, dest: bytes, replace: bool = False):
                 # - https://github.com/python/mypy/issues/14943
                 # Fix not yet released:
                 # - https://github.com/python/mypy/pull/14975
-                shutil.copyfileobj(f, tmp)  # type: ignore[misc]
+                shutil.copyfileobj(f, tmp)
         finally:
             tmp.close()
 
@@ -564,7 +573,7 @@ def move(path: bytes, dest: bytes, replace: bool = False):
                 os.remove(tmp_filename)
 
 
-def link(path: bytes, dest: bytes, replace: bool = False):
+def link(path: bytes, dest: bytes, replace: bool = False) -> None:
     """Create a symbolic link from path to `dest`. Raises an OSError if
     `dest` already exists, unless `replace` is True. Does nothing if
     `path` == `dest`.
@@ -579,7 +588,8 @@ def link(path: bytes, dest: bytes, replace: bool = False):
     except NotImplementedError:
         # raised on python >= 3.2 and Windows versions before Vista
         raise FilesystemError(
-            "OS does not support symbolic links." "link",
+            "OS does not support symbolic links.",
+            "link",
             (path, dest),
             traceback.format_exc(),
         )
@@ -587,7 +597,7 @@ def link(path: bytes, dest: bytes, replace: bool = False):
         raise FilesystemError(exc, "link", (path, dest), traceback.format_exc())
 
 
-def hardlink(path: bytes, dest: bytes, replace: bool = False):
+def hardlink(path: bytes, dest: bytes, replace: bool = False) -> None:
     """Create a hard link from path to `dest`. Raises an OSError if
     `dest` already exists, unless `replace` is True. Does nothing if
     `path` == `dest`.
@@ -601,14 +611,16 @@ def hardlink(path: bytes, dest: bytes, replace: bool = False):
         os.link(syspath(path), syspath(dest))
     except NotImplementedError:
         raise FilesystemError(
-            "OS does not support hard links." "link",
+            "OS does not support hard links.",
+            "link",
             (path, dest),
             traceback.format_exc(),
         )
     except OSError as exc:
         if exc.errno == errno.EXDEV:
             raise FilesystemError(
-                "Cannot hard link across devices." "link",
+                "Cannot hard link across devices.",
+                "link",
                 (path, dest),
                 traceback.format_exc(),
             )
@@ -623,7 +635,7 @@ def reflink(
     dest: bytes,
     replace: bool = False,
     fallback: bool = False,
-):
+) -> None:
     """Create a reflink from `dest` to `path`.
 
     Raise an `OSError` if `dest` already exists, unless `replace` is
@@ -852,7 +864,7 @@ def convert_command_args(args: list[BytesOrStr]) -> list[str]:
     objects, to uniformly surrogate-escaped strings."""
     assert isinstance(args, list)
 
-    def convert(arg) -> str:
+    def convert(arg: BytesOrStr) -> str:
         if isinstance(arg, bytes):
             return os.fsdecode(arg)
         return arg
@@ -906,7 +918,9 @@ def command_output(cmd: list[BytesOrStr], shell: bool = False) -> CommandOutput:
     return CommandOutput(stdout, stderr)
 
 
-def max_filename_length(path: BytesOrStr, limit=MAX_FILENAME_LENGTH) -> int:
+def max_filename_length(
+    path: BytesOrStr, limit: int = MAX_FILENAME_LENGTH
+) -> int:
     """Attempt to determine the maximum filename length for the
     filesystem containing `path`. If the value is greater than `limit`,
     then `limit` is used instead (to prevent errors when a filesystem
@@ -950,7 +964,7 @@ def editor_command() -> str:
     )
 
 
-def interactive_open(targets: Sequence[str], command: str):
+def interactive_open(targets: Sequence[str], command: str) -> NoReturn:
     """Open the files in `targets` by `exec`ing a new `command`, given
     as a Unicode string. (The new program takes over, and Python
     execution ends: this does not fork a subprocess.)
@@ -969,7 +983,7 @@ def interactive_open(targets: Sequence[str], command: str):
 
     args += targets
 
-    return os.execlp(*args)
+    os.execlp(*args)
 
 
 def case_sensitive(path: bytes) -> bool:
@@ -1076,7 +1090,7 @@ class cached_classproperty:
     through *any* instance use the cached result.
     """
 
-    def __init__(self, getter):
+    def __init__(self, getter: Any) -> None:
         self.getter = getter
         self.cache = {}
 
