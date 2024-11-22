@@ -25,9 +25,9 @@ import re
 import socket
 import time
 import traceback
+from collections import Counter
 from functools import lru_cache, partial
 from itertools import groupby, islice
-from string import ascii_lowercase
 from unicodedata import normalize
 
 import confuse
@@ -84,6 +84,12 @@ TRACK_INDEX_PAT = re.compile(
     re.VERBOSE,
 )
 
+
+def get_medium(medium_str: str) -> int:
+    if medium_str.isdigit():
+        return int(medium_str)
+
+    return ((ord(medium_str[0]) - ord("A")) // 2) + 1
 
 
 class ReleaseFormat(TypedDict):
@@ -482,7 +488,6 @@ class DiscogsPlugin(BeetsPlugin):
         # Extract information for the optional AlbumInfo fields, if possible.
         va = result.data["artists"][0].get("name", "").lower() == "various"
         year = result.data.get("year")
-        mediums = [t.medium for t in tracks]
         country = result.data.get("country")
         if country and not re.match(r"[A-Z][A-Z]", country):
             try:
@@ -559,9 +564,10 @@ class DiscogsPlugin(BeetsPlugin):
         cover_art_url = self.select_cover_art(result)
         # Explicitly set the `media` for the tracks, since it is expected by
         # `autotag.apply_metadata`, and set `medium_total`.
+        medium_count = Counter(t.medium for t in tracks)
         for track in tracks:
             track.media = media
-            track.medium_total = mediums.count(track.medium)
+            track.medium_total = medium_count[track.medium]
             if not track.artist:  # get_track_info often fails to find artist
                 track.artist = artist
             if not track.artist_id:
@@ -627,7 +633,7 @@ class DiscogsPlugin(BeetsPlugin):
             tracks=tracks,
             va=va,
             albumstatus=albumstatus,
-            mediums=len(set(mediums)),
+            mediums=len(medium_count),
             releasegroup_id=str(master_id) if master_id else None,
             media=media,
             **data,
@@ -678,7 +684,6 @@ class DiscogsPlugin(BeetsPlugin):
                     divisions += next_divisions
                     del next_divisions[:]
                 track_info = self.get_track_info(raw_track, index, divisions)
-                track_info.track_alt = raw_track.position
                 tracks.append(track_info)
             else:
                 next_divisions.append(raw_track.title)
@@ -689,67 +694,6 @@ class DiscogsPlugin(BeetsPlugin):
                 except IndexError:
                     pass
                 index_tracks[index + 1] = raw_track.title
-
-        # Fix up medium and medium_index for each track. Discogs position is
-        # unreliable, but tracks are in order.
-        medium = None
-        medium_count, index_count, side_count = 0, 0, 0
-        sides_per_medium = 1
-
-        # If a medium has two sides (ie. vinyl or cassette), each pair of
-        # consecutive sides should belong to the same medium.
-        if all([track.medium is not None for track in tracks]):
-            m = sorted({str(track.medium).lower() for track in tracks})
-            # If all track.medium are single consecutive letters, assume it is
-            # a 2-sided medium.
-            if "".join(m) in ascii_lowercase:
-                sides_per_medium = 2
-
-        for track in tracks:
-            # Handle special case where a different medium does not indicate a
-            # new disc, when there is no medium_index and the ordinal of medium
-            # is not sequential. For example, I, II, III, IV, V. Assume these
-            # are the track index, not the medium.
-            # side_count is the number of mediums or medium sides (in the case
-            # of two-sided mediums) that were seen before.
-            medium_is_index = (
-                track.medium
-                and not track.medium_index
-                and (
-                    len(str(track.medium)) != 1
-                    or
-                    # Not within standard incremental medium values (A, B, C, ...).
-                    ord(str(track.medium)) - 64 != side_count + 1
-                )
-            )
-
-            if not medium_is_index and medium != track.medium:
-                side_count += 1
-                if sides_per_medium == 2:
-                    if side_count % sides_per_medium:
-                        # Two-sided medium changed. Reset index_count.
-                        index_count = 0
-                        medium_count += 1
-                else:
-                    # Medium changed. Reset index_count.
-                    medium_count += 1
-                    index_count = 0
-                medium = track.medium
-
-            index_count += 1
-            medium_count = 1 if medium_count == 0 else medium_count
-            track.medium, track.medium_index = medium_count, index_count
-
-        # Get `disctitle` from Discogs index tracks. Assume that an index track
-        # before the first track of each medium is a disc title.
-        for track in tracks:
-            if track.medium_index == 1:
-                if track.index in index_tracks:
-                    disctitle = index_tracks[track.index]
-                else:
-                    disctitle = None
-            track.disctitle = disctitle
-            track.data_source = "discogs"
 
         return tracks
 
@@ -765,18 +709,18 @@ class DiscogsPlugin(BeetsPlugin):
             """Modify `tracklist` in place, merging a list of `subtracks` into
             a single track into `tracklist`."""
             # Calculate position based on first subtrack, without subindex.
-            idx, medium_idx, sub_idx = self.get_track_index(
-                subtracks[0].position
-            )
-            position = f'{idx or ""}{medium_idx or ""}'
-
             if tracklist and not tracklist[-1].position:
                 # Assume the previous index track contains the track title.
+                idx, medium_idx, sub_idx = self.get_track_index(
+                    subtracks[0].position
+                )
                 if sub_idx:
                     # "Convert" the track title to a real track, discarding the
                     # subtracks assuming they are logical divisions of a
                     # physical track (12.2.9 Subtracks).
-                    tracklist[-1].data["position"] = position
+                    tracklist[-1].data["position"] = (
+                        f'{idx or ""}{medium_idx or ""}'
+                    )
                 else:
                     # Promote the subtracks to real tracks, discarding the
                     # index track, assuming the subtracks are physical tracks.
@@ -807,29 +751,28 @@ class DiscogsPlugin(BeetsPlugin):
         for track in raw_tracklist:
             # Regular subtrack (track with subindex).
             if track.position:
-                _, _, subindex = self.get_track_index(track.position)
-                if subindex:
-                    if subindex.rjust(len(raw_tracklist)) > prev_subindex:
-                        # Subtrack still part of the current main track.
-                        subtracks.append(track)
-                    else:
-                        # Subtrack part of a new group (..., 1.3, *2.1*, ...).
-                        add_merged_subtracks(tracklist, subtracks)
-                        subtracks = [track]
-                    prev_subindex = subindex.rjust(len(raw_tracklist))
-                    continue
+                if not track.position.isdigit():
+                    _, _, subindex = self.get_track_index(track.position)
+                    if subindex:
+                        if subindex.rjust(len(raw_tracklist)) > prev_subindex:
+                            # Subtrack still part of the current main track.
+                            subtracks.append(track)
+                        else:
+                            # Subtrack part of a new group (..., 1.3, *2.1*, ...).
+                            add_merged_subtracks(tracklist, subtracks)
+                            subtracks = [track]
+                        prev_subindex = subindex.rjust(len(raw_tracklist))
+                        continue
 
             # Index track with nested sub_tracks.
-            if not track.position and (
-                sub_tracks := getattr(track, "sub_tracks", [])
-            ):
+            elif sub_tracks := getattr(track, "sub_tracks", []):
                 # Append the index track, assuming it contains the track title.
                 tracklist.append(track)
                 add_merged_subtracks(tracklist, sub_tracks)
                 continue
 
             # Regular track or index track without nested sub_tracks.
-            if subtracks:
+            elif subtracks:
                 add_merged_subtracks(tracklist, subtracks)
                 subtracks = []
                 prev_subindex = ""
@@ -868,14 +811,11 @@ class DiscogsPlugin(BeetsPlugin):
             artists_ids=[str(artist_id)],
             length=length,
             index=index,
-            medium=(
-                (int(medium) if medium.isdigit() else medium)
-                if medium
-                else None
-            ),
-            medium_index=(
-                (int(medium_index) if medium_index.isdigit() else medium_index)
-                if medium_index
+            medium=get_medium(medium) if medium else None,
+            medium_index=int(medium_index) if medium_index else None,
+            track_alt=(
+                f"{medium}{medium_index or ''}"
+                if medium and medium.isalpha()
                 else None
             ),
         )
