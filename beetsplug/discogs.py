@@ -587,7 +587,7 @@ class DiscogsPlugin(BeetsPlugin):
 
         data = dict(
             album=album,
-            album_id=album_id,
+            album_id=str(album_id),
             albumtype=albumtype,
             year=year,
             label=label,
@@ -627,7 +627,7 @@ class DiscogsPlugin(BeetsPlugin):
             va=va,
             albumstatus=albumstatus,
             mediums=len(set(mediums)),
-            releasegroup_id=master_id,
+            releasegroup_id=str(master_id) if master_id else None,
             media=media,
             **data,
         )
