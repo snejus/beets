@@ -473,7 +473,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
         label = labels[0] if (labels := result.data.get("labels")) else None
         return AlbumInfo(
             album=album,
-            album_id=album_id,
+            album_id=str(album_id),
             **albumartist.info,  # Unpacks values to satisfy the keyword arguments
             tracks=track_infos,
             albumstatus=albumstatus,
@@ -719,7 +719,6 @@ class DiscogsPlugin(MetadataSourcePlugin):
             prefix = ", ".join(divisions)
             if prefix:
                 title = f"{prefix}: {title}"
-        track_id = None
         medium, medium_index, _ = self.get_track_index(track["position"])
 
         length = self.get_track_length(track["duration"])
@@ -735,7 +734,6 @@ class DiscogsPlugin(MetadataSourcePlugin):
         return (
             TrackInfo(
                 title=title,
-                track_id=track_id,
                 **artistinfo.info,
                 length=length,
                 index=index,
