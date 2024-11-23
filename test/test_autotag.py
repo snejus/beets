@@ -628,7 +628,7 @@ class AssignmentTest(unittest.TestCase):
         )
         assert extra_items == []
         assert extra_tracks == []
-        for item, info in mapping.items():
+        for item, info in mapping:
             assert items.index(item) == trackinfo.index(info)
 
 

@@ -136,17 +136,17 @@ class MBSyncPlugin(BeetsPlugin):
             # Construct a track mapping according to MBIDs (release track MBIDs
             # first, if available, and recording MBIDs otherwise). This should
             # work for albums that have missing or extra tracks.
-            mapping = {}
+            mapping = []
             for item in items:
                 if (
                     item.mb_releasetrackid
                     and item.mb_releasetrackid in releasetrack_index
                 ):
-                    mapping[item] = releasetrack_index[item.mb_releasetrackid]
+                    mapping.append((item, releasetrack_index[item.mb_releasetrackid]))
                 else:
                     candidates = track_index[item.mb_trackid]
                     if len(candidates) == 1:
-                        mapping[item] = candidates[0]
+                        mapping.append((item, candidates[0]))
                     else:
                         # If there are multiple copies of a recording, they are
                         # disambiguated using their disc and track number.
@@ -155,7 +155,7 @@ class MBSyncPlugin(BeetsPlugin):
                                 c.medium_index == item.track
                                 and c.medium == item.disc
                             ):
-                                mapping[item] = c
+                                mapping.append((item, c))
                                 break
 
             # Apply.

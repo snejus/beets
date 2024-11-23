@@ -257,7 +257,7 @@ def show_album_change(
     album's tags are changed according to `match`, which must be an AlbumMatch
     object.
     """
-    pairs = list(match.mapping.items())
+    pairs = list(match.mapping)
     pairs.sort(key=lambda item_and_track_info: item_and_track_info[1].index)
 
     new = match.info.copy()
@@ -456,7 +456,7 @@ def print_album_candidates(candidates: Iterable[hooks.AlbumMatch]) -> None:
     for idx, candidate in enumerate(candidates, 1):
         i = str(idx)
         candidata.append({"id": i, **candidate.disambig_data})
-        for old, new in candidate.mapping.items():
+        for old, new in candidate.mapping:
             track_diff = {"id": i, **get_track_diff(old, new, track_fields)}
             track_diffs_table.add_row(*track_diff.values())
         track_diffs_table.add_row("")

@@ -127,7 +127,7 @@ def current_metadata(
 def assign_items(
     items: Sequence[Item],
     tracks: Sequence[TrackInfo],
-) -> Tuple[Dict[Item, TrackInfo], List[Item], List[TrackInfo]]:
+) -> Tuple[List[Tuple[Item, TrackInfo]], List[Item], List[TrackInfo]]:
     """Given a list of Items and a list of TrackInfo objects, find the
     best mapping between them. Returns a mapping from Items to TrackInfo
     objects, a set of extra Items, and a set of extra TrackInfo
@@ -148,10 +148,11 @@ def assign_items(
     log.debug("...done.")
 
     # Produce the output matching.
-    mapping = {items[i]: tracks[j] for (i, j) in matching}
-    extra_items = list(set(items) - set(mapping.keys()))
+    mapping = [(items[i], tracks[j]) for (i, j) in sorted(matching)]
+    mapping.sort(key=lambda it: (it[0].disc, it[0].track, it[0].title))
+    extra_items = list(set(items) - {i for i, _ in mapping})
     extra_items.sort(key=lambda i: (i.disc, i.track, i.title))
-    extra_tracks = list(set(tracks) - set(mapping.values()))
+    extra_tracks = list(set(tracks) - {t for _, t in mapping})
     extra_tracks.sort(key=lambda t: (t.index, t.title))
     return mapping, extra_items, extra_tracks
 
@@ -221,7 +222,7 @@ def track_distance(
 def distance(
     items: Sequence[Item],
     album_info: AlbumInfo,
-    mapping: Dict[Item, TrackInfo],
+    mapping: List[Tuple[Item, TrackInfo]],
 ) -> Distance:
     """Determines how "significant" an album metadata change would be.
     Returns a Distance object. `album_info` is an AlbumInfo object
@@ -316,7 +317,7 @@ def distance(
 
     # Tracks.
     dist.tracks = {}
-    for item, track in mapping.items():
+    for item, track in mapping:
         dist.tracks[track] = track_distance(item, track, album_info.va)
         dist.add("tracks", dist.tracks[track].distance)
 

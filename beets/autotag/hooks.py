@@ -30,7 +30,6 @@ from typing import (
     Iterator,
     List,
     Optional,
-    Set,
     Tuple,
     TypeVar,
     Union,
@@ -667,9 +666,14 @@ class TrackMatch(Match):
 @dataclass
 class AlbumMatch(Match):
     disambig_fields_key = "album_disambig_fields"
-    mapping: Dict["Item", TrackInfo]
-    extra_items: Set["Item"]
-    extra_tracks: Set[TrackInfo]
+    mapping: list[tuple[Item, TrackInfo]]
+    extra_items: list[Item]
+    extra_tracks: list[TrackInfo]
+    info: AlbumInfo
+
+    @cached_property
+    def items(self) -> list[Item]:
+        return [i for i, _ in self.mapping]
 
 
 # Aggregation of sources.
