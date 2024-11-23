@@ -14,7 +14,7 @@
 
 """Facilities for automatically determining files' correct metadata."""
 
-from typing import Mapping, Sequence, Union
+from typing import Union
 
 from beets import config, logging
 from beets.library import Album, Item
@@ -98,12 +98,12 @@ SPECIAL_FIELDS = {
 def _apply_metadata(
     info: Union[AlbumInfo, TrackInfo],
     db_obj: Union[Album, Item],
-    nullable_fields: Sequence[str] = [],
+    null_fields: bool = False,
 ):
     """Set the db_obj's metadata to match the info."""
-    special_fields = SPECIAL_FIELDS[
-        "album" if isinstance(info, AlbumInfo) else "track"
-    ]
+    key = "album" if isinstance(info, AlbumInfo) else "track"
+    special_fields = set(SPECIAL_FIELDS[key])
+    nullable_fields = set(config["overwrite_null"][key].as_str_seq())
 
     for field, value in info.items():
         # We only overwrite fields that are not already hardcoded.
@@ -134,7 +134,7 @@ def apply_item_metadata(item: Item, track_info: TrackInfo):
     if track_info.artists_ids:
         item.mb_artistids = track_info.artists_ids
 
-    _apply_metadata(track_info, item)
+    _apply_metadata(track_info, item, null_fields=True)
 
     # At the moment, the other metadata is left intact (including album
     # and track number). Perhaps these should be emptied?
@@ -255,14 +255,5 @@ def apply_metadata(album_match: AlbumMatch):
         # Track alt.
         item.track_alt = track_info.track_alt
 
-        _apply_metadata(
-            album_info,
-            item,
-            nullable_fields=config["overwrite_null"]["album"].as_str_seq(),
-        )
-
-        _apply_metadata(
-            track_info,
-            item,
-            nullable_fields=config["overwrite_null"]["track"].as_str_seq(),
-        )
+        _apply_metadata(album_info, item, null_fields=True)
+        _apply_metadata(track_info, item, null_fields=True)
