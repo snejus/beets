@@ -895,32 +895,30 @@ def print_newline_layout(
 FLOAT_EPSILON = 0.01
 
 
-def _field_diff(field, old, old_fmt, new, new_fmt):
+def _field_diff(
+    oldval: Any, old_fmt: str, newval: Any, new_fmt: str
+) -> Optional[str]:
     """Given two Model objects and their formatted views, format their values
     for `field` and highlight changes among them. Return a human-readable
     string. If the value has not changed, return None instead.
     """
-    oldval = old.get(field)
-    newval = new.get(field)
-
     # If no change, abort.
-    if (
+    if oldval == newval or (
         isinstance(oldval, float)
         and isinstance(newval, float)
         and abs(oldval - newval) < FLOAT_EPSILON
     ):
         return None
-    elif oldval == newval:
-        return None
 
-    # Get formatted values for output.
-    oldval = old_fmt.get(field, "")
-    newval = new_fmt.get(field, "")
-
-    return colordiff(str(oldval), str(newval))
+    return colordiff(old_fmt, new_fmt)
 
 
-def show_model_changes(new, old=None, fields=None, always=False):
+def show_model_changes(
+    new: library.Item,
+    old: Optional[library.Item] = None,
+    fields=None,
+    always=False,
+) -> bool:
     """Given a Model object, print a list of changes from its pristine
     version stored in the database. Return a boolean indicating whether
     any changes were found.
@@ -930,39 +928,37 @@ def show_model_changes(new, old=None, fields=None, always=False):
     restrict the detection to. `always` indicates whether the object is
     always identified, regardless of whether any changes are present.
     """
-    old = old or new._db._get(type(new), new.id)
+    if not old:
+        old: library.Item = new._db._get(type(new), new.id)
 
     # Keep the formatted views around instead of re-creating them in each
     # iteration step
     old_fmt = old.formatted()
     new_fmt = new.formatted()
 
+    old_values_set = set((str(k), str(v)) for k, v in old_fmt.items())
+    new_values_set = set((str(k), str(v)) for k, v in new_fmt.items())
     # Build up lines showing changed fields.
+    changed_fields = dict(old_values_set ^ new_values_set).keys()
+    valid_fields = changed_fields - {"mtime"}
+    if fields:
+        valid_fields &= set(fields)
     changes = []
-    for field in old:
-        # Subset of the fields. Never show mtime.
-        if field == "mtime" or (fields and field not in fields):
-            continue
-
+    for field in valid_fields:
         # Detect and show difference for this field.
-        line = _field_diff(field, old, old_fmt, new, new_fmt)
-        if line:
-            changes.append(f"  {field}: {line}")
-
-    # New fields.
-    for field in set(new) - set(old):
-        if fields and field not in fields:
-            continue
-
-        changes.append(
-            "  {}: {}".format(field, colorize("text_highlight", new_fmt[field]))
-        )
+        if diff := _field_diff(
+            old.get(field),
+            old_fmt.get(field, ""),
+            new.get(field),
+            new_fmt.get(field, ""),
+        ):
+            changes.append(f"  {field}: {diff}")
 
     # Print changes.
     if changes or always:
         print_(format(old))
     if changes:
-        print_(*changes)
+        print_("\n".join(changes))
 
     return bool(changes)
 
