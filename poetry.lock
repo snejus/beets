@@ -690,6 +690,20 @@ files = [
 test = ["pytest (>=6)"]
 
 [[package]]
+name = "fake-useragent"
+version = "2.0.0"
+description = "Up-to-date simple useragent faker with real world database"
+optional = false
+python-versions = "*"
+files = [
+    {file = "fake_useragent-2.0.0-py3-none-any.whl", hash = "sha256:1f1920129bb10369a3adf271c3cb99ba676d5d2746fbbed770da6fd8feff8213"},
+    {file = "fake_useragent-2.0.0.tar.gz", hash = "sha256:8b547af788ed7ab018c5f13f67f229d9a4e034afe11fcbb3fa28a380eda68dae"},
+]
+
+[package.dependencies]
+importlib-resources = {version = ">=5.0", markers = "python_version < \"3.10\""}
+
+[[package]]
 name = "filetype"
 version = "1.2.0"
 description = "Infer file type and MIME type of any file/buffer. No external dependencies."
@@ -868,7 +882,7 @@ type = ["pytest-mypy"]
 name = "importlib-resources"
 version = "6.4.5"
 description = "Read resources from Python packages"
-optional = true
+optional = false
 python-versions = ">=3.8"
 files = [
     {file = "importlib_resources-6.4.5-py3-none-any.whl", hash = "sha256:ac29d5f956f01d5e4bb63102a5a19957f1b9175e45649977264a1416783bb717"},
@@ -3360,4 +3374,4 @@ web = ["flask", "flask-cors"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8,<4"
-content-hash = "b453f768aebd7b97cb9baac07060acd160c2bc908c2158dc6e252eb342ded328"
+content-hash = "e86cddba03127920e4c1272d3769f5691137a515a6fda8e1704540c7f2362c18"
