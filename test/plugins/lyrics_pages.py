@@ -159,6 +159,7 @@ lyrics_pages = [
         Jos nenori liūdėt
         Leisk mergaitėms mylėt
         Kaip jos moka mylėt
+
         Koks vakaras šiltas ir nieko nestinga
         Veidus apšviečia žaisminga šviesa
         Jos buvo laimingos prie jūros kur liko
@@ -513,6 +514,98 @@ lyrics_pages = [
         Wonder how you manage to make ends meet.
         """,
         url_title="Paroles Lady Madonna par The Beatles - Lyrics - Paroles.net",
+    ),
+    LyricsPage.make(
+        "https://repozodziai.wordpress.com/2018/03/08/garazhe-nerukoma-autoritetas-lyrics-on/",
+        """
+        Nebedvelkia senove,anei kvapo orumo
+        Tie kur bachūrai , nebeverti vardo bachūro
+        Ko rėki? Reketo civilizacija žuvo
+        Kai užaugsiu būsiu dideliu vyru
+        Autoritetui į šikną lendu ir taip netyčia pakylu
+        Tavo panetkės , tavo kulnas achilo
+        Prasimušiu į liaudį , prasimušiu į žmones
+        Į mersą iš audi , taip rodysiu skonį
+        Būsiu kaip didvyriai , dėdės , dideli galvariezai
+        BMW , Mersedesai, tvarko reikalus interesus
+        Bagažinėje mėsos
+        Miestas žaidimų aikštelė
+        Visi žino , bet tyli visi
+        Ant kiek čia vanelina netikra meile
+        Sako galą su galu sudursiu
+        Kitam padarydamas galą, dėl interesų , resursų
+        Turėsiu valiutą , pakeisiu valiutos kursą
+        Įvaldęs bazarą ruską; roža , matmenys , puška
+        Už ką ima nebepasako , pinigų maža ant chatos garažo
+        Zaraza pasirašo bet kokiai parašai kur tik galima nukelt grašį
+        Rašė rašė – iškeitė pinigus į mylimus
+        Minimum mimika ciniko , atsimeni jį , o jis tavęs nebeatsimena
+
+        Suka ratus , apžiūri teritoriją oriai
+        Mindo , mindo savas asfaltas kontrolėj
+        Daro įtaką kitu įtakai , masto plytą kam , bytą kaip
+        Jeigu lyderiu būti tu nori – tapti autoritetu
+        Reikėtu užsiimti reketu , plėšti pinigus ir iš benamių nagų
+        Ir tapti pačiam nagliausiam iš visų naglų padugnių
+        Suka ratus , apžiūri teritoriją oriai
+        Lindo , lindo į žmones , su meilę folijai
+        Daro įtaką kitu įtakai , masto plytą kam , bytą kaip
+        Jeigu lyderiu būti tu nori – tapti autoritetu
+        Reikėtu būti vierchu , nes vierchu bijo
+        Apie vierchus nešneka garsiai
+        Autoritetas skamba įžūliai – kad ir kaip beištarsi
+
+        Daug pinigų , mini draugų
+        Tavęs nemini nes nenori aukų
+        Tapo kuo turėjo , tapo tipo kietu
+        Tapo tokiu nes turėjo tapti kiemo autoritetu
+        Kiemai – kiemais , begti ir už kiemų
+        Žaisti šita žaidimą , vaikysis mada
+        Nes didybė ji imą
+        Didybės jausmas veikia , svarbu kapeikos suteikia
+        Daug fake draugų , reikalų ir aukų
+        Taip būna kaip augina mauglius maugliai
+        Veliau smaugė , nes xujovai auklėjai
+        Trinasi vietoj ir nedaro progreso
+        Juk vietiniai mokė – buk vietine piešką
+        Būki pažiba miesto
+        Jis , jis , jis mano esas tobuloj rolej – pavizdys
+        Bet tikrovėj – dapizdy
+        Principai įrėmina į treningą, jie myli treningą
+        Tau svarbu išlikti adidu arba nike’u
+        Išlieku snaiperiu , be taikinio – naikinu
+        Dideliu kiemu – mažus žmogeliukus
+        Respect’as kažkur čia
+        Tik išmok , išmok gatvės triukus
+        Stumdyti kaifą , boksuoti svetimas šaikas
+        Kaip rodė bajavykai , filmai , stažu stažas
+        Jei dar bariga dirbi , vapše pritampa – firmai
+
+        Suka ratus , apžiūri teritoriją oriai
+        Mindo , mindo savas asfaltas kontrolėj
+        Daro įtaką kitu įtakai , masto plytą kam , bytą kaip
+        Jeigu lyderiu būti tu nori – tapti autoritetu
+        Reikėtu užsiimti reketu , plėšti pinigus ir iš benamių nagų
+        Ir tapti pačiam nagliausiam iš visų naglų padugnių
+        Suka ratus , apžiūri teritoriją oriai
+        Lindo , lindo į žmones , su meilę folijai
+        Daro įtaką kitu įtakai , masto plytą kam , bytą kaip
+        Jeigu lyderiu būti tu nori – tapti autoritetu
+        Reikėtu būti vierchu , nes vierchu bijo
+        Apie vierchus nešneka garsiai
+        Autoritetas skamba įžūliai – kad ir kaip beištarsi
+
+        Šimtai Minedu , tukstančiai Šalčiūčiu
+        Ir tik vienetai autoritetu kurie pamąsto bent čiučiut
+        Tulikai žūliku , narkotikai , ginklai pakeluose tūliku
+        Metas adaptuotis , į šūlę ikišu liežuvį
+        Atiduodu savajį balsą kaip laša į Lietuvos lietų
+        Kad, po ledu prabiltu ir žuvis
+        Nes pasikėle ne tie , ne tie kur turėtu
+        """,
+        artist="Garazhe Nerūkoma",
+        track_title="Autoritetas",
+        url_title="Garazhe Nerūkoma – Autoritetas (lyrics on)",
     ),
     LyricsPage.make(
         "https://www.songlyrics.com/the-beatles/lady-madonna-lyrics",
