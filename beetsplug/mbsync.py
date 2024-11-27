@@ -95,7 +95,7 @@ class MBSyncPlugin(BeetsPlugin):
 
             # Apply.
             with lib.transaction():
-                autotag.apply_item_metadata(item, track_info)
+                item.update(track_info.item_data)
                 apply_item_changes(lib, item, move, pretend, write)
 
     def albums(self, lib, query, move, pretend, write):
@@ -141,7 +141,9 @@ class MBSyncPlugin(BeetsPlugin):
                     item.mb_releasetrackid
                     and item.mb_releasetrackid in releasetrack_index
                 ):
-                    mapping.append((item, releasetrack_index[item.mb_releasetrackid]))
+                    mapping.append(
+                        (item, releasetrack_index[item.mb_releasetrackid])
+                    )
                 else:
                     candidates = track_index[item.mb_trackid]
                     if len(candidates) == 1:
@@ -160,7 +162,8 @@ class MBSyncPlugin(BeetsPlugin):
             # Apply.
             self._log.debug("applying changes to {}", album_formatted)
             with lib.transaction():
-                autotag.apply_metadata(album_info, mapping)
+                album_match = autotag.hooks.AlbumMatch(0, album_info, mapping)
+                album_match.apply_metadata()
                 changed = False
                 # Find any changed item to apply MusicBrainz changes to album.
                 any_changed_item = items[0]
