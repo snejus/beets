@@ -48,6 +48,7 @@ from typing import (
 )
 
 from rich.text import Text
+from rich_tables.utils import diff, make_console
 from unidecode import unidecode
 
 from beets import config
@@ -1084,21 +1085,33 @@ def par_map(transform: Callable[[T], Any], items: Sequence[T]) -> None:
     pool.join()
 
 
-class cached_classproperty:
+class _CachedClassProperty:
     """A decorator implementing a read-only property that is *lazy* in
     the sense that the getter is only invoked once. Subsequent accesses
     through *any* instance use the cached result.
     """
 
-    def __init__(self, getter: Any) -> None:
-        self.getter = getter
-        self.cache = {}
+    def __init__(self, func):
+        self._func = func
+        self._cache = {}
 
-    def __get__(self, instance, owner):
-        if owner not in self.cache:
-            self.cache[owner] = self.getter(owner)
+    def __get__(self, obj, objtype):
+        if objtype not in self._cache:
+            self._cache[objtype] = self._func(objtype)
+        return self._cache[objtype]
 
-        return self.cache[owner]
+    def __set__(self, obj, value):
+        raise AttributeError("property %s is read-only" % self._func.__name__)
+
+    def __delete__(self, obj):
+        raise AttributeError("property %s is read-only" % self._func.__name__)
+
+
+PropReturn = TypeVar("PropReturn")
+
+
+def cached_classproperty(func: Callable[..., PropReturn]) -> PropReturn:
+    return _CachedClassProperty(func)  # type: ignore[return-value]
 
 
 def get_module_tempdir(module: str) -> Path:
@@ -1162,3 +1175,39 @@ def uncolorize(text: str) -> str:
 def color_len(colored_text: str) -> int:
     """Return the length of a string without color codes."""
     return len(uncolorize(colored_text))
+
+
+cols = os.environ.get("COLUMNS", 80)
+console = make_console(
+    highlight=False, markup=True, width=int(cols), stderr=True
+)
+
+
+def colordiff(a: str, b: str) -> str | tuple[str, str]:
+    """Colorize differences between two values if color is enabled.
+    (Like _colordiff but conditional.)
+    """
+    if config["ui"]["color"]:
+        return str(diff(a, b))
+    else:
+        return str(a), str(b)
+
+
+def show_path_change(before: bytes, after: bytes):
+    """Given a list of tuples (source, destination) that indicate the
+    path changes, log the changes as INFO-level output to the beets log.
+    The output is guaranteed to be unicode.
+
+    Every pair is shown on a single line if the terminal width permits it,
+    else it is split over two lines. E.g.,
+
+    Source -> Destination
+
+    vs.
+
+    Source ->
+    Destination
+    """
+    console.print(
+        colordiff(*map(displayable_path, (before, after))), highlight=False
+    )
