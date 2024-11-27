@@ -270,7 +270,8 @@ SD_PATTERNS = [
 ]
 # Replacements to use before testing distance.
 SD_REPLACE = [
-    (r"&", "and"),
+    (r" & ", ", "),
+    (r" and ", ", "),
 ]
 
 
