@@ -33,7 +33,7 @@ from beets.util import as_string, cached_classproperty, colorize
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
 
-    from beets.library import Item
+    from beets.library import Album, Item
 
     JSONDict = dict[str, Any]
 
@@ -65,9 +65,55 @@ class AttrDict(dict[str, V]):
 
 
 class Info(AttrDict[Any]):
+    IGNORED_ITEM_FIELDS: ClassVar[set[str]] = {"data_url"}
+    ITEM_FIELD_MAP: ClassVar[dict[str, str]] = {}
+
+    @cached_classproperty
+    def nullable_fields(cls) -> set[str]:
+        name = cls.__name__.lower().removesuffix("info")
+        return set(config["overwrite_null"][name].as_str_seq())
+
     @property
     def name(self) -> str | None:
         raise NotImplementedError
+
+    @property
+    def data(self) -> JSONDict:
+        data = {
+            k: v
+            for k, v in self.items()
+            if (v is not None or k in self.nullable_fields)
+        }
+        if config["artist_credit"]:
+            data.update(
+                artist=self.artist_credit or self.artist,
+                artists=self.artists_credit or self.artists,
+            )
+
+        if aid := data.get("artist_id"):
+            data["artists_ids"] = list(
+                dict.fromkeys([aid, *data["artists_ids"]])
+            )
+        elif aids := data.get("artists_ids"):
+            data["artists_ids"] = aids[0]
+
+        if atype := data.get("albumtype"):
+            data["albumtypes"] = list(
+                dict.fromkeys([atype, *data["albumtypes"]])
+            )
+        elif atypes := data.get("albumtypes"):
+            data["albumtype"] = atypes[0]
+
+        return data
+
+    @property
+    def item_data(self) -> JSONDict:
+        """Return data where fields are mapped for the item."""
+        return {
+            self.ITEM_FIELD_MAP.get(k, k): v
+            for k, v in self.data.items()
+            if k not in self.IGNORED_ITEM_FIELDS
+        }
 
     def __init__(
         self,
@@ -115,6 +161,24 @@ class AlbumInfo(Info):
     ``mediums`` along with the fields up through ``tracks`` are required.
     The others are optional and may be None.
     """
+
+    IGNORED_ITEM_FIELDS = {*Info.IGNORED_ITEM_FIELDS, "tracks"}
+
+    ITEM_FIELD_MAP = {
+        **Info.ITEM_FIELD_MAP,
+        "album_id": "mb_albumid",
+        "artist": "albumartist",
+        "artists": "albumartists",
+        "artist_id": "mb_albumartistid",
+        "artists_ids": "mb_albumartistids",
+        "artist_credit": "albumartist_credit",
+        "artists_credit": "albumartists_credit",
+        "artist_sort": "albumartist_sort",
+        "artists_sort": "albumartists_sort",
+        "mediums": "disctotal",
+        "releasegroup_id": "mb_releasegroupid",
+        "va": "comp",
+    }
 
     # TYPING: are all of these correct? I've assumed optional strings
     def __init__(
@@ -195,6 +259,29 @@ class TrackInfo(Info):
     may be None. The indices ``index``, ``medium``, and ``medium_index``
     are all 1-based.
     """
+
+    IGNORED_ITEM_FIELDS = {*Info.IGNORED_ITEM_FIELDS, "length"}
+    ITEM_FIELD_MAP = {
+        **Info.ITEM_FIELD_MAP,
+        "artist_id": "mb_artistid",
+        "artists_ids": "mb_artistids",
+        "index": "track",
+        "medium_index": "track",
+        "medium": "disc",
+        "medium_total": "tracktotal",
+        "release_track_id": "mb_releasetrackid",
+        "track_id": "mb_trackid",
+    }
+
+    @property
+    def data(self) -> JSONDict:
+        data = super().data | {
+            "mb_releasetrackid": self.release_track_id or self.track_id,
+        }
+        if not config["per_disc_numbering"]:
+            data.update(track=self.index, tracktotal=None)
+
+        return data
 
     # TYPING: are all of these correct? I've assumed optional strings
     def __init__(
@@ -642,6 +729,10 @@ class TrackMatch(Match):
     info: TrackInfo
     item: Item
 
+    def apply_metadata(self) -> None:
+        """Apply metadata to the item."""
+        self.item.update(self.info.item_data)
+
 
 @dataclass
 class AlbumMatch(Match):
@@ -654,6 +745,23 @@ class AlbumMatch(Match):
     @cached_property
     def items(self) -> list[Item]:
         return [i for i, _ in self.mapping]
+
+    @property
+    def data_pairs(self) -> list[tuple[Item, JSONDict]]:
+        album_data = self.info.item_data | {"tracktotal": len(self.info.tracks)}
+        return [
+            (i, album_data | {k: v for k, v in ti.item_data.items() if v})
+            for i, ti in self.mapping
+        ]
+
+    def apply_metadata(self) -> None:
+        """Apply metadata to each of the items."""
+        for item, data in self.data_pairs:
+            item.update(data)
+
+    def apply_album_metadata(self, album: Album) -> None:
+        """Apply metadata to each of the items."""
+        album.update(self.info.item_data)
 
 
 # Aggregation of sources.

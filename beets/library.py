@@ -973,6 +973,7 @@ class Album(LibModel):
             "comp",
             "mb_albumid",
             "mb_albumartistid",
+            "mb_albumartistids",
             "albumtype",
             "albumtypes",
             "label",

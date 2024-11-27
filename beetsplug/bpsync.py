@@ -92,7 +92,8 @@ class BPSyncPlugin(BeetsPlugin):
             # Apply.
             trackinfo = self.beatport_plugin.track_for_id(item.mb_trackid)
             with lib.transaction():
-                autotag.apply_item_metadata(item, trackinfo)
+                track_match = autotag.hooks.TrackMatch(0, trackinfo, item)
+                track_match.apply_metadata()
                 apply_item_changes(lib, item, move, pretend, write)
 
     @staticmethod
@@ -152,14 +153,15 @@ class BPSyncPlugin(BeetsPlugin):
             library_trackid_to_item = {
                 int(item.mb_trackid): item for item in items
             }
-            item_to_trackinfo = {
-                item: beatport_trackid_to_trackinfo[track_id]
+            mapping = [
+                (item, beatport_trackid_to_trackinfo[track_id])
                 for track_id, item in library_trackid_to_item.items()
-            }
+            ]
 
             self._log.info("applying changes to {}", album)
             with lib.transaction():
-                autotag.apply_metadata(albuminfo, item_to_trackinfo)
+                album_match = autotag.hooks.AlbumMatch(0, albuminfo, mapping)
+                album_match.apply_metadata()
                 changed = False
                 # Find any changed item to apply Beatport changes to album.
                 any_changed_item = items[0]
