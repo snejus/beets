@@ -529,6 +529,15 @@ class ImportTask(BaseImportTask):
             self.choice_flag = action.APPLY  # Implicit choice.
             self.match = choice
 
+    def apply_metadata(self) -> None:
+        """Copy metadata from match info to the items."""
+        if config["import"]["from_scratch"]:
+            for item in self.items:
+                item.clear()
+
+        if self.match:
+            self.match.apply_metadata()
+
     def save_progress(self):
         """Updates the progress state to indicate that this album has
         finished.
@@ -578,14 +587,6 @@ class ImportTask(BaseImportTask):
             return list(self.match.items)
         else:
             assert False
-
-    def apply_metadata(self):
-        """Copy metadata from match info to the items."""
-        if config["import"]["from_scratch"]:
-            for item in self.match.items:
-                item.clear()
-
-        autotag.apply_metadata(self.match)
 
     def duplicate_items(self, lib):
         duplicate_items = []
@@ -830,7 +831,7 @@ class ImportTask(BaseImportTask):
                 # TODO: change the flow so we create the `Album` object earlier,
                 #   and we can move this into `self.apply_metadata`, just like
                 #   is done for tracks.
-                autotag.apply_album_metadata(self.match.info, self.album)
+                self.match.apply_album_metadata(self.album)
                 self.album.store()
 
             self.reimport_metadata(lib)
@@ -1012,9 +1013,6 @@ class SingletonImportTask(ImportTask):
 
     def imported_items(self):
         return [self.item]
-
-    def apply_metadata(self):
-        autotag.apply_item_metadata(self.item, self.match.info)
 
     def _emit_imported(self, lib):
         for item in self.imported_items():
