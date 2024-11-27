@@ -239,6 +239,11 @@ class AlbumInfo(Info):
         self.discogs_albumid = discogs_albumid
         self.discogs_labelid = discogs_labelid
         self.discogs_artistid = discogs_artistid
+        if self.albumtypes and self.albumtype:
+            self.albumtypes = [
+                self.albumtype,
+                *sorted(set(self.albumtypes) - {self.albumtype}),
+            ]
         super().__init__(**kwargs)
 
     @property
