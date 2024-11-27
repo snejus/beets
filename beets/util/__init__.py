@@ -1090,21 +1090,33 @@ def par_map(transform: Callable[[T], Any], items: Sequence[T]) -> None:
     pool.join()
 
 
-class cached_classproperty:
+class _CachedClassProperty:
     """A decorator implementing a read-only property that is *lazy* in
     the sense that the getter is only invoked once. Subsequent accesses
     through *any* instance use the cached result.
     """
 
-    def __init__(self, getter: Any) -> None:
-        self.getter = getter
-        self.cache = {}
+    def __init__(self, func):
+        self._func = func
+        self._cache = {}
 
-    def __get__(self, instance, owner):
-        if owner not in self.cache:
-            self.cache[owner] = self.getter(owner)
+    def __get__(self, obj, objtype):
+        if objtype not in self._cache:
+            self._cache[objtype] = self._func(objtype)
+        return self._cache[objtype]
 
-        return self.cache[owner]
+    def __set__(self, obj, value):
+        raise AttributeError("property %s is read-only" % self._func.__name__)
+
+    def __delete__(self, obj):
+        raise AttributeError("property %s is read-only" % self._func.__name__)
+
+
+PropReturn = TypeVar("PropReturn")
+
+
+def cached_classproperty(func: Callable[..., PropReturn]) -> PropReturn:
+    return _CachedClassProperty(func)  # type: ignore[return-value]
 
 
 def get_module_tempdir(module: str) -> Path:
