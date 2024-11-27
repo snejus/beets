@@ -387,6 +387,9 @@ class LRCLib(Backend):
 class Html:
     collapse_space = partial(re.compile(r"(^| ) +", re.M).sub, r"\1")
     expand_br = partial(re.compile(r"\s*<br[^>]*>\s*", re.I).sub, "\n")
+    split_paragraphs = partial(
+        re.compile(r"(?<=\w)</p>\n<p>(?=\w)").sub, "\n\n"
+    )
     #: two newlines between paragraphs on the same line (musica, letras.mus.br)
     merge_blocks = partial(re.compile(r"(?<!>)</p><p[^>]*>").sub, "\n\n")
     #: a single new line between paragraphs on separate lines
@@ -419,7 +422,9 @@ class Html:
 
     @classmethod
     def merge_paragraphs(cls, text: str) -> str:
-        return cls.merge_blocks(cls.merge_lines(cls.remove_empty_tags(text)))
+        return cls.merge_blocks(
+            cls.merge_lines(cls.split_paragraphs(cls.remove_empty_tags(text)))
+        )
 
 
 class SoupMixin:
