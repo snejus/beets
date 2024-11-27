@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import atexit
 import itertools
+import json
 import math
 import re
 import textwrap
@@ -29,11 +30,12 @@ from http import HTTPStatus
 from itertools import filterfalse, groupby
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable, Iterator, NamedTuple
-from urllib.parse import quote, quote_plus, urlencode, urlparse
+from urllib.parse import quote_plus, urlencode, urlparse
 
 import langdetect
 import requests
 from bs4 import BeautifulSoup
+from fake_useragent import FakeUserAgent
 from unidecode import unidecode
 
 import beets
@@ -56,7 +58,8 @@ if TYPE_CHECKING:
         TranslatorAPI,
     )
 
-USER_AGENT = f"beets/{beets.__version__}"
+BEETS_USER_AGENT = f"beets/{beets.__version__}"
+RANDOM_USER_AGENT = FakeUserAgent().random
 INSTRUMENTAL_LYRICS = "[Instrumental]"
 
 
@@ -84,7 +87,7 @@ class TimeoutSession(requests.Session):
 
 
 r_session = TimeoutSession()
-r_session.headers.update({"User-Agent": USER_AGENT})
+r_session.headers.update({"User-Agent": BEETS_USER_AGENT})
 
 
 @atexit.register
@@ -381,54 +384,6 @@ class LRCLib(Backend):
         return None
 
 
-class MusiXmatch(Backend):
-    URL_TEMPLATE = "https://www.musixmatch.com/lyrics/{}/{}"
-
-    REPLACEMENTS = {
-        r"\s+": "-",
-        "<": "Less_Than",
-        ">": "Greater_Than",
-        "#": "Number_",
-        r"[\[\{]": "(",
-        r"[\]\}]": ")",
-    }
-
-    @classmethod
-    def encode(cls, text: str) -> str:
-        for old, new in cls.REPLACEMENTS.items():
-            text = re.sub(old, new, text)
-
-        return quote(unidecode(text))
-
-    @classmethod
-    def build_url(cls, *args: str) -> str:
-        return cls.URL_TEMPLATE.format(*map(cls.encode, args))
-
-    def fetch(self, artist: str, title: str, *_) -> tuple[str, str] | None:
-        url = self.build_url(artist, title)
-
-        html = self.fetch_text(url)
-        if "We detected that your IP is blocked" in html:
-            self.warn("Failed: Blocked IP address")
-            return None
-        html_parts = html.split('<p class="mxm-lyrics__content')
-        # Sometimes lyrics come in 2 or more parts
-        lyrics_parts = []
-        for html_part in html_parts:
-            lyrics_parts.append(re.sub(r"^[^>]+>|</p>.*", "", html_part))
-        lyrics = "\n".join(lyrics_parts)
-        lyrics = lyrics.strip(',"').replace("\\n", "\n")
-        # another odd case: sometimes only that string remains, for
-        # missing songs. this seems to happen after being blocked
-        # above, when filling in the CAPTCHA.
-        if "Instant lyrics for all your music." in lyrics:
-            return None
-        # sometimes there are non-existent lyrics with some content
-        if "Lyrics | Musixmatch" in lyrics:
-            return None
-        return lyrics, url
-
-
 class Html:
     collapse_space = partial(re.compile(r"(^| ) +", re.M).sub, r"\1")
     expand_br = partial(re.compile(r"\s*<br[^>]*>\s*", re.I).sub, "\n")
@@ -509,12 +464,13 @@ class SearchBackend(SoupMixin, Backend):
             # log out the candidate that did not make it but was close.
             # This may show a matching candidate with some noise in the name
             self.debug(
-                "({}, {}) does not match ({}, {}) but dist was close: {:.2f}",
+                "({}, {}) does not match ({}, {}) but dist was close: {:.2f}, {}",
                 result.artist,
                 result.title,
                 target_artist,
                 target_title,
                 max_dist,
+                result.url,
             )
 
         return False
@@ -532,17 +488,86 @@ class SearchBackend(SoupMixin, Backend):
     def fetch(self, artist: str, title: str, *_) -> tuple[str, str] | None:
         """Fetch lyrics for the given artist and title."""
         for result in self.get_results(artist, title):
-            if (html := self.fetch_text(result.url)) and (
-                lyrics := self.scrape(html)
-            ):
+            if lyrics := self.scrape_result(result):
                 return lyrics, result.url
 
         return None
 
     @classmethod
-    def scrape(cls, html: str) -> str | None:
+    def scrape_html(cls, html: str) -> str | None:
         """Scrape the lyrics from the given HTML."""
         raise NotImplementedError
+
+    def scrape_result(self, result: SearchResult) -> str | None:
+        return self.scrape_html(self.fetch_text(result.url))
+
+
+class MusiXmatchLyrics(NamedTuple):
+    artist: str
+    title: str
+    lyrics: str
+
+
+class MusiXmatch(SearchBackend):
+    URL_TEMPLATE = "https://www.musixmatch.com/lyrics/{}/{}"
+    JSON_DATA_RE = re.compile(r'(?<=>)\{"props".*?\}(?=<)')
+
+    non_ascii_to_dash = partial(re.compile(r"[^A-z0-9]").sub, "-")
+
+    @classmethod
+    def encode(cls, text: str) -> str:
+        return cls.non_ascii_to_dash(text)
+
+    @classmethod
+    def build_url(cls, *args: str) -> str:
+        return cls.URL_TEMPLATE.format(*map(cls.encode, args))
+
+    def search(self, artist: str, title: str) -> Iterable[SearchResult]:
+        """Return lyrics for the given artist and title.
+
+        If URL '/lyrics/artist-title' fails with InvalidLyricsTitleError,
+        attempt to get lyrics from '/lyrics/artist-title-1'.
+
+        Some lyrics have a URL that ends with suffix '-1' while the original
+        URL may return lyrics for a different song.
+
+        For example, lyrics for 'Pink Floyd - Pigs (Three Different Ones)' are
+        found under
+            https://www.musixmatch.com/lyrics/Pink-Floyd/pigs-three-different-ones-1
+        while
+            https://www.musixmatch.com/lyrics/Pink-Floyd/pigs-three-different-ones
+        returns lyrics for a related title 'Sheep' which is found in the same album.
+            https://www.musixmatch.com/lyrics/Pink-Floyd/sheep
+        """
+        for url_title in [title, f"{title}-1"]:
+            yield SearchResult(artist, title, self.build_url(artist, url_title))
+
+    def fetch_text(self, *args, **kwargs) -> str:
+        kwargs["headers"] = {"User-Agent": RANDOM_USER_AGENT}
+        return super().fetch_text(*args, **kwargs)
+
+    @classmethod
+    def get_lyrics_metadata(cls, html: str) -> MusiXmatchLyrics | None:
+        if lyrics_match := cls.JSON_DATA_RE.search(html):
+            data = json.loads(lyrics_match.group())
+            song_data = data["props"]["pageProps"]["data"]["trackInfo"]["data"]
+            track_data = song_data["track"]
+            if track_data["hasLyrics"] and (lyrics := song_data.get("lyrics")):
+                return MusiXmatchLyrics(
+                    track_data["artistName"], track_data["name"], lyrics["body"]
+                )
+
+        return None
+
+    def scrape_result(self, result: SearchResult) -> str | None:
+        if (
+            (html := self.fetch_text(result.url))
+            and (metadata := self.get_lyrics_metadata(html))
+            and self.check_match(metadata.artist, metadata.title, result)
+        ):
+            return metadata.lyrics
+
+        return None
 
 
 class Genius(SearchBackend):
@@ -571,7 +596,7 @@ class Genius(SearchBackend):
             yield SearchResult(r["artist_names"], r["title"], r["url"])
 
     @classmethod
-    def scrape(cls, html: str) -> str | None:
+    def scrape_html(cls, html: str) -> str | None:
         if m := cls.LYRICS_IN_JSON_RE.search(html):
             html_text = cls.remove_backslash(m[0]).replace(r"\n", "\n")
             return cls.get_soup(html_text).get_text().strip()
@@ -599,10 +624,8 @@ class Tekstowo(SearchBackend):
                     artist, title, f"{self.BASE_URL}{tag['href']}"
                 )
 
-        return None
-
     @classmethod
-    def scrape(cls, html: str) -> str | None:
+    def scrape_html(cls, html: str) -> str | None:
         soup = cls.get_soup(html)
 
         if lyrics_div := soup.select_one("div.song-text > div.inner-text"):
@@ -624,30 +647,14 @@ class Google(SearchBackend):
         "significados.html",
     ]
 
-    #: Regular expression to match noise in the URL title.
-    URL_TITLE_NOISE_RE = re.compile(
-        r"""
-\b
-(
-      paroles(\ et\ traduction|\ de\ chanson)?
-    | letras?(\ de)?
-    | liedtexte
-    | dainų\ žodžiai
-    | original\ song\ full\ text\.
-    | official
-    | 20[12]\d\ version
-    | (absolute\ |az)?lyrics(\ complete)?
-    | www\S+
-    | \S+\.(com|net|mus\.br)
-)
-([^\w.]|$)
-""",
-        re.IGNORECASE | re.VERBOSE,
-    )
     #: Split cleaned up URL title into artist and title parts.
     URL_TITLE_PARTS_RE = re.compile(r" +(?:[ :|-]+|par|by) +")
 
-    SOURCE_DIST_FACTOR = {"www.azlyrics.com": 0.5, "www.songlyrics.com": 0.6}
+    SOURCE_DIST_FACTOR = {
+        "www.musixmatch.com": 0.4,
+        "www.azlyrics.com": 0.5,
+        "www.songlyrics.com": 0.6,
+    }
 
     ignored_domains: set[str] = set()
 
@@ -660,6 +667,7 @@ class Google(SearchBackend):
     def fetch_text(self, *args, **kwargs) -> str:
         """Handle an error so that we can continue with the next URL."""
         kwargs.setdefault("allow_redirects", False)
+        kwargs.setdefault("headers", {"User-Agent": RANDOM_USER_AGENT})
         with self.handle_request():
             try:
                 return super().fetch_text(*args, **kwargs)
@@ -676,6 +684,33 @@ class Google(SearchBackend):
         """
         return string_dist(artist, part) - string_dist(title, part)
 
+    @staticmethod
+    def remove_title_noise(url_title: str, url: str) -> str:
+        #: Regular expression to match noise in the URL title.
+        website = urlparse(url).netloc.replace("www.", "").split(".")[0]
+        return re.sub(
+            rf"""
+    \b
+    (
+          paroles(\ et\ traduction|\ de\ chanson)?
+        | letras?(\ de)?
+        | {website}
+        | liedtexte
+        | dainų\ žodžiai
+        | original\ song\ full\ text\.
+        | official
+        | 20[12]\d\ version
+        | (absolute\ |az)?lyrics(\ (complete|on))?
+        | www\S+
+        | \S+\.(com|net|mus\.br)
+    )
+    ([^\w.]|$)
+    """,
+            "",
+            url_title,
+            flags=re.IGNORECASE | re.VERBOSE,
+        ).strip(" .-|")
+
     @classmethod
     def make_search_result(
         cls, artist: str, title: str, item: GoogleCustomSearchAPI.Item
@@ -687,7 +722,7 @@ class Google(SearchBackend):
             # default to the dispolay title
             or item["title"]
         )
-        clean_title = cls.URL_TITLE_NOISE_RE.sub("", url_title).strip(" .-|")
+        clean_title = cls.remove_title_noise(url_title, item["link"])
         # split it into parts which may be part of the artist or the title
         # `dict.fromkeys` removes duplicates keeping the order
         parts = list(dict.fromkeys(cls.URL_TITLE_PARTS_RE.split(clean_title)))
@@ -713,8 +748,6 @@ class Google(SearchBackend):
             "key": self.config["google_API_key"].as_str(),
             "cx": self.config["google_engine_ID"].as_str(),
             "q": f"{artist} {title}",
-            "siteSearch": "www.musixmatch.com",
-            "siteSearchFilter": "e",
             "excludeTerms": ", ".join(self.EXCLUDE_PAGES),
         }
 
@@ -722,6 +755,7 @@ class Google(SearchBackend):
             self.SEARCH_URL, params=params
         )
         for item in data.get("items", []):
+            self.warn("Received {}: {}", item["title"], item["link"])
             yield self.make_search_result(artist, title, item)
 
     def get_results(self, *args) -> Iterable[SearchResult]:
@@ -734,10 +768,22 @@ class Google(SearchBackend):
                 yield result
 
     @classmethod
-    def scrape(cls, html: str) -> str | None:
+    def scrape_html(cls, html: str) -> str | None:
         # Get the longest text element (if any).
         if strings := sorted(cls.get_soup(html).stripped_strings, key=len):
             return strings[-1]
+
+        return None
+
+    def scrape_result(self, result: SearchResult) -> str | None:
+        if not (html := self.fetch_text(result.url)):
+            return None
+
+        if "musixmatch" not in result.url:
+            return self.scrape_html(html)
+
+        if lyrics := MusiXmatch.get_lyrics_metadata(html):
+            return lyrics.lyrics
 
         return None
 
