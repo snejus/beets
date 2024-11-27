@@ -17,19 +17,19 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 
 from typing_extensions import Self
 
 from beets import config
-from beets.util import cached_classproperty, colorize
+from beets.util import cached_classproperty, colorize, unique_list
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from beets.library import Item
+    from beets.library import Album, Item
 
     from .distance import Distance
 
@@ -37,6 +37,42 @@ if TYPE_CHECKING:
 
 
 V = TypeVar("V")
+
+
+def correct_list_fields(data: JSONDict) -> JSONDict:
+    """Synchronise single and list values for the list fields that we use.
+
+    That is, ensure the same value in the single field and the first element
+    in the list.
+
+    For context, the value we set as, say, ``mb_artistid`` is simply ignored:
+    Under the current :class:`MediaFile` implementation, fields ``albumtype``,
+    ``mb_artistid`` and ``mb_albumartistid`` are mapped to the first element of
+    ``albumtypes``, ``mb_artistids`` and ``mb_albumartistids`` respectively.
+
+    This means setting ``mb_artistid`` has no effect. However, beets
+    functionality still assumes that ``mb_artistid`` is independent and stores
+    its value in the database. If ``mb_artistid`` != ``mb_artistids[0]``,
+    ``beet write`` command thinks that ``mb_artistid`` is modified and tries to
+    update the field in the file. Of course nothing happens, so the same diff
+    is shown every time the command is run.
+
+    We can avoid this issue by ensuring that ``artist_id`` has the same value
+    as ``artists_ids[0]``, and that's what this function does.
+    """
+
+    def ensure_first_value(single_field: str, list_field: str) -> None:
+        """Ensure the first ``list_field`` item is equal to ``single_field``."""
+        single_val, list_val = data.get(single_field), data.get(list_field, [])
+        if single_val:
+            data[list_field] = unique_list([single_val, *list_val])
+        elif list_val:
+            data[single_field] = list_val[0]
+
+    ensure_first_value("albumtype", "albumtypes")
+    ensure_first_value("artist_id", "artists_ids")
+
+    return data
 
 
 # Classes used to represent candidate options.
@@ -63,6 +99,42 @@ class AttrDict(dict[str, V]):
 
 class Info(AttrDict[Any]):
     """Container for metadata about a musical entity."""
+
+    IGNORED_ITEM_FIELDS: ClassVar[set[str]] = {"data_url"}
+    ITEM_FIELD_MAP: ClassVar[dict[str, str]] = {}
+
+    @cached_classproperty
+    def nullable_fields(cls) -> set[str]:
+        name = cls.__name__.lower().removesuffix("info")
+        return set(config["overwrite_null"][name].as_str_seq())
+
+    @property
+    def name(self) -> str | None:
+        raise NotImplementedError
+
+    @property
+    def data(self) -> JSONDict:
+        data = {
+            k: v
+            for k, v in self.items()
+            if (v is not None or k in self.nullable_fields)
+        }
+        if config["artist_credit"]:
+            data.update(
+                artist=self.artist_credit or self.artist,
+                artists=self.artists_credit or self.artists,
+            )
+
+        return correct_list_fields(data)
+
+    @property
+    def item_data(self) -> JSONDict:
+        """Return data where fields are mapped for the item."""
+        return {
+            self.ITEM_FIELD_MAP.get(k, k): v
+            for k, v in self.data.items()
+            if k not in self.IGNORED_ITEM_FIELDS
+        }
 
     def __init__(
         self,
@@ -105,6 +177,24 @@ class AlbumInfo(Info):
     user items, and later to drive tagging decisions once selected.
     """
 
+    IGNORED_ITEM_FIELDS = {*Info.IGNORED_ITEM_FIELDS, "tracks"}
+    ITEM_FIELD_MAP = {
+        **Info.ITEM_FIELD_MAP,
+        "album_id": "mb_albumid",
+        "artist": "albumartist",
+        "artists": "albumartists",
+        "artist_id": "mb_albumartistid",
+        "artists_ids": "mb_albumartistids",
+        "artist_credit": "albumartist_credit",
+        "artists_credit": "albumartists_credit",
+        "artist_sort": "albumartist_sort",
+        "artists_sort": "albumartists_sort",
+        "mediums": "disctotal",
+        "releasegroup_id": "mb_releasegroupid",
+        "va": "comp",
+    }
+
+    # TYPING: are all of these correct? I've assumed optional strings
     def __init__(
         self,
         tracks: list[TrackInfo],
@@ -177,6 +267,34 @@ class TrackInfo(Info):
     stand alone for singleton matching.
     """
 
+    IGNORED_ITEM_FIELDS = {*Info.IGNORED_ITEM_FIELDS, "length"}
+    ITEM_FIELD_MAP = {
+        **Info.ITEM_FIELD_MAP,
+        "artist_id": "mb_artistid",
+        "artists_ids": "mb_artistids",
+        "index": "track",
+        "medium_index": "track",
+        "medium": "disc",
+        "medium_total": "tracktotal",
+        "release_track_id": "mb_releasetrackid",
+        "track_id": "mb_trackid",
+    }
+
+    @property
+    def data(self) -> JSONDict:
+        data = super().data
+        if not config["per_disc_numbering"]:
+            data.update(track=self.index, tracktotal=None)
+
+        return data
+
+    @property
+    def item_data(self) -> JSONDict:
+        return super().item_data | {
+            "mb_releasetrackid": self.release_track_id or self.track_id,
+        }
+
+    # TYPING: are all of these correct? I've assumed optional strings
     def __init__(
         self,
         *,
@@ -229,6 +347,9 @@ class Match:
     disambig_fields_key: ClassVar[str]
     distance: Distance
     info: Info
+
+    def apply_metadata(self) -> None:
+        raise NotImplementedError
 
     @cached_classproperty
     def disambig_fields(cls) -> Sequence[str]:
@@ -288,8 +409,8 @@ class AlbumMatch(Match):
     disambig_fields_key = "album_disambig_fields"
     info: AlbumInfo
     mapping: list[tuple[Item, TrackInfo]]
-    extra_items: list[Item]
-    extra_tracks: list[TrackInfo]
+    extra_items: list[Item] = field(default_factory=list)
+    extra_tracks: list[TrackInfo] = field(default_factory=list)
 
     @property
     def name(self) -> str:
@@ -298,6 +419,23 @@ class AlbumMatch(Match):
     @cached_property
     def items(self) -> list[Item]:
         return [i for i, _ in self.mapping]
+
+    @property
+    def data_pairs(self) -> list[tuple[Item, JSONDict]]:
+        album_data = self.info.item_data | {"tracktotal": len(self.info.tracks)}
+        return [
+            (i, album_data | {k: v for k, v in ti.item_data.items() if v})
+            for i, ti in self.mapping
+        ]
+
+    def apply_metadata(self) -> None:
+        """Apply metadata to each of the items."""
+        for item, data in self.data_pairs:
+            item.update(data)
+
+    def apply_album_metadata(self, album: Album) -> None:
+        """Apply metadata to each of the items."""
+        album.update(self.info.item_data)
 
 
 @dataclass
@@ -309,3 +447,7 @@ class TrackMatch(Match):
     @property
     def name(self) -> str:
         return self.info.title or ""
+
+    def apply_metadata(self) -> None:
+        """Apply metadata to the item."""
+        self.item.update(self.info.item_data)

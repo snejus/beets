@@ -113,10 +113,11 @@ class TestAssignment(ConfigMixin):
 class ApplyTestUtil:
     def _apply(self, info=None, per_disc_numbering=False, artist_credit=False):
         info = info or self.info
-        mapping = list(zip(self.items, info.tracks))
         config["per_disc_numbering"] = per_disc_numbering
         config["artist_credit"] = artist_credit
-        autotag.apply_metadata(info, mapping)
+        autotag.hooks.AlbumMatch(
+            0, info, list(zip(self.items, info.tracks))
+        ).apply_metadata()
 
 
 class ApplyTest(BeetsTestCase, ApplyTestUtil):
