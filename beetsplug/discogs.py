@@ -585,8 +585,6 @@ class DiscogsPlugin(BeetsPlugin):
         year = int(released[0]) if len(released[0]) else None
         month = int(released[1]) if len(released) > 1 else None
         day = int(released[2]) if len(released) > 2 else None
-        if label:
-            label = re.sub(r" \([0-9]+\)", "", label)
         comments = result.data.get("notes") or None
 
         if artist_sort := result.data.get("artists_sort"):
@@ -596,7 +594,7 @@ class DiscogsPlugin(BeetsPlugin):
             album_id=album_id,
             albumtype=albumtype,
             year=year,
-            label=label,
+            label=remove_idx(label) if label else label,
             artist_sort=artist_sort,
             comments=comments,
             albumtypes=sorted(albumtypes),
