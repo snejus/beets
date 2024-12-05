@@ -621,11 +621,11 @@ class Tekstowo(SoupMixin, DirectBackendMixin, Backend):
 
     URL_TEMPLATE = "https://www.tekstowo.pl/piosenka,{},{}.html"
 
-    non_alpha_to_underscore = partial(re.compile(r"\W").sub, "_")
+    non_ascii_to_underscore = partial(re.compile(r"[^A-z0-9]").sub, "_")
 
     @classmethod
     def encode(cls, text: str) -> str:
-        return cls.non_alpha_to_underscore(unidecode(text.lower()))
+        return cls.non_ascii_to_underscore(text.lower())
 
     def fetch(self, artist: str, title: str, *_) -> tuple[str, str] | None:
         url = self.build_url(artist, title)
