@@ -20,7 +20,15 @@ import re
 from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import cached_property, total_ordering
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, TypeVar, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    ClassVar,
+    KeysView,
+    TypeVar,
+    cast,
+)
 
 from jellyfish import levenshtein_distance
 from typing_extensions import Self
@@ -539,8 +547,8 @@ class Distance:
     def __len__(self) -> int:
         return len(self.items())
 
-    def keys(self) -> list[str]:
-        return [key for key, _ in self.items()]
+    def keys(self) -> KeysView[str]:
+        return dict.fromkeys(key for key, _ in self.items()).keys()
 
     def update(self, dist: Distance):
         """Adds all the distance penalties from `dist`."""
