@@ -7,7 +7,7 @@ import time
 import unicodedata
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, KeysView
 
 from mediafile import MediaFile, UnreadableFileError
 
@@ -853,17 +853,17 @@ class Item(LibModel):
             f"({', '.join(f'{k}={self[k]!r}' for k in self.keys(with_album=False))})"
         )
 
-    def keys(self, computed=False, with_album=True):
+    def keys(self, computed=False, with_album=True) -> KeysView[str]:
         """Get a list of available field names.
 
         `with_album` controls whether the album's fields are included.
         """
-        keys = super().keys(computed=computed)
+        item_keys = super().keys(computed=computed)
         if with_album and self._cached_album:
-            keys = set(keys)
-            keys.update(self._cached_album.keys(computed=computed))
-            keys = list(keys)
-        return keys
+            album_keys = self._cached_album.keys(computed=computed)
+            return dict.fromkeys([*item_keys, *album_keys]).keys()
+
+        return item_keys
 
     def get(self, key, default=None, with_album=True):
         """Get the value for a given key or `default` if it does not

@@ -140,8 +140,7 @@ def _print_keys(query):
 
 def fields_func(lib, opts, args):
     def _print_rows(names):
-        names.sort()
-        print_(textwrap.indent("\n".join(names), "  "))
+        print_(textwrap.indent("\n".join(sorted(names))))
 
     print_("Item fields:")
     _print_rows(library.Item.all_keys())
