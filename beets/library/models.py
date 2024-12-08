@@ -28,6 +28,8 @@ from .exceptions import FileOperationError, ReadError, WriteError
 from .queries import PF_KEY_DEFAULT, parse_query_string
 
 if TYPE_CHECKING:
+    from collections.abc import KeysView
+
     from ..dbcore import types
     from ..dbcore.query import FieldQuery, FieldQueryType
     from .library import Library  # noqa: F401
@@ -864,17 +866,17 @@ class Item(LibModel):
             f"({', '.join(f'{k}={self[k]!r}' for k in self.keys(with_album=False))})"
         )
 
-    def keys(self, computed=False, with_album=True):
+    def keys(self, computed=False, with_album=True) -> KeysView[str]:
         """Get a list of available field names.
 
         `with_album` controls whether the album's fields are included.
         """
-        keys = super().keys(computed=computed)
+        item_keys = super().keys(computed=computed)
         if with_album and self._cached_album:
-            keys = set(keys)
-            keys.update(self._cached_album.keys(computed=computed))
-            keys = list(keys)
-        return keys
+            album_keys = self._cached_album.keys(computed=computed)
+            return dict.fromkeys([*item_keys, *album_keys]).keys()
+
+        return item_keys
 
     def get(self, key, default=None, with_album=True):
         """Get the value for a given key or `default` if it does not
