@@ -1189,3 +1189,23 @@ def colordiff(a: str, b: str) -> str | tuple[str, str]:
         return str(diff(a, b))
     else:
         return str(a), str(b)
+
+
+def show_path_change(before: bytes, after: bytes):
+    """Given a list of tuples (source, destination) that indicate the
+    path changes, log the changes as INFO-level output to the beets log.
+    The output is guaranteed to be unicode.
+
+    Every pair is shown on a single line if the terminal width permits it,
+    else it is split over two lines. E.g.,
+
+    Source -> Destination
+
+    vs.
+
+    Source ->
+    Destination
+    """
+    console.print(
+        colordiff(*map(displayable_path, (before, after))), highlight=False
+    )
