@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 
 from rich import box
 from rich.align import Align
+from rich.progress import track
 from rich_tables.fields import FIELDS_MAP
 from rich_tables.generic import flexitable
 from rich_tables.utils import border_panel, make_difftext, new_table, wrap
@@ -37,20 +38,22 @@ from rich_tables.utils import border_panel, make_difftext, new_table, wrap
 import beets
 from beets import autotag, config, importer, library, logging, plugins, ui, util
 from beets.autotag import Recommendation, hooks
-from beets.ui import console, decargs, input_, print_, show_path_changes
+from beets.ui import decargs, input_, print_
 from beets.util import (
     MoveOperation,
     ancestry,
+    console,
     displayable_path,
     functemplate,
     normpath,
+    show_path_change,
     syspath,
 )
 
 from . import _store_dict
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterable, Sequence
 
 # Global logger.
 log = logging.getLogger(__name__)
@@ -1197,9 +1200,7 @@ def list_func(lib, opts, args):
 
 
 list_cmd = ui.Subcommand("list", help="query the library", aliases=("ls",))
-list_cmd.parser.usage += (
-    "\n" "Example: %prog -f '$album: $title' artist:beatles"
-)
+list_cmd.parser.usage += "\nExample: %prog -f '$album: $title' artist:beatles"
 list_cmd.parser.add_all_common_options()
 list_cmd.func = list_func
 default_commands.append(list_cmd)
@@ -1728,82 +1729,35 @@ default_commands.append(modify_cmd)
 
 
 def move_items(
-    lib, dest, query, copy, album, pretend, confirm=False, export=False
-):
+    items: list[library.Item],
+    dest: str,
+    operation: MoveOperation,
+    pretend: bool,
+    confirm: bool,
+    store: bool,
+) -> None:
     """Moves or copies items to a new base directory, given by dest. If
     dest is None, then the library's base directory is used, making the
     command "consolidate" files.
     """
-    items, albums = _do_query(lib, query, album, False)
-    objs = albums if album else items
-    num_objs = len(objs)
-
     # Filter out files that don't need to be moved.
-    def isitemmoved(item):
-        return item.path != item.destination(basedir=dest)
-
-    def isalbummoved(album):
-        return any(isitemmoved(i) for i in album.items())
-
-    objs = [o for o in objs if (isalbummoved if album else isitemmoved)(o)]
-    num_unmoved = num_objs - len(objs)
-    # Report unmoved files that match the query.
-    unmoved_msg = ""
-    if num_unmoved > 0:
-        unmoved_msg = f" ({num_unmoved} already in place)"
-
-    copy = copy or export  # Exporting always copies.
-    action = "Copying" if copy else "Moving"
-    act = "copy" if copy else "move"
-    entity = "album" if album else "item"
-    log.info(
-        "{0} {1} {2}{3}{4}.",
-        action,
-        len(objs),
-        entity,
-        "s" if len(objs) != 1 else "",
-        unmoved_msg,
+    to_move: Iterable[tuple[library.Item, bytes]] = (
+        (i, dst)
+        for i in track(items, "Checking paths...", total=len(items))
+        if ((dst := i.destination(dest)) != i.path)
     )
-    if not objs:
-        return
 
-    if pretend:
-        if album:
-            show_path_changes(
-                [
-                    (item.path, item.destination(basedir=dest))
-                    for obj in objs
-                    for item in obj.items()
-                ]
-            )
+    if confirm:
+        to_move = ui.input_select_objects(
+            f"Really {operation.name.lower()}?",
+            to_move,
+            lambda i: show_path_change(i[0].path, i[1]),
+        )
+    for item, destination in to_move:
+        if not pretend:
+            item.move(operation=operation, store=store, dest=destination)
         else:
-            show_path_changes(
-                [(obj.path, obj.destination(basedir=dest)) for obj in objs]
-            )
-    else:
-        if confirm:
-            objs = ui.input_select_objects(
-                "Really %s" % act,
-                objs,
-                lambda o: show_path_changes(
-                    [(o.path, o.destination(basedir=dest))]
-                ),
-            )
-
-        for obj in objs:
-            show_path_changes([(obj.path, obj.destination(basedir=dest))])
-
-            if export:
-                # Copy without affecting the database.
-                obj.move(
-                    operation=MoveOperation.COPY, basedir=dest, store=False
-                )
-            else:
-                # Ordinary move/copy: store the new path.
-                if copy:
-                    obj.move(operation=MoveOperation.COPY, basedir=dest)
-                else:
-                    obj.move(operation=MoveOperation.MOVE, basedir=dest)
+            show_path_change(item.path, destination)
 
 
 def move_func(lib, opts, args):
@@ -1815,15 +1769,15 @@ def move_func(lib, opts, args):
                 "no such directory: {}".format(displayable_path(dest))
             )
 
+    items, albums = _do_query(lib, args, opts.album, False)
+
     move_items(
-        lib,
+        [i for a in albums for i in a.items()] if opts.album else items,
         dest,
-        decargs(args),
-        opts.copy,
-        opts.album,
+        MoveOperation.COPY if opts.copy or opts.export else MoveOperation.MOVE,
         opts.pretend,
         opts.timid,
-        opts.export,
+        store=not opts.export,
     )
 
 

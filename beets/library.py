@@ -37,6 +37,7 @@ from beets.util import (
     cached_classproperty,
     normpath,
     samefile,
+    show_path_change,
     syspath,
 )
 from beets.util.functemplate import Template, template
@@ -803,6 +804,7 @@ class Item(LibModel):
         basedir=None,
         with_album=True,
         store=True,
+        dest=None,
     ):
         """Move the item to its designated location within the library
         directory (provided by destination()).
@@ -826,8 +828,10 @@ class Item(LibModel):
         have to be manually stored after invoking this method.
         """
         self._check_db()
-        dest = self.destination(basedir=basedir)
+        if not dest:
+            dest = self.destination(basedir=basedir)
 
+        show_path_change(self.path, dest)
         # Create necessary ancestry for the move.
         util.mkdirall(dest)
 

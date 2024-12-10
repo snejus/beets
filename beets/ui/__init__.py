@@ -589,31 +589,6 @@ def show_model_changes(new, old=None, fields=None, always=False):
     return bool(changes)
 
 
-def show_path_changes(path_changes):
-    """Given a list of tuples (source, destination) that indicate the
-    path changes, log the changes as INFO-level output to the beets log.
-    The output is guaranteed to be unicode.
-
-    Every pair is shown on a single line if the terminal width permits it,
-    else it is split over two lines. E.g.,
-
-    Source -> Destination
-
-    vs.
-
-    Source ->
-    Destination
-    """
-    sources, destinations = zip(*path_changes)
-
-    # Ensure unicode output
-    sources = list(map(util.displayable_path, sources))
-    destinations = list(map(util.displayable_path, destinations))
-
-    for source, dest in zip(sources, destinations):
-        console.print(colordiff(source, dest), highlight=False)
-
-
 # Helper functions for option parsing.
 
 
