@@ -242,6 +242,10 @@ def distance(
     # Album.
     dist.add_string("album", likelies["album"], album_info.album)
 
+    data_source = config["match"]["preferred"]["data_source"].as_str_seq()
+    if data_source:
+        dist.add_priority("data_source", album_info.data_source, data_source)
+
     # Current or preferred media.
     if album_info.media:
         # Preferred media options.
