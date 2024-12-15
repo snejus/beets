@@ -392,6 +392,7 @@ class SpotifyPlugin(
         for track in tracks:
             track.medium_total = medium_totals[track.medium]
 
+        album_type = album_data["album_type"]
         return AlbumInfo(
             album=album_data["name"],
             album_id=spotify_id,
@@ -402,7 +403,8 @@ class SpotifyPlugin(
             artists=artists_names,
             artists_ids=artists_ids,
             tracks=tracks,
-            albumtype=album_data["album_type"],
+            albumtype=album_type,
+            albumtypes=[album_type],
             va=len(album_data["artists"]) == 1
             and artist.lower() == "various artists",
             year=year,
@@ -412,6 +414,8 @@ class SpotifyPlugin(
             mediums=max(filter(None, medium_totals.keys())),
             data_source=self.data_source,
             data_url=album_data["external_urls"]["spotify"],
+            media="Digital Media",
+            albumstatus="Official",
         )
 
     def _get_track(self, track_data: JSONDict) -> TrackInfo:
