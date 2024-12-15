@@ -564,14 +564,14 @@ class DiscogsPlugin(BeetsPlugin):
         # `autotag.apply_metadata`, and set `medium_total`.
         medium_count = Counter(t.medium for t in tracks)
         for track in tracks:
-            track.media = media
-            track.medium_total = medium_count[track.medium]
-            if not track.artist:  # get_track_info often fails to find artist
-                track.artist = artist
-            if not track.artist_id:
-                track.artist_id = str(artist_id)
-            # Discogs does not have track IDs. Invent our own IDs as proposed in #2336.
-            track.track_id = f"{album_id}-{track.track_alt or track.index}"
+            track.update(
+                media=media,
+                medium_total=medium_count[track.medium],
+                # Discogs does not have track IDs. Invent our own IDs as proposed in #2336.
+                track_id=f"{album_id}-{track.track_alt or track.index}",
+                data_url=data_url,
+                data_source="discogs",
+            )
 
         # Retrieve master release id (returns None if there isn't one).
         master_id = result.data.get("master_id")
