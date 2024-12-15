@@ -192,6 +192,7 @@ match:
         countries: []
         media: []
         original_year: no
+        data_source: []
     ignored: []
     required: []
     ignored_media: []

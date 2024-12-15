@@ -140,7 +140,7 @@ def _get_distance(
 
     dist = Distance()
     if info.data_source == data_source:
-        dist.add("source", config["source_weight"].as_number())
+        dist.add("data_source", config["source_weight"].as_number())
     return dist
 
 
