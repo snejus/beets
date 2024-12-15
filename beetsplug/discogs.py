@@ -604,9 +604,9 @@ class DiscogsPlugin(BeetsPlugin):
             original_year=year,
             data_source="discogs",
             data_url=data_url,
-            discogs_labelid=labelid,
-            discogs_artistid=artist_id,
-            discogs_albumid=discogs_albumid,
+            discogs_labelid=int(labelid),
+            discogs_artistid=int(artist_id),
+            discogs_albumid=int(discogs_albumid),
             cover_art_url=cover_art_url,
         )
         if len(tracks) == 1:
