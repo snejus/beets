@@ -529,8 +529,6 @@ class DiscogsPlugin(MetadataSourcePlugin):
         else:
             genre = base_genre
 
-        discogs_albumid = self._extract_id(result.data.get("uri"))
-
         # Extract information for the optional AlbumInfo fields that are
         # contained on nested discogs fields.
         va = artist_data["artist"].lower() == "various"
@@ -596,9 +594,13 @@ class DiscogsPlugin(MetadataSourcePlugin):
             original_year=original_year,
             data_source=self.data_source,
             data_url=data_url,
-            discogs_albumid=discogs_albumid,
+            discogs_albumid=album_id,
             discogs_labelid=label["id"] if label else None,
-            discogs_artistid=artist_data["artist_id"],
+            discogs_artistid=(
+                int(artist_data["artist_id"])
+                if artist_data["artist_id"]
+                else None
+            ),
             cover_art_url=cover_art_url,
         )
         if len(tracks) == 1:
