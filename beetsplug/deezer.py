@@ -48,6 +48,7 @@ class DeezerPlugin(MetadataSourcePlugin, BeetsPlugin):
 
     def __init__(self):
         super().__init__()
+        self.config.add({"results_count": 5})
 
     def commands(self):
         """Add beet UI commands to interact with Deezer."""
@@ -270,7 +271,7 @@ class DeezerPlugin(MetadataSourcePlugin, BeetsPlugin):
             self.data_source,
             query,
         )
-        return response_data
+        return response_data[: self.config["results_count"].get(int)]
 
     def deezerupdate(self, items, write):
         """Obtain rank information from Deezer."""
