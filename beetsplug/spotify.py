@@ -398,6 +398,8 @@ class SpotifyPlugin(
             mediums=max(filter(None, medium_totals.keys())),
             data_source=self.data_source,
             data_url=album_data["external_urls"]["spotify"],
+            media="Digital Media",
+            albumstatus="Official",
         )
 
     def _get_track(self, track_data: JSONDict) -> TrackInfo:
