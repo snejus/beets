@@ -26,6 +26,7 @@ import socket
 import time
 import traceback
 from collections import Counter
+from contextlib import suppress
 from functools import lru_cache, partial
 from itertools import groupby, islice
 from unicodedata import normalize
@@ -33,7 +34,7 @@ from unicodedata import normalize
 import confuse
 from discogs_client import Client, Master, Release, Track
 from discogs_client import __version__ as dc_string
-from discogs_client.exceptions import DiscogsAPIError
+from discogs_client.exceptions import DiscogsAPIError, HTTPError
 from pycountry import countries, subdivisions
 from requests.exceptions import ConnectionError
 from typing_extensions import TypedDict
@@ -67,6 +68,18 @@ COUNTRY_OVERRIDES = {
 
 remove_idx = partial(re.compile(r" +\(\d+\)").sub, "")
 remove_year = partial(re.compile(r" +\((19|20)\d\d\)").sub, "")
+remove_remix = partial(re.compile(r" *\(.*?mix\)", re.I).sub, "")
+remove_va_ft = partial(
+    re.compile(r"va\b|various artists|\bf(ea)?t.*", re.I).sub, ""
+)
+remove_disc = partial(
+    re.compile(r"(?i)\b(CD|disc|vinyl)\s*\d+| *\(.*?version\)", re.I).sub, ""
+)
+
+
+def clean_query(query: str) -> str:
+    return remove_disc(query).replace("'", "")
+
 
 TRACK_INDEX_PAT = re.compile(
     r"""
@@ -228,45 +241,36 @@ class DiscogsPlugin(BeetsPlugin):
         if not self.discogs_client:
             return ()
 
-        query = re.sub(
-            r"va\b|various artists|\bf(ea)?t.*", "", artist, flags=re.I
-        ).strip()
-        results = []
-        if barcode := items[0].barcode:
-            results.extend(self.get_albums(query, barcode=barcode))
-
-        kwargs = {"artist": query}
-        if album == items[0].title:
-            kwargs["track"] = re.sub(
-                r" *\((?!.*remix)[^)]*\)", "", album, flags=re.I
-            )
-        else:
-            kwargs["title"] = album
-
         item = items[0]
+        name = album or item.album or item.title
+        query = f"{remove_va_ft(artist).strip()} - {name}"
+
+        results = []
+        if barcode := item.barcode:
+            with suppress(DiscogsAPIError):
+                results.extend(self.get_albums(query, barcode=barcode))
+
         if getattr(item, "data_source", "").lower() == "discogs":
-            album_id = (
-                str(item.discogs_albumid)
-                if item.discogs_albumid
-                else item.mb_albumid
-            )
+            album_id = str(item.discogs_albumid or item.mb_albumid)
 
             try:
                 results.append(
                     self.get_album_info(self.discogs_client.release(album_id))
                 )
-            except Exception as exc:
-                if "404" in str(exc):
+            except HTTPError as exc:
+                if exc.status_code == 404:
                     album_id = album_id.replace("-1", "")
                     results.append(
                         self.get_album_info(
                             self.discogs_client.release(album_id)
                         )
                     )
+            except Exception:
+                pass
 
         try:
-            results.extend(self.get_albums(query, **kwargs))
-            if not results and items and (item := items[0]) and item.label:
+            results.extend(self.get_albums(query))
+            if not results and items and item.label:
                 query = f"{item.label} {item.album}"
                 results.extend(self.get_albums(query))
         except DiscogsAPIError as e:
@@ -397,16 +401,9 @@ class DiscogsPlugin(BeetsPlugin):
             return None
         return self.get_album_info(result)
 
-    def get_albums(self, query, **kwargs):
+    def get_albums(self, query: str, **kwargs):
         """Returns a list of AlbumInfo objects for a discogs search query."""
-        # Strip non-word characters from query. Things like "!" and "-" can
-        # cause a query to return no results, even if they match the artist or
-        # album title. Use `re.UNICODE` flag to avoid stripping non-english
-        # word characters.
-        query = re.sub(r"(?u)\W+", " ", query, re.UNICODE)
-        # Strip medium information from query, Things like "CD1" and "disk 1"
-        # can also negate an otherwise positive result.
-        query = re.sub(r"(?i)\b(CD|disc|vinyl)\s*\d+", "", query)
+        query = clean_query(query)
         self._log.debug("Searching for '{}', {}", query, kwargs)
 
         results = self.discogs_client.search(query, type="release", **kwargs)
