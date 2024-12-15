@@ -29,13 +29,11 @@ class DGAlbumInfoTest(BeetsTestCase):
         of elements on the returned Bag is incomplete, including just
         those required for the tests on this class."""
         data = {
-            "id": "ALBUM ID",
+            "id": 1,
             "uri": "https://www.discogs.com/release/release/13633721",
             "title": "ALBUM TITLE",
             "year": "3001",
-            "artists": [
-                {"name": "ARTIST NAME", "id": "ARTIST ID", "join": ","}
-            ],
+            "artists": [{"name": "ARTIST NAME", "id": 2, "join": ","}],
             "formats": [
                 {
                     "descriptions": ["FORMAT DESC 1", "FORMAT DESC 2"],
@@ -47,6 +45,7 @@ class DGAlbumInfoTest(BeetsTestCase):
             "genres": ["GENRE1", "GENRE2"],
             "labels": [
                 {
+                    "id": 3,
                     "name": "LABEL NAME",
                     "catno": "CATALOG NUMBER",
                 }
