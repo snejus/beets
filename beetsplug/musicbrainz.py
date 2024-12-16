@@ -242,6 +242,7 @@ def _merge_pseudo_and_actual_album(
             "style",
             "genres",
         ]
+        if actual[k] is not None
     }
     merged.update(from_actual)
     return merged
