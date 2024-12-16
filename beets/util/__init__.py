@@ -1263,3 +1263,11 @@ def colordiff(a: str, b: str) -> str | tuple[str, str]:
         return str(diff(a, b))
     else:
         return str(a), str(b)
+
+
+def get_text(arg: Any, end: str = " ") -> str:
+    console = get_console()
+    with console.capture() as capture:
+        console.print(arg, end=end)
+
+    return capture.get()
