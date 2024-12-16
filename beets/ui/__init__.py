@@ -14,7 +14,13 @@ import textwrap
 import traceback
 from typing import TYPE_CHECKING, Any, Literal, TextIO, TypeVar, overload
 
+try:
+    import readline
+except ImportError:
+    readline = None  # type: ignore[assignment]
+
 import confuse
+from rich.ansi import re_ansi
 from rich.logging import RichHandler
 from rich.traceback import install
 from rich_tables.utils import make_console
@@ -63,6 +69,17 @@ class SafeRichHandler(RichHandler):
             return super().emit(record)
         except Exception:
             self.handleError(record)
+
+
+def _render_prompt(prompt: Any) -> str:
+    with console.capture() as capture:
+        console.print(prompt, end=" ")
+
+    prompt = capture.get()
+    if readline is None:
+        return prompt
+
+    return re_ansi.sub(lambda match: f"\x01{match[0]}\x02", prompt)
 
 
 # Encoding utilities.
@@ -164,23 +181,14 @@ def should_move(move_opt: bool | None = None) -> bool:
 
 
 def input_(prompt: str | None = None) -> str:
-    """Like `input`, but decodes the result to a Unicode string.
-    Raises a UserError if stdin is not available. The prompt is sent to
-    stdout rather than stderr. A printed between the prompt and the
-    input cursor.
+    """Read a response while keeping styled prompts compatible with readline.
+
+    Raises a user-facing error when input ends before a response is available.
     """
-    # raw_input incorrectly sends prompts to stderr, not stdout, so we
-    # use print_() explicitly to display prompts.
-    # https://bugs.python.org/issue1927
-    if prompt:
-        print_(prompt, end=" ")
-
     try:
-        resp = input()
+        return input(_render_prompt(prompt) if prompt else "")
     except EOFError:
-        raise UserError("stdin stream ended while input required")
-
-    return resp
+        raise UserError("stdin stream ended while input required") from None
 
 
 @overload
