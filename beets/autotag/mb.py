@@ -625,10 +625,11 @@ def album_info(release: dict) -> beets.autotag.hooks.AlbumInfo:
         for source in sources:
             for genreitem in source:
                 genres[genreitem["name"]] += int(genreitem["count"])
-        info.genre = "; ".join(
-            genre
-            for genre, _count in sorted(genres.items(), key=lambda g: -g[1])
-        )
+        if genres:
+            info.genre = "; ".join(
+                genre
+                for genre, _count in sorted(genres.items(), key=lambda g: -g[1])
+            )
 
     # We might find links to external sources (Discogs, Bandcamp, ...)
     external_ids = config["musicbrainz"]["external_ids"].get()
