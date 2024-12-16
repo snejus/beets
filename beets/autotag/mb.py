@@ -518,9 +518,26 @@ def album_info(release: dict) -> beets.autotag.hooks.AlbumInfo:
             track_infos.append(ti)
 
     album_artist_ids = _artist_ids(release["artist-credit"])
+
+    # Get the "classic" Release type. This data comes from a legacy API
+    # feature before MusicBrainz supported multiple release types.
+    albumtype = release["release-group"]["type"].lower()
+    # Set the new-style "primary" and "secondary" release types.
+    albumtypes = []
+    if "primary-type" in release["release-group"]:
+        rel_primarytype = release["release-group"]["primary-type"]
+        if rel_primarytype:
+            albumtypes.append(rel_primarytype.lower())
+    if "secondary-type-list" in release["release-group"]:
+        if release["release-group"]["secondary-type-list"]:
+            for sec_type in release["release-group"]["secondary-type-list"]:
+                albumtypes.append(sec_type.lower())
+
     info = beets.autotag.hooks.AlbumInfo(
         album=release["title"],
         album_id=release["id"],
+        albumtype=albumtype,
+        albumtypes=albumtypes,
         artist=artist_name,
         artist_id=album_artist_ids[0],
         artists=artists_names,
@@ -558,25 +575,6 @@ def album_info(release: dict) -> beets.autotag.hooks.AlbumInfo:
         )
     if release.get("disambiguation"):
         info.albumdisambig = release.get("disambiguation")
-
-    # Get the "classic" Release type. This data comes from a legacy API
-    # feature before MusicBrainz supported multiple release types.
-    if "type" in release["release-group"]:
-        reltype = release["release-group"]["type"]
-        if reltype:
-            info.albumtype = reltype.lower()
-
-    # Set the new-style "primary" and "secondary" release types.
-    albumtypes = []
-    if "primary-type" in release["release-group"]:
-        rel_primarytype = release["release-group"]["primary-type"]
-        if rel_primarytype:
-            albumtypes.append(rel_primarytype.lower())
-    if "secondary-type-list" in release["release-group"]:
-        if release["release-group"]["secondary-type-list"]:
-            for sec_type in release["release-group"]["secondary-type-list"]:
-                albumtypes.append(sec_type.lower())
-    info.albumtypes = albumtypes
 
     # Release events.
     info.country, release_date = _preferred_release_event(release)
