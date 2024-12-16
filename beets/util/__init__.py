@@ -1226,3 +1226,11 @@ def unique_list(elements: Iterable[T]) -> list[T]:
 def get_console() -> Console:
     color = beets.config["ui"]["color"].get()
     return make_console(highlight=False, force_terminal=color)
+
+
+def get_text(arg: Any, end: str = " ") -> str:
+    console = get_console()
+    with console.capture() as capture:
+        console.print(arg, end=end)
+
+    return capture.get()
