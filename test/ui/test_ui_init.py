@@ -4,12 +4,42 @@ import unittest
 from copy import deepcopy
 from pathlib import Path
 from random import random
+from unittest.mock import patch
 
 import pytest
 
 from beets import config, ui
 from beets.exceptions import UserError
 from beets.test.helper import BeetsTestCase, IOMixin
+
+
+class TestInput:
+    @pytest.mark.parametrize(
+        "prompt,expected", [(None, ""), ("Prompt:", "Prompt: ")]
+    )
+    def test_passes_prompt_to_input(self, prompt, expected):
+        with patch("builtins.input", return_value="answer") as input_mock:
+            assert ui.input_(prompt) == "answer"
+
+        input_mock.assert_called_once_with(expected)
+
+    @pytest.mark.parametrize(
+        "readline,expected",
+        [
+            (object(), "\x01\x1b[31m\x02Prompt\x01\x1b[0m\x02 "),
+            (None, "\x1b[31mPrompt\x1b[0m "),
+        ],
+    )
+    def test_marks_only_ansi_codes_as_non_printing(self, readline, expected):
+        with patch("beets.ui.readline", readline):
+            assert ui._render_prompt("\x1b[31mPrompt\x1b[0m") == expected
+
+    def test_raises_user_error_at_end_of_input(self):
+        with (
+            patch("builtins.input", side_effect=EOFError),
+            pytest.raises(UserError, match="stdin stream ended"),
+        ):
+            ui.input_("Prompt:")
 
 
 class InputMethodsTest(IOMixin, unittest.TestCase):
