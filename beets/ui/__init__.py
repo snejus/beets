@@ -23,6 +23,7 @@ import errno
 import optparse
 import os.path
 import re
+import readline  # noqa: F401
 import sqlite3
 import sys
 import textwrap
@@ -36,7 +37,7 @@ from rich.traceback import install
 from beets import config, library, logging, plugins, util
 from beets.dbcore import db
 from beets.dbcore import query as db_query
-from beets.util import as_string, colordiff, colorize, get_console
+from beets.util import as_string, colordiff, colorize, get_console, get_text
 from beets.util.deprecation import deprecate_for_maintainers
 from beets.util.functemplate import template
 
@@ -186,18 +187,7 @@ def input_(prompt=None):
     stdout rather than stderr. A printed between the prompt and the
     input cursor.
     """
-    # raw_input incorrectly sends prompts to stderr, not stdout, so we
-    # use print_() explicitly to display prompts.
-    # https://bugs.python.org/issue1927
-    if prompt:
-        print_(prompt, end=" ")
-
-    try:
-        resp = input()
-    except EOFError:
-        raise UserError("stdin stream ended while input required")
-
-    return resp
+    return input(f"\x01{get_text(prompt)}\x02 ")
 
 
 def input_options(
@@ -207,7 +197,7 @@ def input_options(
     fallback_prompt=None,
     numrange: tuple[int, int] | None = None,
     default: str | None = None,
-    max_width: int = get_console().width,
+    max_width: int = None,
 ) -> str:
     """Prompts a user for input. The sequence of `options` defines the
     choices the user has. A single-letter shortcut is inferred for each
@@ -325,7 +315,7 @@ def input_options(
             length += 1
 
             # Choose either the current line or the beginning of the next.
-            if line_length + length + 1 > max_width:
+            if line_length + length + 1 > (max_width or get_console().width):
                 prompt += "\n"
                 line_length = 0
 
