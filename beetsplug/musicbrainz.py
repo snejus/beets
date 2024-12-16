@@ -580,9 +580,20 @@ class MusicBrainzPlugin(MusicBrainzAPIMixin, MetadataSourcePlugin):
                 track_infos.append(ti)
 
         album_artist_ids = _artist_ids(release["artist-credit"])
+
+        # Get the "classic" Release type. This data comes from a legacy API
+        # feature before MusicBrainz supported multiple release types.
+        albumtype = release["release-group"]["primary-type"].lower()
+        albumtypes = [
+            albumtype,
+            *map(str.lower, release["release-group"]["secondary-types"]),
+        ]
+
         info = AlbumInfo(
             album=release["title"],
             album_id=release["id"],
+            albumtype=albumtype,
+            albumtypes=list(albumtypes),
             artist=artist_name,
             artist_id=album_artist_ids[0],
             artists=artists_names,
@@ -618,21 +629,6 @@ class MusicBrainzPlugin(MusicBrainzAPIMixin, MetadataSourcePlugin):
             )
         if release.get("disambiguation"):
             info.albumdisambig = release.get("disambiguation")
-
-        if reltype := release["release-group"].get("primary-type"):
-            info.albumtype = reltype.lower()
-
-        # Set the new-style "primary" and "secondary" release types.
-        albumtypes = []
-        if "primary-type" in release["release-group"]:
-            rel_primarytype = release["release-group"]["primary-type"]
-            if rel_primarytype:
-                albumtypes.append(rel_primarytype.lower())
-        if "secondary-types" in release["release-group"]:
-            if release["release-group"]["secondary-types"]:
-                for sec_type in release["release-group"]["secondary-types"]:
-                    albumtypes.append(sec_type.lower())
-        info.albumtypes = albumtypes
 
         # Release events.
         info.country, release_date = _preferred_release_event(release)
