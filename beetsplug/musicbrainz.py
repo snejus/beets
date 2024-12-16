@@ -675,9 +675,27 @@ class MusicBrainzPlugin(MetadataSourcePlugin):
                 track_infos.append(ti)
 
         album_artist_ids = _artist_ids(release["artist-credit"])
+
+        # Get the "classic" Release type. This data comes from a legacy API
+        # feature before MusicBrainz supported multiple release types.
+        albumtype = (
+            reltype.lower()
+            if (reltype := release["release-group"].get("type"))
+            else None
+        )
+        albumtypes = map(
+            str.lower,
+            [
+                *(release["release-group"].get("primary-type") or []),
+                *(release["release-group"].get("secondary-type-list") or []),
+            ],
+        )
+
         info = AlbumInfo(
             album=release["title"],
             album_id=release["id"],
+            albumtype=albumtype,
+            albumtypes=list(albumtypes),
             artist=artist_name,
             artist_id=album_artist_ids[0],
             artists=artists_names,
