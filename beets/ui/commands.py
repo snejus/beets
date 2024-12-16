@@ -52,7 +52,7 @@ from beets.util import (
 from . import _store_dict
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Sequence
 
     from beets.autotag.hooks import AnyMatch
     from beets.importer import AlbumImportTask, SingletonImportTask, action
@@ -69,7 +69,9 @@ default_commands = []
 # Utilities.
 
 
-def _do_query(lib, query, album, also_items=True):
+def _do_query(
+    lib: library.Library, query: str, album: bool, also_items: bool = True
+) -> tuple[list[library.Item], list[library.Album]]:
     """For commands that operate on matched items, performs a query
     and returns a list of matching items and a list of matching
     albums. (The latter is only nonempty when album is True.) Raises
@@ -78,7 +80,7 @@ def _do_query(lib, query, album, also_items=True):
     """
     if album:
         albums = list(lib.albums(query))
-        items = []
+        items: list[library.Item] = []
         if also_items:
             for al in albums:
                 items += al.items()
@@ -1746,7 +1748,7 @@ def move_items(
     command "consolidate" files.
     """
     # Filter out files that don't need to be moved.
-    to_move: Iterable[tuple[library.Item, bytes]] = (
+    to_move: list[tuple[library.Item, bytes]] = (
         (i, dst)
         for i in track(items, "Checking paths...", total=len(items))
         if ((dst := i.destination(dest)) != i.path)

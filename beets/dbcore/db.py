@@ -345,7 +345,7 @@ class Model(ABC, Generic[D]):
         """
 
     @classmethod
-    def _getters(cls: type[Model]):
+    def _getters(cls) -> Mapping[str, Callable[[Model], Any]]:
         """Return a mapping from field names to getter functions."""
         # We could cache this if it becomes a performance problem to
         # gather the getter mapping every time.
@@ -532,7 +532,7 @@ class Model(ABC, Generic[D]):
         for key, value in values.items():
             self[key] = value
 
-    def items(self) -> Iterator[tuple[str, Any]]:
+    def items(self) -> Iterable:
         """Iterate over (key, value) pairs that this object contains.
         Computed fields are not included.
         """
