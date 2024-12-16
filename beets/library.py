@@ -46,6 +46,8 @@ from .dbcore.fields import TYPE_BY_FIELD
 from .dbcore.query import PathQuery
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from .dbcore.db import Results
     from .dbcore.query import FieldQuery, FieldQueryType
 
@@ -122,6 +124,7 @@ class WriteError(FileOperationError):
 class LibModel(dbcore.Model["Library"]):
     """Shared concrete functionality for Items and Albums."""
 
+    _db: Library
     # Config key that specifies how an instance should be formatted.
     _format_config_key: str
 
@@ -134,7 +137,7 @@ class LibModel(dbcore.Model["Library"]):
         funcs.update(plugins.template_funcs())
         return funcs
 
-    def store(self, fields=None):
+    def store(self, fields=None) -> None:
         super().store(fields)
         plugins.send("database_change", lib=self._db, model=self)
 
@@ -205,7 +208,7 @@ class FormattedItemMapping(dbcore.db.FormattedMapping):
 
     ALL_KEYS = "*"
 
-    def __init__(self, item, included_keys=ALL_KEYS, for_path=False):
+    def __init__(self, item: Item, included_keys=ALL_KEYS, for_path=False):
         # We treat album and item keys specially here,
         # so exclude transitive album keys from the model's keys.
         super().__init__(item, included_keys=[], for_path=for_path)
@@ -238,7 +241,7 @@ class FormattedItemMapping(dbcore.db.FormattedMapping):
         return album_keys
 
     @property
-    def album(self):
+    def album(self) -> Album:
         return self.item._cached_album
 
     def _get(self, key):
@@ -862,7 +865,7 @@ class Item(LibModel):
         platform=None,
         path_formats=None,
         replacements=None,
-    ):
+    ) -> bytes:
         """Return the path in the library directory designated for the
         item (i.e., where the file ought to be).
 
@@ -1011,7 +1014,7 @@ class Album(LibModel):
     }
 
     # List of keys that are set on an album's items.
-    item_keys = [
+    item_keys = {
         "added",
         "albumartist",
         "albumartists",
@@ -1052,7 +1055,7 @@ class Album(LibModel):
         "original_year",
         "original_month",
         "original_day",
-    ]
+    }
 
     _format_config_key = "format_album"
 
@@ -1081,7 +1084,7 @@ class Album(LibModel):
         getters["albumtotal"] = Album._albumtotal
         return getters
 
-    def items(self):
+    def items(self) -> Iterable[Item]:
         """Return an iterable over the items associated with this
         album.
 
@@ -1420,7 +1423,7 @@ class Library(dbcore.Database):
         self._memotable = {}
         return obj.id
 
-    def add_album(self, items):
+    def add_album(self, items) -> Album:
         """Create a new album consisting of a list of items.
 
         The items are added to the database if they don't yet have an

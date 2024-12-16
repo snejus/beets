@@ -17,6 +17,8 @@ interface. To invoke the CLI, just call beets.ui.main(). The actual
 CLI commands are implemented in the ui.commands module.
 """
 
+from __future__ import annotations
+
 import errno
 import optparse
 import os.path
@@ -25,7 +27,7 @@ import sqlite3
 import sys
 import textwrap
 import traceback
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
 import confuse
 from rich.logging import RichHandler
@@ -37,6 +39,9 @@ from beets.dbcore import db
 from beets.dbcore import query as db_query
 from beets.util import as_string, colordiff, colorize, console
 from beets.util.functemplate import template
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
 
 # On Windows platforms, use colorama to support "ANSI" terminal colors.
 if sys.platform == "win32":
@@ -213,14 +218,14 @@ def input_(prompt=None):
 
 
 def input_options(
-    options,
-    require=False,
+    options: Sequence[str],
+    require: bool = False,
     prompt=None,
     fallback_prompt=None,
-    numrange=None,
-    default=None,
-    max_width=72,
-):
+    numrange: tuple[int, int] | None = None,
+    default: str | None = None,
+    max_width: int = console.width,
+) -> str:
     """Prompts a user for input. The sequence of `options` defines the
     choices the user has. A single-letter shortcut is inferred for each
     option; the user's choice is returned as that single, lower-case
@@ -400,7 +405,15 @@ def input_yn(prompt, require=False):
     return sel == "y"
 
 
-def input_select_objects(prompt, objs, rep, prompt_all=None):
+T = TypeVar("T")
+
+
+def input_select_objects(
+    prompt: str,
+    objs: Iterable[T],
+    rep: Callable[[T], None],
+    prompt_all: str | None = None,
+) -> list[T]:
     """Prompt to user to choose all, none, or some of the given objects.
     Return the list of selected objects.
 
@@ -1087,7 +1100,7 @@ def _open_library(config):
             )
         )
     log.debug(
-        "library database: {0}\n" "library directory: {1}",
+        "library database: {0}\nlibrary directory: {1}",
         util.displayable_path(lib.path),
         util.displayable_path(lib.directory),
     )

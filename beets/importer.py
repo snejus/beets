@@ -35,8 +35,9 @@ from typing import TYPE_CHECKING, Any, ClassVar, Generic, Sequence
 
 import mediafile
 
-from beets import autotag, config, dbcore, library, logging, plugins, util
+from beets import autotag, config, dbcore, logging, plugins, util
 from beets.autotag import hooks, match
+from beets.library import Album, Item, Library, ReadError
 from beets.util import (
     MoveOperation,
     ancestry,
@@ -452,6 +453,9 @@ class BaseImportTask:
     Tasks flow through the importer pipeline. Each stage can update
     them."""
 
+    items: list[Item]
+    paths: tuple[bytes, ...]
+
     def __init__(self, toppath, paths, items):
         """Create a task. The primary fields that define a task are:
 
@@ -515,7 +519,11 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
     choice_flag: action | hooks.AnyMatch | None
     album: Album
 
-    def __init__(self, toppath, paths, items):
+    @property
+    def item(self):
+        return self.items[0]
+
+    def __init__(self, toppath, paths, items) -> None:
         super().__init__(toppath, paths, items)
         self.choice_flag = None
         self.candidates = []
@@ -570,11 +578,11 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
     # Logical decisions.
 
     @property
-    def apply(self):
+    def apply(self) -> bool:
         return self.choice_flag == action.APPLY
 
     @property
-    def skip(self):
+    def skip(self) -> bool:
         return self.choice_flag == action.SKIP
 
     # Convenient data.
@@ -592,7 +600,7 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
             return self.match.info.copy()
         assert False
 
-    def imported_items(self):
+    def imported_items(self) -> list[Item]:
         """Return a list of Items that should be added to the library.
 
         If the tasks applies an album match the method only returns the
@@ -623,7 +631,7 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
                 util.remove(item.path)
                 util.prune_dirs(os.path.dirname(item.path), lib.directory)
 
-    def set_fields(self, lib):
+    def set_fields(self, lib: Library) -> None:
         """Sets the fields given at CLI or configuration to the specified
         values, for both the album and all its items.
         """
@@ -716,7 +724,7 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
 
         # Construct a query to find duplicates with this metadata. We
         # use a temporary Album object to generate any computed fields.
-        tmp_album = library.Album(lib, **info)
+        tmp_album = Album(lib, **info)
         keys = config["import"]["duplicate_keys"]["album"].as_str_seq()
         dup_query = tmp_album.duplicates_query(keys)
 
@@ -762,7 +770,7 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
         elif self.choice_flag in (action.APPLY, action.RETAG):
             # Applying autotagged metadata. Just get AA from the first
             # item.
-            first = self.items[0]
+            first = self.item
             if not first.albumartist:
                 changes["albumartist"] = first.artist
             if not first.albumartists:
@@ -820,7 +828,7 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
 
         plugins.send("import_task_files", session=session, task=self)
 
-    def add(self, lib):
+    def add(self, lib: Library) -> None:
         """Add the items as an album to the library and remove replaced items."""
         self.align_album_level_fields()
         with lib.transaction():
@@ -838,12 +846,12 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
 
             self.reimport_metadata(lib)
 
-    def record_replaced(self, lib):
+    def record_replaced(self, lib) -> None:
         """Records the replaced items and albums in the `replaced_items`
         and `replaced_albums` dictionaries.
         """
         self.replaced_items = defaultdict(list)
-        self.replaced_albums = defaultdict(list)
+        self.replaced_albums: dict[bytes, Album] = {}
         replaced_album_ids = set()
         for dup_item in lib.items(
             dbcore.query.OrQuery(
@@ -861,7 +869,7 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
                 replaced_album_ids.add(dup_item.album_id)
                 self.replaced_albums[replaced_album.path] = replaced_album
 
-    def reimport_metadata(self, lib):
+    def reimport_metadata(self, lib: Library) -> None:
         """For reimports, preserves metadata for reimported items and
         albums.
         """
@@ -872,7 +880,7 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
             entries that should not be preserved and returns a dict containing
             those fields left to actually be preserved.
             """
-            noun = "album" if isinstance(new_obj, library.Album) else "item"
+            noun = "album" if isinstance(new_obj, Album) else "item"
             existing_fields = dict(existing_fields)
             overwritten_fields = [
                 k
@@ -963,7 +971,7 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
             len(self.imported_items()),
         )
 
-    def choose_match(self, session):
+    def choose_match(self, session: ImportSession) -> None:
         """Ask the session which match should apply and apply it."""
         choice = session.choose_match(self)
         self.set_choice(choice)
@@ -997,10 +1005,8 @@ class SingletonImportTask(ImportTask[hooks.TrackMatch]):
 
     is_album = False
 
-    def __init__(self, toppath, item):
+    def __init__(self, toppath, item) -> None:
         super().__init__(toppath, [item.path], [item])
-        self.item = item
-        self.paths = [item.path]
 
     def chosen_info(self):
         """Return a dictionary of metadata about the current choice.
@@ -1014,7 +1020,7 @@ class SingletonImportTask(ImportTask[hooks.TrackMatch]):
         elif self.choice_flag is action.APPLY:
             return self.match.info.copy()
 
-    def imported_items(self):
+    def imported_items(self) -> list[Item]:
         return [self.item]
 
     def _emit_imported(self, lib):
@@ -1036,7 +1042,7 @@ class SingletonImportTask(ImportTask[hooks.TrackMatch]):
 
         # Query for existing items using the same metadata. We use a
         # temporary `Item` object to generate any computed fields.
-        tmp_item = library.Item(lib, **info)
+        tmp_item = Item(lib, **info)
         keys = config["import"]["duplicate_keys"]["item"].as_str_seq()
         dup_query = tmp_item.duplicates_query(keys)
 
@@ -1049,7 +1055,7 @@ class SingletonImportTask(ImportTask[hooks.TrackMatch]):
 
     duplicate_items = find_duplicates
 
-    def add(self, lib):
+    def add(self, lib: Library) -> None:
         with lib.transaction():
             self.record_replaced(lib)
             self.remove_replaced(lib)
@@ -1059,7 +1065,7 @@ class SingletonImportTask(ImportTask[hooks.TrackMatch]):
     def infer_album_fields(self):
         raise NotImplementedError
 
-    def choose_match(self, session):
+    def choose_match(self, session: ImportSession) -> None:
         """Ask the session which match should apply and apply it."""
         choice = session.choose_item(self)
         self.set_choice(choice)
@@ -1068,7 +1074,7 @@ class SingletonImportTask(ImportTask[hooks.TrackMatch]):
     def reload(self):
         self.item.load()
 
-    def set_fields(self, lib):
+    def set_fields(self, lib: Library) -> None:
         """Sets the fields given at CLI or configuration to the specified
         values, for the singleton item.
         """
@@ -1433,8 +1439,8 @@ class ImportTaskFactory:
         error.
         """
         try:
-            return library.Item.from_path(path)
-        except library.ReadError as exc:
+            return Item.from_path(path)
+        except ReadError as exc:
             if isinstance(exc.reason, mediafile.FileTypeError):
                 # Silently ignore non-music files.
                 pass
