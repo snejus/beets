@@ -23,6 +23,7 @@ import errno
 import optparse
 import os.path
 import re
+import readline  # noqa: F401
 import sqlite3
 import sys
 import textwrap
