@@ -584,9 +584,6 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
         ):
             self.choice_flag = choice
             self.match = None
-        else:
-            self.choice_flag = action.APPLY  # Implicit choice.
-            self.match = choice
 
     def apply_metadata(self) -> None:
         """Copy metadata from match info to the items."""
@@ -610,10 +607,6 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
             history_add(self.paths)
 
     # Logical decisions.
-
-    @property
-    def apply(self) -> bool:
-        return self.choice_flag == action.APPLY
 
     @property
     def skip(self) -> bool:
@@ -804,7 +797,7 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
                     # old paths.
                     item.move(operation)
 
-            if write and (self.apply or self.choice_flag == action.RETAG):
+            if write and self.choice_flag in (action.APPLY, action.RETAG):
                 item.try_write()
 
         with session.lib.transaction():
@@ -1025,7 +1018,7 @@ class AlbumImportTask(ImportTask[hooks.AlbumMatch]):
         """
         if self.choice_flag in (action.ASIS, action.RETAG):
             return self.likelies
-        elif self.apply:
+        elif self.choice_flag is action.APPLY:
             return self.match.info.copy()
 
     def _emit_imported(self, lib: Library) -> None:
@@ -1070,7 +1063,7 @@ class AlbumImportTask(ImportTask[hooks.AlbumMatch]):
             self.remove_replaced(lib)
 
             self.album = lib.add_album(self.imported_items())
-            if self.apply:
+            if self.choice_flag is action.APPLY:
                 # Copy album flexible fields to the DB
                 # TODO: change the flow so we create the `Album` object earlier,
                 #   and we can move this into `self.apply_metadata`, just like
@@ -1679,7 +1672,7 @@ def apply_choice(session: ImportSession, task: ImportTask[hooks.AnyMatch]):
         return
 
     # Change metadata.
-    if task.apply:
+    if task.choice_flag is action.APPLY:
         task.apply_metadata()
         plugins.send("import_task_apply", session=session, task=task)
 
