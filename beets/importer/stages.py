@@ -321,7 +321,7 @@ def _apply_choice(session: ImportSession, task: ImportTask[AnyMatch]):
         return
 
     # Change metadata.
-    if task.apply:
+    if task.choice_flag is Action.APPLY:
         task.apply_metadata()
         plugins.send("import_task_apply", session=session, task=task)
 
