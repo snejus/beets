@@ -258,11 +258,7 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
     # Logical decisions.
 
     @property
-    def apply(self) -> bool:
-        return self.choice_flag == Action.APPLY
-
-    @property
-    def skip(self):
+    def skip(self) -> bool:
         return self.choice_flag == Action.SKIP
 
     # Convenient data.
@@ -457,7 +453,7 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
                     # old paths.
                     item.move(operation)
 
-            if write and (self.apply or self.choice_flag == Action.RETAG):
+            if write and self.choice_flag in (Action.APPLY, Action.RETAG):
                 item.try_write()
 
         with session.lib.transaction():
@@ -638,7 +634,7 @@ class AlbumImportTask(ImportTask[AlbumMatch]):
         """
         if self.choice_flag in (Action.ASIS, Action.RETAG):
             return list(self.items)
-        elif self.apply and self.match:
+        elif isinstance(self.match, Match):
             return list(self.match.items)
         else:
             assert False
@@ -673,7 +669,7 @@ class AlbumImportTask(ImportTask[AlbumMatch]):
         """
         if self.choice_flag in (Action.ASIS, Action.RETAG):
             return self.likelies
-        elif self.apply:
+        elif self.choice_flag is Action.APPLY:
             return self.match.info.copy()
 
     def _emit_imported(self, lib: library.Library) -> None:
@@ -720,7 +716,7 @@ class AlbumImportTask(ImportTask[AlbumMatch]):
             self.remove_replaced(lib)
 
             self.album = lib.add_album(self.imported_items())
-            if self.apply and self.match:
+            if self.choice_flag is Action.APPLY and self.match:
                 # Copy album flexible fields to the DB
                 # TODO: change the flow so we create the `Album` object earlier,
                 #   and we can move this into `self.apply_metadata`, just like
