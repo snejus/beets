@@ -20,7 +20,7 @@ invocation of beets usually has only one :class:`Library`. It's powered by
 abstraction, something like a very minimal `ORM`_. The library is also
 responsible for handling queries to retrieve stored objects.
 
-.. autoclass:: Library(path, directory[, path_formats[, replacements]])
+.. autoclass:: Library(path, directory)
 
     .. automethod:: __init__
 

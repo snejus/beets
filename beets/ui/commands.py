@@ -49,6 +49,7 @@ from beets.util import (
     syspath,
 )
 
+from ..exceptions import UserError
 from . import _store_dict
 
 if TYPE_CHECKING:
@@ -90,9 +91,9 @@ def _do_query(
         items = list(lib.items(query))
 
     if album and not albums:
-        raise ui.UserError("No matching albums found.")
+        raise UserError("No matching albums found.")
     elif not album and not items:
-        raise ui.UserError("No matching items found.")
+        raise UserError("No matching items found.")
 
     return items, albums
 
@@ -123,13 +124,13 @@ def _parse_logfiles(logfiles):
         try:
             yield from _paths_from_logfile(syspath(normpath(logfile)))
         except ValueError as err:
-            raise ui.UserError(
+            raise UserError(
                 "malformed logfile {}: {}".format(
                     util.displayable_path(logfile), str(err)
                 )
             ) from err
         except OSError as err:
-            raise ui.UserError(
+            raise UserError(
                 "unreadable logfile {}: {}".format(
                     util.displayable_path(logfile), str(err)
                 )
@@ -192,7 +193,7 @@ class HelpCommand(ui.Subcommand):
             cmdname = args[0]
             helpcommand = self.root_parser._subcommand_for_name(cmdname)
             if not helpcommand:
-                raise ui.UserError(f"unknown command '{cmdname}'")
+                raise UserError(f"unknown command '{cmdname}'")
             helpcommand.print_help()
         else:
             self.root_parser.print_help()
@@ -908,7 +909,7 @@ def import_files(lib, paths, query):
     """
     # Check parameter consistency.
     if config["import"]["quiet"] and config["import"]["timid"]:
-        raise ui.UserError("can't be both quiet and timid")
+        raise UserError("can't be both quiet and timid")
 
     # Open the log.
     if config["import"]["log"].get() is not None:
@@ -919,7 +920,7 @@ def import_files(lib, paths, query):
                 logging.Formatter("%(asctime)s | %(message)s")
             )
         except OSError:
-            raise ui.UserError(
+            raise UserError(
                 f"Could not open log file for writing: {displayable_path(logpath)}"
             )
     else:
@@ -956,7 +957,7 @@ def import_func(lib, opts, args):
         paths_from_logfiles = list(_parse_logfiles(opts.from_logfiles or []))
 
         if not paths and not paths_from_logfiles:
-            raise ui.UserError("no path specified")
+            raise UserError("no path specified")
 
         # On Python 2, we used to get filenames as raw bytes, which is
         # what we need. On Python 3, we need to undo the "helpful"
@@ -973,7 +974,7 @@ def import_func(lib, opts, args):
         # Check the user-specified directories.
         for path in paths:
             if not os.path.exists(syspath(normpath(path))):
-                raise ui.UserError(
+                raise UserError(
                     "no such file or directory: {}".format(
                         displayable_path(path)
                     )
@@ -997,7 +998,7 @@ def import_func(lib, opts, args):
         # If all paths were read from a logfile, and none of them exist, throw
         # an error
         if not paths:
-            raise ui.UserError("none of the paths are importable")
+            raise UserError("none of the paths are importable")
 
     import_files(lib, paths, query)
 
@@ -1670,7 +1671,7 @@ def modify_parse_args(args):
 def modify_func(lib, opts, args):
     query, mods, dels = modify_parse_args(decargs(args))
     if not mods and not dels:
-        raise ui.UserError("no modifications specified")
+        raise UserError("no modifications specified")
     modify_items(
         lib,
         mods,
@@ -1772,7 +1773,7 @@ def move_func(lib, opts, args):
     if dest is not None:
         dest = normpath(dest)
         if not os.path.isdir(syspath(dest)):
-            raise ui.UserError(
+            raise UserError(
                 "no such directory: {}".format(displayable_path(dest))
             )
 
@@ -1934,7 +1935,7 @@ def config_edit():
             message += (
                 ". Please set the VISUAL (or EDITOR) environment variable"
             )
-        raise ui.UserError(message)
+        raise UserError(message)
 
 
 config_cmd = ui.Subcommand("config", help="show or edit the user configuration")
