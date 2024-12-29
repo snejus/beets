@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import shlex
+from typing import TYPE_CHECKING
 
 import beets
 from beets import dbcore, logging, plugins
+
+if TYPE_CHECKING:
+    from .library import LibModel
 
 log = logging.getLogger(__name__)
 
@@ -14,7 +18,9 @@ PF_KEY_DEFAULT = "default"
 # Query construction helpers.
 
 
-def parse_query_parts(parts, model_cls):
+def parse_query_parts(
+    parts, model_cls: type[LibModel]
+) -> tuple[dbcore.Query, dbcore.Sort]:
     """Given a beets query string as a list of components, return the
     `Query` and `Sort` they represent.
 
@@ -46,7 +52,9 @@ def parse_query_parts(parts, model_cls):
     return query, sort
 
 
-def parse_query_string(s, model_cls):
+def parse_query_string(
+    s: str, model_cls: type[LibModel]
+) -> tuple[dbcore.Query, dbcore.Sort]:
     """Given a beets query string, return the `Query` and `Sort` they
     represent.
 

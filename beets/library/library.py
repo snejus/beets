@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import re
+from functools import cached_property
 from typing import TYPE_CHECKING
 
 import platformdirs
 
 import beets
 from beets import dbcore
-from beets.util import normpath
+from beets.exceptions import UserError
+from beets.util import Replacements, normpath
+from beets.util.functemplate import PathFormat, get_path_formats
 
 from .models import Album, Item
-from .queries import PF_KEY_DEFAULT, parse_query_parts, parse_query_string
+from .queries import parse_query_parts, parse_query_string
 
 if TYPE_CHECKING:
     from beets.dbcore import Results
@@ -20,20 +24,28 @@ class Library(dbcore.Database):
 
     _models = (Item, Album)
 
-    def __init__(
-        self,
-        path="library.blb",
-        directory: str | None = None,
-        path_formats=((PF_KEY_DEFAULT, "$artist/$album/$track $title"),),
-        replacements=None,
-    ):
-        timeout = beets.config["timeout"].as_number()
-        super().__init__(path, timeout=timeout)
+    @cached_property
+    def path_formats(self) -> list[PathFormat]:
+        return get_path_formats()
+
+    @cached_property
+    def replacements(self) -> Replacements:
+        """Confuse validation function that reads regex/string pairs."""
+        replacements = []
+        for pattern, repl in beets.config["replace"].get(dict).items():
+            repl = repl or ""
+            try:
+                replacements.append((re.compile(pattern), repl))
+            except re.error as e:
+                raise UserError(
+                    f"Malformed regular expression in replace: {pattern}"
+                ) from e
+        return replacements
+
+    def __init__(self, path="library.blb", directory: str | None = None):
+        super().__init__(path, timeout=beets.config["timeout"].as_number())
 
         self.directory = normpath(directory or platformdirs.user_music_path())
-
-        self.path_formats = path_formats
-        self.replacements = replacements
 
         # Used for template substitution performance.
         self._memotable: dict[tuple[str, ...], str] = {}
