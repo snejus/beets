@@ -417,7 +417,7 @@ def track_distance(
 def distance(
     items: Sequence[Item],
     album_info: AlbumInfo,
-    mapping: dict[Item, TrackInfo],
+    mapping: list[tuple[Item, TrackInfo]],
 ) -> Distance:
     """Determines how "significant" an album metadata change would be.
     Returns a Distance object. `album_info` is an AlbumInfo object
@@ -513,7 +513,7 @@ def distance(
 
     # Tracks.
     dist.tracks = {}
-    for item, track in mapping.items():
+    for item, track in mapping:
         dist.tracks[track] = track_distance(item, track, album_info.va)
         dist.add("tracks", dist.tracks[track].distance)
 

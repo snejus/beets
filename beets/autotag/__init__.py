@@ -30,7 +30,7 @@ from .hooks import AlbumInfo, AlbumMatch, TrackInfo, TrackMatch
 from .match import Proposal, Recommendation, tag_album, tag_item
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Sequence
 
     from beets.library import Album, Item, LibModel
 
@@ -210,11 +210,13 @@ def apply_album_metadata(album_info: AlbumInfo, album: Album):
     correct_list_fields(album)
 
 
-def apply_metadata(album_info: AlbumInfo, mapping: Mapping[Item, TrackInfo]):
+def apply_metadata(
+    album_info: AlbumInfo, mapping: list[tuple[Item, TrackInfo]]
+):
     """Set the items' metadata to match an AlbumInfo object using a
     mapping from Items to TrackInfo objects.
     """
-    for item, track_info in mapping.items():
+    for item, track_info in mapping:
         # Artist or artist credit.
         if config["artist_credit"]:
             item.artist = (

@@ -58,7 +58,7 @@ class TestAssignment(ConfigMixin):
         mapping, extra_items, extra_tracks = match.assign_items(items, tracks)
 
         assert (
-            {i.title: t.title for i, t in mapping.items()},
+            {i.title: t.title for i, t in mapping},
             [i.title for i in extra_items],
             [t.title for t in extra_tracks],
         ) == (expected_mapping, expected_extra_items, expected_extra_tracks)
@@ -105,7 +105,7 @@ class TestAssignment(ConfigMixin):
         trackinfo.append(info(11, "Beloved One", 243.733))
         trackinfo.append(info(12, "In the Lord's Arms", 186.13300000000001))
 
-        expected = dict(zip(items, trackinfo)), [], []
+        expected = list(zip(items, trackinfo)), [], []
 
         assert match.assign_items(items, trackinfo) == expected
 
@@ -113,9 +113,7 @@ class TestAssignment(ConfigMixin):
 class ApplyTestUtil:
     def _apply(self, info=None, per_disc_numbering=False, artist_credit=False):
         info = info or self.info
-        mapping = {}
-        for i, t in zip(self.items, info.tracks):
-            mapping[i] = t
+        mapping = list(zip(self.items, info.tracks))
         config["per_disc_numbering"] = per_disc_numbering
         config["artist_credit"] = artist_credit
         autotag.apply_metadata(info, mapping)

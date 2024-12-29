@@ -247,14 +247,14 @@ class ImportTask(BaseImportTask):
         elif self.choice_flag == Action.APPLY and isinstance(
             self.match, autotag.AlbumMatch
         ):
-            return list(self.match.mapping.keys())
+            return list(self.match.items)
         else:
             assert False
 
     def apply_metadata(self):
         """Copy metadata from match info to the items."""
         if config["import"]["from_scratch"]:
-            for item in self.match.mapping:
+            for item in self.match.items:
                 item.clear()
 
         autotag.apply_metadata(self.match.info, self.match.mapping)

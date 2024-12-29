@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from functools import cached_property
 from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
 
 from typing_extensions import Self
@@ -221,9 +222,13 @@ class Match(NamedTuple):
 
 class AlbumMatch(Match):
     info: AlbumInfo
-    mapping: dict[Item, TrackInfo]
+    mapping: list[tuple[Item, TrackInfo]]
     extra_items: list[Item]
     extra_tracks: list[TrackInfo]
+
+    @cached_property
+    def items(self) -> list[Item]:
+        return [i for i, _ in self.mapping]
 
 
 class TrackMatch(Match):
