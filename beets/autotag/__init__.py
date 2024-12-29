@@ -14,7 +14,7 @@
 
 """Facilities for automatically determining files' correct metadata."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from typing import Union
 
 from beets import config, logging
@@ -192,11 +192,12 @@ def apply_album_metadata(album_info: AlbumInfo, album: Album):
     correct_list_fields(album)
 
 
-def apply_metadata(album_info: AlbumInfo, mapping: Mapping[Item, TrackInfo]):
+def apply_metadata(album_match: AlbumMatch):
     """Set the items' metadata to match an AlbumInfo object using a
     mapping from Items to TrackInfo objects.
     """
-    for item, track_info in mapping.items():
+    album_info = album_match.info
+    for item, track_info in album_match.mapping:
         # Artist or artist credit.
         if config["artist_credit"]:
             item.artist = (

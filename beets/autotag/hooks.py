@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property, total_ordering
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, TypeVar, cast
 
@@ -646,10 +646,14 @@ class TrackMatch(Match):
 @dataclass
 class AlbumMatch(Match):
     disambig_fields_key = "album_disambig_fields"
+    mapping: list[tuple[Item, TrackInfo]] = field(repr=False)
+    extra_items: list[Item] = field(default_factory=list)
+    extra_tracks: list[TrackInfo] = field(default_factory=list)
     info: AlbumInfo
-    mapping: dict["Item", TrackInfo]
-    extra_items: set["Item"]
-    extra_tracks: set[TrackInfo]
+
+    @cached_property
+    def items(self) -> list[Item]:
+        return [i for i, _ in self.mapping]
 
 
 # Aggregation of sources.

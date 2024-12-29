@@ -575,17 +575,17 @@ class ImportTask(BaseImportTask):
         if self.choice_flag in (action.ASIS, action.RETAG):
             return list(self.items)
         elif self.choice_flag == action.APPLY:
-            return list(self.match.mapping.keys())
+            return list(self.match.items)
         else:
             assert False
 
     def apply_metadata(self):
         """Copy metadata from match info to the items."""
         if config["import"]["from_scratch"]:
-            for item in self.match.mapping:
+            for item in self.match.items:
                 item.clear()
 
-        autotag.apply_metadata(self.match.info, self.match.mapping)
+        autotag.apply_metadata(self.match)
 
     def duplicate_items(self, lib):
         duplicate_items = []
