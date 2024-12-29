@@ -26,11 +26,19 @@ This is sort of like a tiny, horrible degeneration of a real templating
 engine like Jinja2 or Mustache.
 """
 
+from __future__ import annotations
+
 import ast
 import dis
 import functools
 import re
 import types
+from typing import TYPE_CHECKING
+
+import beets
+
+if TYPE_CHECKING:
+    import confuse
 
 SYMBOL_DELIM = "$"
 FUNC_DELIM = "%"
@@ -41,6 +49,10 @@ ESCAPE_CHAR = "$"
 
 VARIABLE_PREFIX = "__var_"
 FUNCTION_PREFIX = "__func_"
+
+PF_KEY_QUERIES = {"comp": "comp:true", "singleton": "singleton:true"}
+
+PathFormat = tuple[str, "Template"]
 
 
 class Environment:
@@ -572,6 +584,18 @@ class Template:
             return "".join(parts)
 
         return wrapper_func
+
+
+def get_path_formats(
+    subview: confuse.Subview | None = None,
+) -> list[PathFormat]:
+    """Get the configuration's path formats as a list of query/template
+    pairs.
+    """
+    return [
+        (PF_KEY_QUERIES.get(q, q), template(v.as_str()))
+        for q, v in (subview or beets.config["paths"]).items()
+    ]
 
 
 # Performance tests.
