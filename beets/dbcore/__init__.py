@@ -24,6 +24,7 @@ from .query import (
     MatchQuery,
     OrQuery,
     Query,
+    Sort,
 )
 from .queryparse import (
     parse_sorted_query,
@@ -43,6 +44,7 @@ __all__ = [
     "OrQuery",
     "Query",
     "Results",
+    "Sort",
     "Type",
     "parse_sorted_query",
     "query_from_strings",

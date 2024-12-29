@@ -1232,20 +1232,19 @@ class Item(LibModel):
         basedir = basedir or self.db.directory
         path_formats = path_formats or self.db.path_formats
 
-        # Use a path format based on a query, falling back on the
-        # default.
-        for query, path_format in path_formats:
-            if query == PF_KEY_DEFAULT:
+        # Use a path format based on a query, falling back on the default.
+        for query_str, path_format in path_formats:
+            if query_str == PF_KEY_DEFAULT:
                 continue
-            query, _ = parse_query_string(query, type(self))
+            query, _ = parse_query_string(query_str, type(self))
             if query.match(self):
                 # The query matches the item! Use the corresponding path
                 # format.
                 break
         else:
             # No query matched; fall back to default.
-            for query, path_format in path_formats:
-                if query == PF_KEY_DEFAULT:
+            for query_str, path_format in path_formats:
+                if query_str == PF_KEY_DEFAULT:
                     break
             else:
                 assert False, "no default path format"

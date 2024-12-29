@@ -23,6 +23,8 @@ stored objects.
 Overview
 ~~~~~~~~
 
+.. autoclass:: Library(path, directory)
+
 You can add new items or albums to the library via the :py:meth:`Library.add`
 and :py:meth:`Library.add_album` methods.
 
