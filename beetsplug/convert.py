@@ -29,6 +29,7 @@ from beets.library import Item, parse_query_string
 from beets.plugins import BeetsPlugin
 from beets.util import arg_encoding, par_map
 from beets.util.artresizer import ArtResizer
+from beets.util.functemplate import get_path_formats
 from beets.util.m3u import M3UFile
 
 _fs_lock = threading.Lock()
@@ -708,7 +709,7 @@ class ConvertPlugin(BeetsPlugin):
 
         threads = opts.threads or self.config["threads"].get(int)
 
-        path_formats = ui.get_path_formats(self.config["paths"] or None)
+        path_formats = get_path_formats(self.config["paths"])
 
         fmt = opts.format or self.config["format"].as_str().lower()
 

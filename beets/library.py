@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import string
 import sys
@@ -33,6 +34,7 @@ import beets
 from beets import dbcore, logging, plugins, util
 from beets.util import (
     MoveOperation,
+    Replacements,
     bytestring_path,
     cached_classproperty,
     normpath,
@@ -40,10 +42,16 @@ from beets.util import (
     show_path_change,
     syspath,
 )
-from beets.util.functemplate import Template, template
+from beets.util.functemplate import (
+    PathFormat,
+    Template,
+    get_path_formats,
+    template,
+)
 
 from .dbcore.fields import TYPE_BY_FIELD
 from .dbcore.query import PathQuery
+from .exceptions import UserError
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -885,20 +893,19 @@ class Item(LibModel):
         if replacements is None:
             replacements = self._db.replacements
 
-        # Use a path format based on a query, falling back on the
-        # default.
-        for query, path_format in path_formats:
-            if query == PF_KEY_DEFAULT:
+        # Use a path format based on a query, falling back on the default.
+        for query_str, path_format in path_formats:
+            if query_str == PF_KEY_DEFAULT:
                 continue
-            query, _ = parse_query_string(query, type(self))
+            query, _ = parse_query_string(query_str, type(self))
             if query.match(self):
                 # The query matches the item! Use the corresponding path
                 # format.
                 break
         else:
             # No query matched; fall back to default.
-            for query, path_format in path_formats:
-                if query == PF_KEY_DEFAULT:
+            for query_str, path_format in path_formats:
+                if query_str == PF_KEY_DEFAULT:
                     break
             else:
                 assert False, "no default path format"
@@ -1345,7 +1352,9 @@ class Album(LibModel):
 # Query construction helpers.
 
 
-def parse_query_parts(parts, model_cls):
+def parse_query_parts(
+    parts, model_cls: type[LibModel]
+) -> tuple[dbcore.Query, dbcore.Sort]:
     """Given a beets query string as a list of components, return the
     `Query` and `Sort` they represent.
 
@@ -1374,7 +1383,9 @@ def parse_query_parts(parts, model_cls):
     return query, sort
 
 
-def parse_query_string(s, model_cls):
+def parse_query_string(
+    s: str, model_cls: type[LibModel]
+) -> tuple[dbcore.Query, dbcore.Sort]:
     """Given a beets query string, return the `Query` and `Sort` they
     represent.
 
@@ -1397,20 +1408,28 @@ class Library(dbcore.Database):
 
     _models = (Item, Album)
 
-    def __init__(
-        self,
-        path="library.blb",
-        directory: str | None = None,
-        path_formats=((PF_KEY_DEFAULT, "$artist/$album/$track $title"),),
-        replacements=None,
-    ):
-        timeout = beets.config["timeout"].as_number()
-        super().__init__(path, timeout=timeout)
+    @cached_property
+    def path_formats(self) -> list[PathFormat]:
+        return get_path_formats()
+
+    @cached_property
+    def replacements(self) -> Replacements:
+        """Confuse validation function that reads regex/string pairs."""
+        replacements = []
+        for pattern, repl in beets.config["replace"].get(dict).items():
+            repl = repl or ""
+            try:
+                replacements.append((re.compile(pattern), repl))
+            except re.error as e:
+                raise UserError(
+                    f"Malformed regular expression in replace: {pattern}"
+                ) from e
+        return replacements
+
+    def __init__(self, path="library.blb", directory: str | None = None):
+        super().__init__(path, timeout=beets.config["timeout"].as_number())
 
         self.directory = normpath(directory or platformdirs.user_music_path())
-
-        self.path_formats = path_formats
-        self.replacements = replacements
 
         # Used for template substitution performance.
         self._memotable: dict[tuple[str, ...], str] = {}

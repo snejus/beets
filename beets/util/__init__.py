@@ -28,6 +28,7 @@ import sys
 import tempfile
 import traceback
 from collections import Counter
+from collections.abc import Sequence
 from contextlib import suppress
 from enum import Enum
 from importlib import import_module
@@ -52,20 +53,15 @@ from beets import config
 from beets.util import hidden
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator, Sequence
+    from collections.abc import Iterable, Iterator
     from logging import Logger
-
-if sys.version_info >= (3, 10):
-    from typing import TypeAlias
-else:
-    from typing_extensions import TypeAlias
 
 MAX_FILENAME_LENGTH = 200
 WINDOWS_MAGIC_PREFIX = "\\\\?\\"
 T = TypeVar("T")
 BytesOrStr = Union[str, bytes]
 PathLike = Union[BytesOrStr, Path]
-Replacements: TypeAlias = "Sequence[tuple[Pattern[str], str]]"
+Replacements = Sequence[tuple[Pattern[str], str]]
 
 
 class HumanReadableError(Exception):
