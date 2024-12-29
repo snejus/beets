@@ -1,4 +1,4 @@
-# This file is part of beets.
+# This file is part of beets.width.
 # Copyright 2016, Adrian Sampson.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
@@ -22,7 +22,6 @@ from __future__ import annotations
 import errno
 import optparse
 import os.path
-import re
 import readline  # noqa: F401
 import sqlite3
 import sys
@@ -39,7 +38,8 @@ from beets import config, library, logging, plugins, util
 from beets.dbcore import db
 from beets.dbcore import query as db_query
 from beets.util import as_string, colordiff, colorize, get_console, get_text
-from beets.util.functemplate import template
+
+from ..exceptions import UserError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -73,12 +73,6 @@ PF_KEY_QUERIES = {
     "comp": "comp:true",
     "singleton": "singleton:true",
 }
-
-
-class UserError(Exception):
-    """UI exception. Commands should throw this in order to display
-    nonrecoverable errors to the user.
-    """
 
 
 # Encoding utilities.
@@ -420,32 +414,6 @@ def input_select_objects(
         elif answer == "q":
             return out
     return out
-
-
-def get_path_formats(subview=None):
-    """Get the configuration's path formats as a list of query/template
-    pairs.
-    """
-    path_formats = []
-    subview = subview or config["paths"]
-    for query, view in subview.items():
-        query = PF_KEY_QUERIES.get(query, query)  # Expand common queries.
-        path_formats.append((query, template(view.as_str())))
-    return path_formats
-
-
-def get_replacements():
-    """Confuse validation function that reads regex/string pairs."""
-    replacements = []
-    for pattern, repl in config["replace"].get(dict).items():
-        repl = repl or ""
-        try:
-            replacements.append((re.compile(pattern), repl))
-        except re.error:
-            raise UserError(
-                f"malformed regular expression in replace: {pattern}"
-            )
-    return replacements
 
 
 FLOAT_EPSILON = 0.01
@@ -998,12 +966,7 @@ def _open_library(config: confuse.LazyConfig) -> library.Library:
     dbpath = util.bytestring_path(config["library"].as_filename())
     _ensure_db_directory_exists(dbpath)
     try:
-        lib = library.Library(
-            dbpath,
-            config["directory"].as_filename(),
-            get_path_formats(),
-            get_replacements(),
-        )
+        lib = library.Library(dbpath, config["directory"].as_filename())
         lib.get_item(0)  # Test database connection.
     except (sqlite3.OperationalError, sqlite3.DatabaseError) as db_error:
         log.debug("{}", traceback.format_exc())

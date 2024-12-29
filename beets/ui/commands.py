@@ -59,6 +59,7 @@ from beets.util import (
 )
 from beets.util.units import human_bytes, human_seconds, human_seconds_short
 
+from ..exceptions import UserError
 from . import _store_dict
 
 if TYPE_CHECKING:
@@ -100,9 +101,9 @@ def _do_query(
         items = list(lib.items(query))
 
     if album and not albums:
-        raise ui.UserError("No matching albums found.")
+        raise UserError("No matching albums found.")
     elif not album and not items:
-        raise ui.UserError("No matching items found.")
+        raise UserError("No matching items found.")
 
     return items, albums
 
@@ -133,11 +134,11 @@ def _parse_logfiles(logfiles):
         try:
             yield from _paths_from_logfile(syspath(normpath(logfile)))
         except ValueError as err:
-            raise ui.UserError(
+            raise UserError(
                 f"malformed logfile {util.displayable_path(logfile)}: {err}"
             ) from err
         except OSError as err:
-            raise ui.UserError(
+            raise UserError(
                 f"unreadable logfile {util.displayable_path(logfile)}: {err}"
             ) from err
 
@@ -197,7 +198,7 @@ class HelpCommand(ui.Subcommand):
             cmdname = args[0]
             helpcommand = self.root_parser._subcommand_for_name(cmdname)
             if not helpcommand:
-                raise ui.UserError(f"unknown command '{cmdname}'")
+                raise UserError(f"unknown command '{cmdname}'")
             helpcommand.print_help()
         else:
             self.root_parser.print_help()
@@ -903,7 +904,7 @@ def import_files(lib, paths: list[bytes], query):
     """
     # Check parameter consistency.
     if config["import"]["quiet"] and config["import"]["timid"]:
-        raise ui.UserError("can't be both quiet and timid")
+        raise UserError("can't be both quiet and timid")
 
     # Open the log.
     if config["import"]["log"].get() is not None:
@@ -914,7 +915,7 @@ def import_files(lib, paths: list[bytes], query):
                 logging.Formatter("%(asctime)s | %(message)s")
             )
         except OSError:
-            raise ui.UserError(
+            raise UserError(
                 "Could not open log file for writing:"
                 f" {displayable_path(logpath)}"
             )
@@ -952,7 +953,7 @@ def import_func(lib, opts, args: list[str]):
         paths_from_logfiles = list(_parse_logfiles(opts.from_logfiles or []))
 
         if not paths and not paths_from_logfiles:
-            raise ui.UserError("no path specified")
+            raise UserError("no path specified")
 
         byte_paths = [os.fsencode(p) for p in paths]
         paths_from_logfiles = [os.fsencode(p) for p in paths_from_logfiles]
@@ -960,7 +961,7 @@ def import_func(lib, opts, args: list[str]):
         # Check the user-specified directories.
         for path in byte_paths:
             if not os.path.exists(syspath(normpath(path))):
-                raise ui.UserError(
+                raise UserError(
                     f"no such file or directory: {displayable_path(path)}"
                 )
 
@@ -980,7 +981,7 @@ def import_func(lib, opts, args: list[str]):
         # If all paths were read from a logfile, and none of them exist, throw
         # an error
         if not paths:
-            raise ui.UserError("none of the paths are importable")
+            raise UserError("none of the paths are importable")
 
     import_files(lib, byte_paths, query)
 
@@ -1643,7 +1644,7 @@ def modify_parse_args(args):
 def modify_func(lib, opts, args):
     query, mods, dels = modify_parse_args(args)
     if not mods and not dels:
-        raise ui.UserError("no modifications specified")
+        raise UserError("no modifications specified")
     modify_items(
         lib,
         mods,
@@ -1757,7 +1758,7 @@ def move_func(lib, opts, args):
     if dest is not None:
         dest = normpath(dest)
         if not os.path.isdir(syspath(dest)):
-            raise ui.UserError(f"no such directory: {displayable_path(dest)}")
+            raise UserError(f"no such directory: {displayable_path(dest)}")
 
     items, albums = _do_query(lib, args, opts.album, False)
     move_items(
@@ -1915,7 +1916,7 @@ def config_edit():
             message += (
                 ". Please set the VISUAL (or EDITOR) environment variable"
             )
-        raise ui.UserError(message)
+        raise UserError(message)
 
 
 config_cmd = ui.Subcommand("config", help="show or edit the user configuration")

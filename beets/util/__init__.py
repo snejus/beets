@@ -1,4 +1,4 @@
-# This file is part of beets.
+# This file is part of beets.util ini
 # Copyright 2016, Adrian Sampson.
 #
 # Permission is hereby granted, free of charge, to any person obtaining
@@ -63,7 +63,6 @@ if TYPE_CHECKING:
     from rich.console import Console
 
     from beets.library import Item
-
 
 MAX_FILENAME_LENGTH = 200
 WINDOWS_MAGIC_PREFIX = "\\\\?\\"
