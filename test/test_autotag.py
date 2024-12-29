@@ -581,7 +581,7 @@ class TestAssignment(ConfigMixin):
         trackinfo.append(info(11, "Beloved One", 243.733))
         trackinfo.append(info(12, "In the Lord's Arms", 186.13300000000001))
 
-        expected = dict(zip(items, trackinfo)), [], []
+        expected = list(zip(items, trackinfo)), [], []
 
         assert match.assign_items(items, trackinfo) == expected
 
