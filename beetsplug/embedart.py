@@ -28,6 +28,7 @@ class EmbedArtCLIOpts(Protocol):
     file: str | None
     url: str | None
     yes: bool | None
+    force: bool | None
 
 
 class ExtractArtCLIOpts(Protocol):
@@ -106,6 +107,9 @@ class EmbedCoverArtPlugin(BeetsPlugin):
         embed_cmd.parser.add_option(
             "-f", "--file", metavar="PATH", help="the image file to embed"
         )
+        embed_cmd.parser.add_option(
+            "--force", action="store_true", help="overwrite existing art"
+        )
 
         embed_cmd.parser.add_option(
             "-y", "--yes", action="store_true", help="skip confirmation"
@@ -121,11 +125,11 @@ class EmbedCoverArtPlugin(BeetsPlugin):
         maxwidth = self.config["maxwidth"].get(int)
         quality = self.config["quality"].get(int)
         compare_threshold = self.config["compare_threshold"].get(int)
-        ifempty = self.config["ifempty"].get(bool)
 
         def embed_func(
             lib: Library, opts: EmbedArtCLIOpts, args: list[str]
         ) -> None:
+            ifempty = not opts.force
             if opts.file:
                 imagepath = normpath(opts.file)
                 if not os.path.isfile(syspath(imagepath)):
