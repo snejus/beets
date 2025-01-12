@@ -38,6 +38,10 @@ Bug fixes:
   request their own last.fm genre. Also log messages regarding what's been
   tagged are now more polished.
   :bug:`5582`
+* :doc:`plugins/lyrics`: Rewrite lyrics tests using pytest to provide isolated
+  configuration for each test case. This fixes the issue where some tests
+  failed because they read developers' local lyrics configuration.
+  :bug:`5133`
 
 For packagers:
 
