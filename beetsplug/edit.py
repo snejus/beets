@@ -450,7 +450,9 @@ class EditPlugin(plugins.BeetsPlugin):
                     return load(new_str), new_str
                 except ParseError as e:
                     ui.print_(f"Could not read data: {e}")
-                    if not ui.input_yn("Edit again to fix? (Y/n)", True):
+                    if ui.input_yn(
+                        "Edit again to fix?", highlight_default=False
+                    ):
                         return None
         finally:
             os.remove(new.name)
