@@ -138,7 +138,9 @@ def update_func(lib, opts, args):
     if not os.path.isdir(syspath(lib.directory)):
         ui.print_("Library path is unavailable or does not exist.")
         ui.print_(lib.directory)
-        if not ui.input_yn("Are you sure you want to continue (y/n)?", True):
+        if not ui.input_yn(
+            "Are you sure you want to continue?", highlight_default=False
+        ):
             return
     update_items(
         lib,
