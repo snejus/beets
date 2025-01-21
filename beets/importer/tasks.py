@@ -35,7 +35,7 @@ from beets.dbcore.query import OrQuery, PathQuery
 from .state import ImportState
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Iterable, Iterator, Sequence
 
     from beets.autotag.match import Proposal, Recommendation
     from beets.dbcore.db import AnyModel, LazyDict
@@ -821,7 +821,7 @@ class ArchiveImportTask(SentinelImportTask):
       after sending the rest of the music tasks to make this work.
     """
 
-    def __init__(self, toppath):
+    def __init__(self, toppath: bytes) -> None:
         super().__init__(toppath, ())
         self.extracted = False
 
@@ -917,7 +917,7 @@ class ImportTaskFactory:
     indicated by a path.
     """
 
-    def __init__(self, toppath: util.PathBytes, session: ImportSession):
+    def __init__(self, toppath: util.PathBytes, session: ImportSession) -> None:
         """Create a new task factory.
 
         `toppath` is the user-specified path to search for music to
@@ -930,7 +930,7 @@ class ImportTaskFactory:
         self.imported = 0  # "Real" tasks created.
         self.is_archive = ArchiveImportTask.is_archive(util.syspath(toppath))
 
-    def tasks(self) -> Iterable[ImportTask]:
+    def tasks(self) -> Iterator[BaseImportTask]:
         """Yield all import tasks for music found in the user-specified
         path `self.toppath`. Any necessary sentinel tasks are also
         produced.
@@ -968,7 +968,7 @@ class ImportTaskFactory:
         # the extracted directory).
         yield archive_task or self.sentinel()
 
-    def _create(self, task: ImportTask | None):
+    def _create(self, task: ImportTask[Any] | None):
         """Handle a new task to be emitted by the factory.
 
         Emit the `import_task_created` event and increment the
@@ -1050,7 +1050,7 @@ class ImportTaskFactory:
         """
         return SentinelImportTask(self.toppath, paths)
 
-    def unarchive(self):
+    def unarchive(self) -> ArchiveImportTask | None:
         """Extract the archive for this `toppath`.
 
         Extract the archive to a new directory, adjust `toppath` to
@@ -1064,7 +1064,7 @@ class ImportTaskFactory:
                 "Archive importing requires either "
                 "'copy' or 'move' to be enabled."
             )
-            return
+            return None
 
         log.debug("Extracting archive: {}", util.displayable_path(self.toppath))
         archive_task = ArchiveImportTask(self.toppath)
@@ -1072,7 +1072,7 @@ class ImportTaskFactory:
             archive_task.extract()
         except Exception as exc:
             log.error("extraction failed: {}", exc)
-            return
+            return None
 
         # Now read albums from the extracted directory.
         self.toppath = archive_task.toppath
