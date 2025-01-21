@@ -264,7 +264,9 @@ class EditPlugin(plugins.BeetsPlugin):
                     new_data = load(new_str)
                 except ParseError as e:
                     ui.print_(f"Could not read data: {e}")
-                    if ui.input_yn("Edit again to fix? (Y/n)", True):
+                    if ui.input_yn(
+                        "Edit again to fix?", highlight_default=False
+                    ):
                         continue
                     else:
                         return False
