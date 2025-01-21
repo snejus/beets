@@ -37,8 +37,7 @@ def _confirm(objs, album):
     """
     noun = "album" if album else "file"
     prompt = (
-        "Modify artwork for"
-        f" {len(objs)} {noun}{'s' if len(objs) > 1 else ''} (Y/n)?"
+        f"Modify artwork for {len(objs)} {noun}{'s' if len(objs) > 1 else ''}?"
     )
 
     # Show all the items or albums.
