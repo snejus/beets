@@ -87,7 +87,7 @@ class ZeroPlugin(BeetsPlugin):
             lib: Library, opts: optparse.Values, args: list[str]
         ) -> None:
             if not args and not input_yn(
-                "Remove fields for all items? (Y/n)", True
+                "Remove fields for all items? (Y/n)", highlight_default=False
             ):
                 return
             for item in lib.items(args):

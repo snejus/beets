@@ -169,7 +169,9 @@ def update_func(lib: Library, opts: UpdateCLIOpts, args: list[str]) -> None:
     if not os.path.isdir(syspath(lib.directory)):
         ui.print_("Library path is unavailable or does not exist.")
         ui.print_(os.fsdecode(lib.directory))
-        if not ui.input_yn("Are you sure you want to continue (y/n)?", True):
+        if not ui.input_yn(
+            "Are you sure you want to continue?", highlight_default=False
+        ):
             return
     if opts.album:
         items = [i for a in lib.albums(args) for i in a.items()]

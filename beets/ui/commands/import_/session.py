@@ -217,7 +217,7 @@ class TerminalImportSession(importer.ImportSession):
     def should_resume(self, path: PathBytes) -> bool:
         return ui.input_yn(
             f"Import of the directory:\n{displayable_path(path)}\n"
-            "was interrupted. Resume (Y/n)?"
+            "was interrupted. Resume?"
         )
 
     def _get_choices(self, task: ImportTask) -> list[PromptChoice]:
@@ -426,7 +426,7 @@ def choose_candidate(
 
     while True:
         # Display and choose from candidates.
-        require = rec <= Recommendation.low
+        highlight_default = rec > Recommendation.low
 
         if not bypass_candidates:
             # Display list of candidates.
@@ -443,7 +443,7 @@ def choose_candidate(
                 if sel != 1:
                     # When choosing anything but the first match,
                     # disable the default action.
-                    require = True
+                    highlight_default = False
             elif sel == "m":
                 pass
             elif sel in choice_actions:
@@ -466,13 +466,13 @@ def choose_candidate(
             {"apply": "a", "skip": "s", "asis": "u", "none": None}
         )
         if default is None:
-            require = True
+            highlight_default = False
         # Bell ring when user interaction is needed.
         if config["import"]["bell"]:
             ui.print_("\a", end="")
         sel = ui.input_options(
             ("Apply", "More candidates", *choice_opts),
-            require=require,
+            highlight_default=highlight_default,
             default=default,
         )
         if sel == "a":
