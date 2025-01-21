@@ -538,7 +538,7 @@ def choose_candidate(
 
     while True:
         # Display and choose from candidates.
-        require = rec <= autotag.match.Recommendation.low
+        highlight_default = rec > autotag.match.Recommendation.low
 
         if not bypass_candidates:
             # Display list of candidates.
@@ -561,7 +561,7 @@ def choose_candidate(
                 if sel != 1:
                     # When choosing anything but the first match,
                     # disable the default action.
-                    require = True
+                    highlight_default = False
         bypass_candidates = False
 
         # Show what we're about to do.
@@ -587,13 +587,13 @@ def choose_candidate(
             }
         )
         if default is None:
-            require = True
+            highlight_default = False
         # Bell ring when user interaction is needed.
         if config["import"]["bell"]:
             ui.print_("\a", end="")
         sel = ui.input_options(
             ("Apply", "More candidates") + choice_opts,
-            require=require,
+            highlight_default=highlight_default,
             default=default,
         )
         if sel == "a":
@@ -818,8 +818,9 @@ class TerminalImportSession(importer.ImportSession):
 
     def should_resume(self, path):
         return ui.input_yn(
-            "Import of the directory:\n{}\n"
-            "was interrupted. Resume (Y/n)?".format(displayable_path(path))
+            "Import of the directory:\n{}\nwas interrupted. Resume?".format(
+                displayable_path(path)
+            )
         )
 
     def _get_choices(self, task):
@@ -1345,7 +1346,9 @@ def update_func(lib, opts, args):
     if not os.path.isdir(syspath(lib.directory)):
         ui.print_("Library path is unavailable or does not exist.")
         ui.print_(lib.directory)
-        if not ui.input_yn("Are you sure you want to continue (y/n)?", True):
+        if not ui.input_yn(
+            "Are you sure you want to continue?", highlight_default=False
+        ):
             return
     update_items(
         lib,
