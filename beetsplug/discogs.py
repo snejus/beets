@@ -537,10 +537,13 @@ class DiscogsPlugin(BeetsPlugin):
         year = int(released[0]) if len(released[0]) else None
         month = int(released[1]) if len(released) > 1 else None
         day = int(released[2]) if len(released) > 2 else None
-        label = re.sub(r" \([0-9]+\)", "", label)
+        if label:
+            label = re.sub(r" \([0-9]+\)", "", label)
         comments = result.data.get("notes") or None
 
         data = dict(
+            album=album,
+            album_id=album_id,
             albumtype=albumtype,
             year=year,
             label=label,
@@ -558,13 +561,11 @@ class DiscogsPlugin(BeetsPlugin):
             data_url=data_url,
             discogs_labelid=labelid,
             discogs_artistid=artist_id,
+            discogs_albumid=discogs_albumid,
             cover_art_url=cover_art_url,
         )
         if len(tracks) == 1:
-            t = tracks[0]
             data.update(albumtype="single", albumtypes=["single"])
-            album = artist + " - " + t.title
-            album_id = t.track_id
             for track in tracks:
                 track.index = None
                 track.medium_index = None
@@ -572,12 +573,6 @@ class DiscogsPlugin(BeetsPlugin):
                 track.medium_total = None
                 track.track_alt = None
                 track.update(data)
-        else:
-            data.update(
-                discogs_albumid=discogs_albumid,
-                album=album,
-                album_id=album_id,
-            )
 
         return AlbumInfo(
             artist=artist,
@@ -696,6 +691,16 @@ class DiscogsPlugin(BeetsPlugin):
             index_count += 1
             medium_count = 1 if medium_count == 0 else medium_count
             track.medium, track.medium_index = medium_count, index_count
+
+        # Get `disctitle` from Discogs index tracks. Assume that an index track
+        # before the first track of each medium is a disc title.
+        for track in tracks:
+            if track.medium_index == 1:
+                if track.index in index_tracks:
+                    disctitle = index_tracks[track.index]
+                else:
+                    disctitle = None
+            track.disctitle = disctitle
             track.data_source = "discogs"
 
         return tracks
@@ -740,11 +745,10 @@ class DiscogsPlugin(BeetsPlugin):
                             )
                     tracklist.extend(subtracks)
             else:
-                tracklist.extend(subtracks)
-                # # Merge the subtracks, pick a title, and append the new track.
-                # track = subtracks[0].copy()
-                # track["title"] = " / ".join([t["title"] for t in subtracks])
-                # tracklist.append(track)
+                # Merge the subtracks, pick a title, and append the new track.
+                track = subtracks[0].copy()
+                track["title"] = " / ".join([t["title"] for t in subtracks])
+                tracklist.append(track)
 
         # Pre-process the tracklist, trying to identify subtracks.
         subtracks = []
