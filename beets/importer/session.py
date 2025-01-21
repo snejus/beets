@@ -25,6 +25,8 @@ from . import stages as stagefuncs
 from .state import ImportState
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from beets.util import PathBytes
 
     from .tasks import ImportTask
@@ -86,7 +88,9 @@ class ImportSession:
         # Normalize the paths.
         self.paths = list(map(normpath, paths or []))
 
-    def _setup_logging(self, loghandler: logging.Handler | None):
+    def _setup_logging(
+        self, loghandler: logging.Handler
+    ) -> logging.BeetsLogger:
         logger = logging.getLogger(__name__)
         logger.propagate = False
         if not loghandler:
@@ -146,7 +150,7 @@ class ImportSession:
 
         self.want_resume = config["resume"].as_choice([True, False, "ask"])
 
-    def tag_log(self, status, paths: Sequence[PathBytes]):
+    def tag_log(self, status: str, paths: Iterable[PathBytes]) -> None:
         """Log a message about a given album to the importer log. The status
         should reflect the reason the album couldn't be tagged.
         """
@@ -246,7 +250,9 @@ class ImportSession:
 
     # Incremental and resumed imports
 
-    def already_imported(self, toppath: PathBytes, paths: Sequence[PathBytes]):
+    def already_imported(
+        self, toppath: PathBytes, paths: Sequence[PathBytes]
+    ) -> bool:
         """Returns true if the files belonging to this task have already
         been imported in a previous session.
         """
