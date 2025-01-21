@@ -616,7 +616,7 @@ class ConvertPlugin(BeetsPlugin):
         if not items:
             self._log.error("Empty query result.")
             return
-        if not (pretend or opts.yes or ui.input_yn("Convert? (Y/n)")):
+        if not (pretend or opts.yes or ui.input_yn("Convert?")):
             return
 
         if opts.album and self.config["copy_album_art"]:

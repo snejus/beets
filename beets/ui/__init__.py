@@ -178,9 +178,9 @@ def input_(prompt=None):
 
 def input_options(
     options: Sequence[str],
-    require: bool = False,
-    prompt=None,
-    fallback_prompt=None,
+    highlight_default: bool = True,
+    prompt: str | None = None,
+    fallback_prompt: str | None = None,
     numrange: tuple[int, int] | None = None,
     default: str | None = None,
     max_width: int = None,
@@ -230,23 +230,18 @@ def input_options(
         index = option.index(found_letter)
 
         # Mark the option's shortcut letter for display.
-        if not require and (
+        is_default = highlight_default and (
             (default is None and not numrange and first)
             or (
                 isinstance(default, str)
                 and found_letter.lower() == default.lower()
             )
-        ):
-            # The first option is the default; mark it.
-            show_letter = f"[{found_letter.upper()}]"
-            is_default = True
-        else:
-            show_letter = found_letter.upper()
-            is_default = False
+        )
 
         # Colorize the letter shortcut.
         show_letter = colorize(
-            "action_default" if is_default else "action", show_letter
+            "action_default" if is_default else "action",
+            f"[dim][[/]{found_letter.upper()}[dim]][/]",
         )
 
         # Insert the highlighted letter back into the word.
@@ -261,11 +256,11 @@ def input_options(
         first = False
 
     # The default is just the first option if unspecified.
-    if require:
+    if not highlight_default:
         default = None
     elif default is None:
         if numrange:
-            default = numrange[0]
+            default = str(numrange[0])
         else:
             default = display_letters[0].lower()
 
@@ -274,12 +269,12 @@ def input_options(
         prompt_parts = []
         prompt_part_lengths = []
         if numrange:
-            if isinstance(default, int):
-                default_name = str(default)
-                default_name = colorize("action_default", default_name)
+            if default:
                 tmpl = "# selection (default {})"
-                prompt_parts.append(tmpl.format(default_name))
-                prompt_part_lengths.append(len(tmpl) - 2 + len(str(default)))
+                prompt_parts.append(
+                    tmpl.format(f"[action_default]{default}[/]")
+                )
+                prompt_part_lengths.append(len(tmpl.format(default)))
             else:
                 prompt_parts.append("# selection")
                 prompt_part_lengths.append(len(prompt_parts[-1]))
@@ -352,16 +347,18 @@ def input_options(
         resp = input_(fallback_prompt)
 
 
-def input_yn(prompt, require=False):
+def input_yn(prompt, **kwargs) -> bool:
     """Prompts the user for a "yes" or "no" response. The default is
     "yes" unless `require` is `True`, in which case there is no default.
     """
     # Start prompt with U+279C: Heavy Round-Tipped Rightwards Arrow
-    yesno = colorize("action", "\u279c ") + colorize(
-        "action_description", "Enter Y or N:"
+    kwargs["prompt"] = f"{prompt} (Y/n)"
+    kwargs.setdefault(
+        "fallback_prompt",
+        colorize("action", "\u279c ")
+        + colorize("action_description", "Enter Y or N:"),
     )
-    sel = input_options(("y", "n"), require, prompt, yesno)
-    return sel == "y"
+    return input_options(("y", "n"), **kwargs) == "y"
 
 
 def input_select_objects(
@@ -894,7 +891,7 @@ def _ensure_db_directory_exists(path):
     if not os.path.isdir(newpath):
         if input_yn(
             f"The database directory {util.displayable_path(newpath)} does not"
-            " exist. Create it (Y/n)?"
+            " exist. Create it?"
         ):
             os.makedirs(newpath)
 
