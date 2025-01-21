@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 import itertools
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from beets import config, logging, plugins
 from beets.util import MoveOperation, displayable_path, pipeline
@@ -30,12 +30,13 @@ from .tasks import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
 
     from beets import library
     from beets.autotag.hooks import AnyMatch
 
     from .session import ImportSession
+    from .tasks import BaseImportTask
 
 # Global logger.
 log = logging.getLogger(__name__)
@@ -44,7 +45,7 @@ log = logging.getLogger(__name__)
 # Functions that are called first i.e. they generate import tasks
 
 
-def read_tasks(session: ImportSession):
+def read_tasks(session: ImportSession) -> Iterator[BaseImportTask]:
     """A generator yielding all the albums (as ImportTask objects) found
     in the user-specified list of paths. In the case of a singleton
     import, yields single-item tasks instead.
@@ -130,7 +131,7 @@ def group_albums(session: ImportSession):
 
 
 @pipeline.mutator_stage
-def lookup_candidates(session: ImportSession, task: ImportTask):
+def lookup_candidates(session: ImportSession, task: ImportTask[Any]):
     """A coroutine for performing the initial MusicBrainz lookup for an
     album. It accepts lists of Items and yields
     (items, candidates, rec) tuples. If no match
@@ -150,7 +151,7 @@ def lookup_candidates(session: ImportSession, task: ImportTask):
 
 
 @pipeline.stage
-def user_query(session: ImportSession, task: ImportTask):
+def user_query(session: ImportSession, task: ImportTask[Any]):
     """A coroutine for interfacing with the user about the tagging
     process.
 
@@ -222,7 +223,7 @@ def user_query(session: ImportSession, task: ImportTask):
 
 
 @pipeline.mutator_stage
-def import_asis(session: ImportSession, task: ImportTask):
+def import_asis(session: ImportSession, task: ImportTask[Any]):
     """Select the `action.ASIS` choice for all tasks.
 
     This stage replaces the initial_lookup and user_query stages
@@ -239,8 +240,8 @@ def import_asis(session: ImportSession, task: ImportTask):
 @pipeline.mutator_stage
 def plugin_stage(
     session: ImportSession,
-    func: Callable[[ImportSession, ImportTask], None],
-    task: ImportTask,
+    func: Callable[[ImportSession, ImportTask[Any]], None],
+    task: ImportTask[Any],
 ):
     """A coroutine (pipeline stage) that calls the given function with
     each non-skipped import task. These stages occur between applying
@@ -258,7 +259,7 @@ def plugin_stage(
 
 
 @pipeline.stage
-def log_files(session: ImportSession, task: ImportTask):
+def log_files(session: ImportSession, task: ImportTask[Any]):
     """A coroutine (pipeline stage) to log each file to be imported."""
     if isinstance(task, SingletonImportTask):
         log.info("Singleton: {}", displayable_path(task.item["path"]))
@@ -275,7 +276,7 @@ def log_files(session: ImportSession, task: ImportTask):
 
 
 @pipeline.stage
-def manipulate_files(session: ImportSession, task: ImportTask):
+def manipulate_files(session: ImportSession, task: ImportTask[Any]):
     """A coroutine (pipeline stage) that performs necessary file
     manipulations *after* items have been added to the library and
     finalizes each task.
@@ -336,7 +337,7 @@ def _apply_choice(session: ImportSession, task: ImportTask[AnyMatch]):
         task.set_fields(session.lib)
 
 
-def _resolve_duplicates(session: ImportSession, task: ImportTask):
+def _resolve_duplicates(session: ImportSession, task: ImportTask[Any]):
     """Check if a task conflicts with items or albums already imported
     and ask the session to resolve this.
     """
