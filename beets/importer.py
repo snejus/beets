@@ -31,7 +31,7 @@ from contextlib import contextmanager
 from enum import Enum
 from functools import cached_property
 from tempfile import mkdtemp
-from typing import TYPE_CHECKING, Any, ClassVar, Generic, Sequence
+from typing import TYPE_CHECKING, Any, AnyStr, ClassVar, Generic, Sequence
 
 import mediafile
 
@@ -50,7 +50,7 @@ from beets.util import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable, Iterator
 
     from beets.dbcore.db import LazyDict
 
@@ -218,7 +218,9 @@ class ImportSession:
         if self.paths:
             self.paths = list(map(normpath, self.paths))
 
-    def _setup_logging(self, loghandler):
+    def _setup_logging(
+        self, loghandler: logging.Handler
+    ) -> logging.BeetsLogger:
         logger = logging.getLogger(__name__)
         logger.propagate = False
         if not loghandler:
@@ -278,7 +280,7 @@ class ImportSession:
 
         self.want_resume = config["resume"].as_choice([True, False, "ask"])
 
-    def tag_log(self, status, paths):
+    def tag_log(self, status: str, paths: Iterable[AnyStr]) -> None:
         """Log a message about a given album to the importer log. The status
         should reflect the reason the album couldn't be tagged.
         """
@@ -375,7 +377,7 @@ class ImportSession:
 
     # Incremental and resumed imports
 
-    def already_imported(self, toppath, paths):
+    def already_imported(self, toppath: bytes, paths: list[bytes]) -> bool:
         """Returns true if the files belonging to this task have already
         been imported in a previous session.
         """
@@ -1161,7 +1163,7 @@ class ArchiveImportTask(SentinelImportTask):
       after sending the rest of the music tasks to make this work.
     """
 
-    def __init__(self, toppath):
+    def __init__(self, toppath: bytes) -> None:
         super().__init__(toppath, ())
         self.extracted = False
 
@@ -1255,7 +1257,7 @@ class ImportTaskFactory:
     indicated by a path.
     """
 
-    def __init__(self, toppath, session):
+    def __init__(self, toppath: bytes, session: ImportSession) -> None:
         """Create a new task factory.
 
         `toppath` is the user-specified path to search for music to
@@ -1268,7 +1270,7 @@ class ImportTaskFactory:
         self.imported = 0  # "Real" tasks created.
         self.is_archive = ArchiveImportTask.is_archive(syspath(toppath))
 
-    def tasks(self):
+    def tasks(self) -> Iterator[BaseImportTask]:
         """Yield all import tasks for music found in the user-specified
         path `self.toppath`. Any necessary sentinel tasks are also
         produced.
@@ -1389,7 +1391,7 @@ class ImportTaskFactory:
         """
         return SentinelImportTask(self.toppath, paths)
 
-    def unarchive(self):
+    def unarchive(self) -> ArchiveImportTask | None:
         """Extract the archive for this `toppath`.
 
         Extract the archive to a new directory, adjust `toppath` to
@@ -1403,7 +1405,7 @@ class ImportTaskFactory:
                 "Archive importing requires either "
                 "'copy' or 'move' to be enabled."
             )
-            return
+            return None
 
         log.debug("Extracting archive: {0}", displayable_path(self.toppath))
         archive_task = ArchiveImportTask(self.toppath)
@@ -1411,7 +1413,7 @@ class ImportTaskFactory:
             archive_task.extract()
         except Exception as exc:
             log.error("extraction failed: {0}", exc)
-            return
+            return None
 
         # Now read albums from the extracted directory.
         self.toppath = archive_task.toppath
@@ -1461,7 +1463,7 @@ def _extend_pipeline(tasks, *stages):
 # Full-album pipeline stages.
 
 
-def read_tasks(session):
+def read_tasks(session: ImportSession) -> Iterator[BaseImportTask]:
     """A generator yielding all the albums (as ImportTask objects) found
     in the user-specified list of paths. In the case of a singleton
     import, yields single-item tasks instead.
@@ -1536,7 +1538,7 @@ def lookup_candidates(session, task):
 
 
 @pipeline.stage
-def user_query(session, task):
+def user_query(session: ImportSession, task: ImportTask[Any]):
     """A coroutine for interfacing with the user about the tagging
     process.
 
