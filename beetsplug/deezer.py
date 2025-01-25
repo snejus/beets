@@ -124,7 +124,7 @@ class DeezerPlugin(MetadataSourcePlugin, BeetsPlugin):
             album=album,
             albumtype=albumtype,
             artist=artist,
-            artist_id=artist_id,
+            artist_id=str(artist_id),
             artist_credit=artist_credit,
             albumstatus="Official",
             album_id=deezer_id,
