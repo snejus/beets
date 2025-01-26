@@ -23,6 +23,7 @@ from beets.util import MoveOperation, displayable_path, pipeline
 from .tasks import (
     Action,
     AlbumImportTask,
+    DuplicateAction,
     ImportTask,
     ImportTaskFactory,
     SentinelImportTask,
@@ -196,9 +197,9 @@ def user_query(session: ImportSession, task: ImportTask[Any]):
             user_query(session),
         )
 
-    _resolve_duplicates(session, task)
+    task.resolve_duplicates(session)
 
-    if task.should_merge_duplicates:
+    if task.duplicate_action is DuplicateAction.MERGE:
         # Create a new task for tagging the current items
         # and duplicates together
         duplicate_items = task.duplicate_items(session.lib)
@@ -282,7 +283,7 @@ def manipulate_files(session: ImportSession, task: ImportTask[Any]):
     finalizes each task.
     """
     if not task.skip:
-        if task.should_remove_duplicates:
+        if task.duplicate_action is DuplicateAction.REMOVE:
             task.remove_duplicates(session.lib)
 
         if session.config["move"]:
@@ -335,46 +336,6 @@ def _apply_choice(session: ImportSession, task: ImportTask[AnyMatch]):
     # it can set the fields.
     if config["import"]["set_fields"]:
         task.set_fields(session.lib)
-
-
-def _resolve_duplicates(session: ImportSession, task: ImportTask[Any]):
-    """Check if a task conflicts with items or albums already imported
-    and ask the session to resolve this.
-    """
-    if task.choice_flag in (Action.ASIS, Action.APPLY, Action.RETAG):
-        found_duplicates = task.find_duplicates(session.lib)
-        if found_duplicates:
-            log.debug("found duplicates: {}", [o.id for o in found_duplicates])
-
-            # Get the default action to follow from config.
-            duplicate_action = config["import"]["duplicate_action"].as_choice(
-                {
-                    "skip": "s",
-                    "keep": "k",
-                    "remove": "r",
-                    "merge": "m",
-                    "ask": "a",
-                }
-            )
-            log.debug("default action for duplicates: {}", duplicate_action)
-
-            if duplicate_action == "s":
-                # Skip new.
-                task.set_choice(Action.SKIP)
-            elif duplicate_action == "k":
-                # Keep both. Do nothing; leave the choice intact.
-                pass
-            elif duplicate_action == "r":
-                # Remove old.
-                task.should_remove_duplicates = True
-            elif duplicate_action == "m":
-                # Merge duplicates together
-                task.should_merge_duplicates = True
-            else:
-                # No default action set; ask the session.
-                session.resolve_duplicate(task, found_duplicates)
-
-            session.log_choice(task, True)
 
 
 def _freshen_items(items):

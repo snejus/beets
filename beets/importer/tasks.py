@@ -26,6 +26,8 @@ from tempfile import mkdtemp
 from typing import TYPE_CHECKING, Any, ClassVar, Generic
 
 import mediafile
+from confuse import ConfigValueError
+from typing_extensions import Self
 
 from beets import config, library, logging, plugins, util
 from beets.autotag.hooks import AlbumMatch, AnyMatch, Match, TrackMatch
@@ -68,6 +70,25 @@ REIMPORT_FLEX_ATTRS = {
     "data_url",
     "media",
 }
+
+
+class DuplicateAction(str, Enum):
+    text: str
+
+    def __new__(cls, value: str) -> Self:
+        obj = str.__new__(cls, [value])
+        obj._value_ = value[0].lower()
+        obj.text = value
+        return obj
+
+    @classmethod
+    def options(cls):
+        return [d.text for d in cls]
+
+    SKIP = "Skip new"
+    MERGE = "Merge all"
+    REMOVE = "Remove old"
+    KEEP = "Keep all"
 
 
 class ImportAbortError(Exception):
@@ -165,6 +186,7 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
 
     candidates: Sequence[AnyMatch] = []
     rec: Recommendation | None
+    duplicate_action: DuplicateAction | None
     album: Album
 
     @util.cached_classproperty
@@ -190,8 +212,7 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
         super().__init__(toppath, paths, items)
         self.choice_flag = None
         self.rec = None
-        self.should_remove_duplicates = False
-        self.should_merge_duplicates = False
+        self.duplicate_action = None
 
     @classmethod
     def _get_flex_attrs(
@@ -230,20 +251,19 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
         use isinstance to check for them.
         """
         # Not part of the task structure:
-        assert choice != Action.APPLY  # Only used internally.
+        to_log: Iterable[bytes] | Iterable[str]
         if isinstance(choice, Match):
             self.choice_flag = Action.APPLY  # Implicit choice.
-            self.match = choice
-        elif choice in (
-            Action.SKIP,
-            Action.ASIS,
-            Action.TRACKS,
-            Action.ALBUMS,
-            Action.RETAG,
-        ):
+            # TODO: redesign to stricten the type
+            self.match = choice  # type: ignore[assignment]
+            to_log = [choice.type.lower(), choice.name]
+        else:
             # TODO: redesign to stricten the type
             self.choice_flag = choice  # type: ignore[assignment]
             self.match = None
+            to_log = self.paths
+
+        self.tag_log(self.choice_flag.name, to_log)
 
     def save_progress(self):
         """Updates the progress state to indicate that this album has
@@ -260,7 +280,10 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
 
     @property
     def skip(self) -> bool:
-        return self.choice_flag == Action.SKIP
+        return (
+            self.choice_flag == Action.SKIP
+            or self.duplicate_action is DuplicateAction.SKIP
+        )
 
     # Convenient data.
 
@@ -531,6 +554,33 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
                 clutter=config["clutter"].as_str_seq(),
             )
 
+    @staticmethod
+    def tag_log(status: str, paths: Iterable[str] | Iterable[bytes]) -> None:
+        """Log a message about a given album to the importer log. The status
+        should reflect the reason the album couldn't be tagged.
+        """
+        log.info("{0} {1}", status, util.displayable_path(tuple(paths)))
+
+    def resolve_duplicates(self, session: ImportSession) -> None:
+        """Check if a task conflicts with items or albums already imported
+        and ask the session to resolve this.
+        """
+        if self.choice_flag in (Action.ASIS, Action.APPLY, Action.RETAG):
+            duplicates = self.find_duplicates(session.lib)
+            if duplicates:
+                log.debug("found duplicates: {}", [o.id for o in duplicates])
+
+                # Get the default action to follow from config.
+                try:
+                    choice = config["import"]["duplicate_action"].as_choice(
+                        {da.name.lower(): da.value for da in DuplicateAction}
+                    )
+                except ConfigValueError:
+                    choice = session.decide_duplicates(self, duplicates)
+
+                self.duplicate_action = DuplicateAction(choice)
+                self.tag_log(self.duplicate_action.name, self.paths)
+
 
 class SingletonImportTask(ImportTask[TrackMatch]):
     """ImportTask for a single track that is not associated to an album."""
@@ -594,7 +644,6 @@ class SingletonImportTask(ImportTask[TrackMatch]):
         """Ask the session which match should apply and apply it."""
         choice = session.choose_item(self)
         self.set_choice(choice)
-        session.log_choice(self)
 
     def reload(self) -> None:
         self.item.load()
@@ -731,7 +780,6 @@ class AlbumImportTask(ImportTask[AlbumMatch]):
         """Ask the session which match should apply and apply it."""
         choice = session.choose_match(self)
         self.set_choice(choice)
-        session.log_choice(self)
 
     def reload(self) -> None:
         """Reload albums and items from the database."""
@@ -778,7 +826,7 @@ class SentinelImportTask(ImportTask[TrackMatch]):
     def __init__(self, toppath, paths):
         super().__init__(toppath, paths, ())
         # TODO Remove the remaining attributes eventually
-        self.should_remove_duplicates = False
+        self.duplicate_action = None
         self.choice_flag = None
 
     def save_history(self):
