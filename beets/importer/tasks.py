@@ -23,7 +23,7 @@ from beets.autotag import (
     tag_item,
 )
 from beets.dbcore.query import PathQuery
-from beets.util import extension, get_most_common_tags
+from beets.util import extension
 from beets.util.extension import remux_mpeglayer3_wav
 
 from .actions import Action, DuplicateAction
@@ -32,7 +32,7 @@ from .state import ImportState
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
-    from beets.autotag import Recommendation
+    from beets.autotag import Proposal, Recommendation
     from beets.dbcore.db import AnyModel, LazyDict
 
     from .session import ImportSession
@@ -264,6 +264,10 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
         return Source.from_items(self.items)
 
     @util.cached_classproperty
+    def proposal_func(cls) -> Callable[..., Proposal[AnyMatch]]:
+        raise NotImplementedError
+
+    @util.cached_classproperty
     def overwrite_flex_fields(cls) -> set[str]:
         return REIMPORT_FLEX_ATTRS | set(
             config["overwrite_attributes"].as_str_seq()
@@ -365,23 +369,13 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
         """
         if self.choice_flag in (Action.ASIS, Action.RETAG):
             return self.source.data.copy()
-        if self.choice_flag is Action.APPLY and self.match:
+        if self.apply and self.match:
             return self.match.info.copy()
         assert False
 
     def imported_items(self) -> list[library.Item]:
-        """Return a list of Items that should be added to the library.
-
-        If the tasks applies an album match the method only returns the
-        matched items.
-        """
-        if self.choice_flag in (Action.ASIS, Action.RETAG):
-            return self.items
-        if self.choice_flag == Action.APPLY and isinstance(
-            self.match, AlbumMatch
-        ):
-            return self.match.items
-        return []
+        """Return a list of Items that should be added to the library."""
+        return self.items
 
     def apply_upgrade(
         self,
@@ -511,25 +505,7 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
             # arbitrarily choosing between two candidates.
 
     def set_fields(self, lib: library.Library) -> None:
-        """Sets the fields given at CLI or configuration to the specified
-        values, for both the album and all its items.
-        """
-        items = self.imported_items()
-        for field, view in config["import"]["set_fields"].items():
-            value = str(view.get())
-            log.debug(
-                "Set field {}={} for {}",
-                field,
-                value,
-                util.displayable_path(self.paths),
-            )
-            self.album.set_parse(field, format(self.album, value))
-            for item in items:
-                item.set_parse(field, format(item, value))
-        with lib.transaction():
-            for item in items:
-                item.store()
-            self.album.store()
+        raise NotImplementedError
 
     def finalize(self, session: ImportSession) -> None:
         """Save progress, clean up files, and emit plugin event."""
@@ -576,7 +552,7 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
                 self.prune(old_path)
 
     def _emit_imported(self, lib: library.Library) -> None:
-        plugins.send("album_imported", lib=lib, album=self.album)
+        raise NotImplementedError
 
     def handle_created(self, session: ImportSession) -> list[ImportTask]:
         """Send the `import_task_created` event for this task. Return a list of
@@ -593,38 +569,17 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
         # The plugins gave us a list of lists of tasks. Flatten it.
         return [t for inner in plugin_tasks for t in inner]
 
-    def find_duplicates(self, lib: library.Library) -> list[library.Album]:
-        """Return a list of albums from `lib` with the same artist and
-        album name as the task.
+    def find_duplicates(self, lib: library.Library) -> list[library.LibModel]:
+        raise NotImplementedError
+
+    def lookup_candidates(self, search_ids: list[str]) -> None:
+        """Retrieve and store candidates for this album. User-specified
+        candidate IDs are stored in self.search_ids: if present, the
+        initial lookup is restricted to only those IDs.
         """
-        info = self.chosen_info()
-        info["albumartist"] = info["artist"]
-
-        if info["artist"] is None:
-            # As-is import with no artist. Skip check.
-            return []
-
-        # Construct a query to find duplicates with this metadata. We
-        # use a temporary Album object to generate any computed fields.
-        tmp_album = library.Album(lib, **info)
-        keys: list[str] = config["import"]["duplicate_keys"][
-            "album"
-        ].as_str_seq()
-        dup_query = tmp_album.duplicates_query(keys)
-
-        # Don't count albums with the same files as duplicates.
-        task_paths = {i.path for i in self.items if i}
-
-        duplicates = []
-        for album in lib.albums(dup_query):
-            # Check whether the album paths are all present in the task
-            # i.e. album is being completely re-imported by the task,
-            # in which case it is not a duplicate (will be replaced).
-            album_paths = {i.path for i in album.items()}
-            if not (album_paths <= task_paths):
-                duplicates.append(album)
-
-        return duplicates
+        self.candidates, self.rec = self.proposal_func(
+            self.source, search_ids=search_ids
+        )
 
     def align_album_level_fields(self) -> None:
         """Make some album fields equal across `self.items`. For the
@@ -719,24 +674,7 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
         plugins.send("import_task_files", session=session, task=self)
 
     def add(self, lib: library.Library) -> None:
-        """Add the items as an album to the library and remove replaced items."""
-        self.align_album_level_fields()
-        with lib.transaction():
-            self.record_replaced(lib)
-            self.remove_replaced(lib)
-
-            self.album = lib.add_album(self.imported_items())
-            if self.choice_flag == Action.APPLY and isinstance(
-                self.match, AlbumMatch
-            ):
-                # Copy album flexible fields to the DB
-                # TODO: change the flow so we create the `Album` object earlier,
-                #   and we can move this into `self.apply_metadata`, just like
-                #   is done for tracks.
-                self.match.apply_album_metadata(self.album)
-                self.album.store()
-
-            self.reimport_metadata(lib)
+        raise NotImplementedError
 
     def record_replaced(self, lib: library.Library) -> None:
         """Records the replaced items and albums in the `replaced_items`
@@ -785,16 +723,10 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
         )
 
     def choose_match(self, session: ImportSession) -> None:
-        """Ask the session which match should apply and apply it."""
-        choice = session.choose_match(self)
-        self.set_choice(choice)
-        session.log_choice(self)
+        raise NotImplementedError
 
     def reload(self) -> None:
-        """Reload albums and items from the database."""
-        for item in self.imported_items():
-            item.load()
-        self.album.load()
+        raise NotImplementedError
 
     # Utilities.
 
@@ -816,6 +748,12 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
 class SingletonImportTask(ImportTask[TrackMatch]):
     """ImportTask for a single track that is not associated to an album."""
 
+    is_album = False
+
+    @util.cached_classproperty
+    def proposal_func(cls):
+        return tag_item
+
     @cached_property
     def source(self) -> Source:
         return Source.from_item(self.item)
@@ -826,9 +764,6 @@ class SingletonImportTask(ImportTask[TrackMatch]):
         super().__init__(toppath, [item.path], [item])
         self.item = item
         self.paths = [item.path]
-
-    def imported_items(self) -> list[library.Item]:
-        return [self.item]
 
     def apply_upgrade(
         self,
@@ -852,9 +787,6 @@ class SingletonImportTask(ImportTask[TrackMatch]):
         for item in self.imported_items():
             plugins.send("item_imported", lib=lib, item=item)
 
-    def lookup_candidates(self, search_ids: list[str]) -> None:
-        self.candidates, self.rec = tag_item(self.source, search_ids=search_ids)
-
     def find_duplicates(self, lib: library.Library) -> list[library.Item]:  # type: ignore[override] # Need splitting Singleton and Album tasks into separate classes
         """Return a list of items from `lib` that have the same artist
         and title as the task.
@@ -869,7 +801,7 @@ class SingletonImportTask(ImportTask[TrackMatch]):
         ].as_str_seq()
         dup_query = tmp_item.duplicates_query(keys)
 
-        found_items = []
+        found_items: list[library.LibModel] = []
         for other_item in lib.items(dup_query):
             # Existing items not considered duplicates.
             if other_item.path != self.item.path:
@@ -923,9 +855,6 @@ class SingletonImportTask(ImportTask[TrackMatch]):
             lib.add(self.item)
             self.reimport_metadata(lib)
 
-    def infer_album_fields(self) -> None:
-        raise NotImplementedError
-
     def choose_match(self, session: ImportSession) -> None:
         """Ask the session which match should apply and apply it."""
         choice = session.choose_item(self)
@@ -954,10 +883,26 @@ class SingletonImportTask(ImportTask[TrackMatch]):
 class AlbumImportTask(ImportTask[AlbumMatch]):
     is_album = True
 
+    @util.cached_classproperty
+    def proposal_func(cls):
+        return tag_album
+
     @cached_property
     def likelies(self) -> dict[str, Any]:
-        likelies, _ = get_most_common_tags(self.items)
+        likelies, _ = util.get_most_common_tags(self.items)
         return likelies
+
+    def imported_items(self) -> list[library.Item]:
+        """Return a list of Items that should be added to the library.
+
+        If the tasks applies an album match the method only returns the
+        matched items.
+        """
+        if self.choice_flag in (Action.ASIS, Action.RETAG):
+            return list(self.items)
+        if self.apply and self.match:
+            return list(self.match.items)
+        return []
 
     @cached_property
     def cur_album(self) -> str:
@@ -966,15 +911,6 @@ class AlbumImportTask(ImportTask[AlbumMatch]):
     @cached_property
     def cur_artist(self) -> str:
         return self.likelies["artist"]
-
-    def lookup_candidates(self, search_ids: list[str]) -> None:
-        """Retrieve and store candidates for this album. User-specified
-        candidate IDs are stored in self.search_ids: if present, the
-        initial lookup is restricted to only those IDs.
-        """
-        self.candidates, self.rec = tag_album(
-            self.source, search_ids=search_ids
-        )
 
     def reimport_metadata(self, lib: library.Library) -> None:
         """Preserve metadata for reimported items and albums."""
@@ -990,11 +926,98 @@ class AlbumImportTask(ImportTask[AlbumMatch]):
 
         super().reimport_metadata(lib)
 
+    def _emit_imported(self, lib: library.Library) -> None:
+        plugins.send("album_imported", lib=lib, album=self.album)
+
+    def find_duplicates(self, lib: library.Library) -> list[library.LibModel]:
+        """Return a list of albums from `lib` with the same artist and
+        album name as the task.
+        """
+        info = self.chosen_info()
+        info["albumartist"] = info["artist"]
+
+        if info["artist"] is None:
+            # As-is import with no artist. Skip check.
+            return []
+
+        # Construct a query to find duplicates with this metadata. We
+        # use a temporary Album object to generate any computed fields.
+        tmp_album = library.Album(lib, **info)
+        keys: list[str] = config["import"]["duplicate_keys"][
+            "album"
+        ].as_str_seq()
+        dup_query = tmp_album.duplicates_query(keys)
+
+        # Don't count albums with the same files as duplicates.
+        task_paths = {i.path for i in self.items if i}
+
+        duplicates: list[library.LibModel] = []
+        for album in lib.albums(dup_query):
+            # Check whether the album paths are all present in the task
+            # i.e. album is being completely re-imported by the task,
+            # in which case it is not a duplicate (will be replaced).
+            album_paths = {i.path for i in album.items()}
+            if not (album_paths <= task_paths):
+                duplicates.append(album)
+
+        return duplicates
+
+    def add(self, lib: library.Library) -> None:
+        """Add the items as an album to the library and remove replaced items."""
+        self.align_album_level_fields()
+        with lib.transaction():
+            self.record_replaced(lib)
+            self.remove_replaced(lib)
+
+            self.album = lib.add_album(self.imported_items())
+            if self.apply and self.match:
+                # Copy album flexible fields to the DB
+                # TODO: change the flow so we create the `Album` object earlier,
+                #   and we can move this into `self.apply_metadata`, just like
+                #   is done for tracks.
+                self.match.apply_album_metadata(self.album)
+                self.album.store()
+
+            self.reimport_metadata(lib)
+
+    def choose_match(self, session: ImportSession) -> None:
+        """Ask the session which match should apply and apply it."""
+        choice = session.choose_match(self)
+        self.set_choice(choice)
+        session.log_choice(self)
+
+    def reload(self) -> None:
+        """Reload albums and items from the database."""
+        for item in self.imported_items():
+            item.load()
+        self.album.load()
+
+    def set_fields(self, lib: library.Library) -> None:
+        """Sets the fields given at CLI or configuration to the specified
+        values, for both the album and all its items.
+        """
+        items = self.imported_items()
+        for field, view in config["import"]["set_fields"].items():
+            value = str(view.get())
+            log.debug(
+                "Set field {1}={2} for {0}",
+                util.displayable_path(self.paths),
+                field,
+                value,
+            )
+            self.album.set_parse(field, format(self.album, value))
+            for item in items:
+                item.set_parse(field, format(item, value))
+        with lib.transaction():
+            for item in items:
+                item.store()
+            self.album.store()
+
 
 # FIXME The inheritance relationships are inverted. This is why there
 # are so many methods which pass. More responsibility should be delegated to
 # the BaseImportTask class.
-class SentinelImportTask(ImportTask):
+class SentinelImportTask(ImportTask[TrackMatch]):
     """A sentinel task marks the progress of an import and does not
     import any items itself.
 
@@ -1035,9 +1058,6 @@ class SentinelImportTask(ImportTask):
     def cleanup(
         self, copy: bool = False, delete: bool = False, move: bool = False
     ) -> None:
-        pass
-
-    def _emit_imported(self, lib: library.Library) -> None:
         pass
 
 

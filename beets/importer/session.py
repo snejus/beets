@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     import confuse
 
     from beets import dbcore, library
-    from beets.autotag import AlbumMatch, TrackMatch
+    from beets.autotag import AlbumMatch, AnyMatch, TrackMatch
     from beets.library import AlbumOrItem
     from beets.util import PathBytes
 
@@ -145,7 +145,9 @@ class ImportSession:
         """
         self.logger.info("{} {}", status, displayable_path(paths))
 
-    def log_choice(self, task: ImportTask, duplicate: bool = False) -> None:
+    def log_choice(
+        self, task: ImportTask[AnyMatch], duplicate: bool = False
+    ) -> None:
         """Logs the task's current choice if it should be logged. If
         ``duplicate``, then this is a secondary choice after a duplicate was
         detected and a decision was made.
@@ -175,7 +177,7 @@ class ImportSession:
     def should_resume(self, path: PathBytes) -> bool:
         raise NotImplementedError
 
-    def choose_match(self, task: ImportTask) -> AlbumMatch | Action:
+    def choose_match(self, task: ImportTask[AnyMatch]) -> AlbumMatch | Action:
         raise NotImplementedError
 
     def get_duplicate_action(
