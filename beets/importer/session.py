@@ -15,11 +15,15 @@ from __future__ import annotations
 
 import os
 import time
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from beets import config, logging, plugins, util
+from typing_extensions import Self
+
+from beets import config, library, logging, plugins, util
+from beets.exceptions import UserError
 from beets.importer.tasks import Action
-from beets.util import displayable_path, normpath, pipeline, syspath
+from beets.util import displayable_path, pipeline, syspath
 
 from . import stages as stagefuncs
 from .state import ImportState
@@ -27,7 +31,7 @@ from .state import ImportState
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
-    from beets import dbcore, library
+    from beets import library
     from beets.util import PathBytes
 
     from .tasks import ImportTask
@@ -45,59 +49,40 @@ class ImportAbortError(Exception):
     pass
 
 
+@dataclass
 class ImportSession:
     """Controls an import action. Subclasses should implement methods to
     communicate with the user or otherwise make decisions.
     """
 
-    logger: logging.Logger
-    paths: list[PathBytes]
     lib: library.Library
+    query: str | None
+    paths: list[PathBytes]
 
-    _is_resuming: dict[bytes, bool]
-    _merged_items: set[PathBytes]
-    _merged_dirs: set[PathBytes]
+    _is_resuming: dict[bytes, bool] = field(default_factory=dict, init=False)
+    _merged_items: set[bytes] = field(default_factory=set, init=False)
+    _merged_dirs: set[bytes] = field(default_factory=set, init=False)
 
-    def __init__(
-        self,
-        lib: library.Library,
-        loghandler: logging.Handler | None,
-        paths: Sequence[PathBytes] | None,
-        query: dbcore.Query | None,
-    ):
-        """Create a session.
+    @classmethod
+    def make(cls, *args, **kwargs) -> Self:
+        kwargs["paths"] = kwargs.get("paths") or []
+        cls.update_logger()
+        return cls(*args, **kwargs)
 
-        Parameters
-        ----------
-        lib : library.Library
-            The library instance to which items will be imported.
-        loghandler : logging.Handler or None
-            A logging handler to use for the session's logger. If None, a
-            NullHandler will be used.
-        paths : os.PathLike or None
-            The paths to be imported.
-        query : dbcore.Query or None
-            A query to filter items for import.
-        """
-        self.lib = lib
-        self.logger = self._setup_logging(loghandler)
-        self.query = query
-        self._is_resuming = {}
-        self._merged_items = set()
-        self._merged_dirs = set()
+    @staticmethod
+    def update_logger() -> None:
+        if not (view := config["import"]["log"]):
+            return
 
-        # Normalize the paths.
-        self.paths = list(map(normpath, paths or []))
+        path = syspath(view.as_filename())
+        try:
+            handler = logging.FileHandler(path, encoding="utf-8")
+        except OSError as e:
+            raise UserError(f"Could not open file for writing: {path}") from e
 
-    def _setup_logging(
-        self, loghandler: logging.Handler
-    ) -> logging.BeetsLogger:
-        logger = logging.getLogger(__name__)
-        logger.propagate = False
-        if not loghandler:
-            loghandler = logging.NullHandler()
-        logger.handlers = [loghandler]
-        return logger
+        handler.setFormatter(logging.Formatter("%(asctime)s | %(message)s"))
+        log.propagate = True
+        log.handlers.append(handler)
 
     def set_config(self, config):
         """Set `config` property from global import config and make
@@ -155,7 +140,7 @@ class ImportSession:
         """Log a message about a given album to the importer log. The status
         should reflect the reason the album couldn't be tagged.
         """
-        self.logger.info("{} {}", status, displayable_path(paths))
+        log.info("{} {}", status, displayable_path(paths))
 
     def log_choice(self, task: ImportTask, duplicate=False):
         """Logs the task's current choice if it should be logged. If
@@ -198,7 +183,7 @@ class ImportSession:
 
     def run(self):
         """Run the import task."""
-        self.logger.info("import started {}", time.asctime())
+        log.info("import started {}", time.asctime())
         self.set_config(config["import"])
 
         # Set up the pipeline.

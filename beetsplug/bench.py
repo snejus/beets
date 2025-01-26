@@ -78,7 +78,7 @@ def match_benchmark(lib, prof, query=None, album_id=None):
     plugins.send(
         "import_task_start",
         task=importer.AlbumImportTask(None, None, items),
-        session=importer.ImportSession(lib, None, None, None),
+        session=importer.ImportSession.make(lib),
     )
 
     # Run the match.
