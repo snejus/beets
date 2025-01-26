@@ -57,7 +57,7 @@ from beets.util import (
     normpath,
     syspath,
 )
-from beets.util.units import human_bytes, human_seconds, human_seconds_short
+from beets.util.units import human_bytes, human_seconds
 
 from ..exceptions import UserError
 from . import _store_dict
@@ -367,7 +367,7 @@ def show_item_change(
     console.print(wrap(new.data_url, "b grey35"))
 
 
-def summarize_items(items, singleton):
+def summarize_items(items: list[library.Item], singleton: bool) -> str:
     """Produces a brief summary line describing a set of items. Used for
     manually resolving duplicates during import.
 
@@ -379,33 +379,26 @@ def summarize_items(items, singleton):
     if not singleton:
         summary_parts.append(f"{len(items)} items")
 
-    format_counts = {}
-    for item in items:
-        format_counts[item.format] = format_counts.get(item.format, 0) + 1
+    format_counts = Counter(i.format for i in items)
+
     if len(format_counts) == 1:
         # A single format.
         summary_parts.append(items[0].format)
     else:
-        # Enumerate all the formats by decreasing frequencies:
-        for fmt, count in sorted(
-            format_counts.items(),
-            key=lambda fmt_and_count: (-fmt_and_count[1], fmt_and_count[0]),
-        ):
-            summary_parts.append(f"{fmt} {count}")
+        summary_parts.extend(f"{f} {c}" for f, c in format_counts.items())
 
-    if items:
-        average_bitrate = sum([item.bitrate for item in items]) / len(items)
-        total_duration = sum([item.length for item in items])
-        total_filesize = sum([item.filesize for item in items])
-        summary_parts.append(f"{int(average_bitrate / 1000)}kbps")
-        if items[0].format == "FLAC":
-            sample_bits = (
-                f"{round(int(items[0].samplerate) / 1000, 1)}kHz"
-                f"/{items[0].bitdepth} bit"
-            )
-            summary_parts.append(sample_bits)
-        summary_parts.append(human_seconds_short(total_duration))
-        summary_parts.append(human_bytes(total_filesize))
+    average_bitrate = sum(item.bitrate for item in items) / len(items)
+    summary_parts.append(f"{average_bitrate / 1000:0f}kbps")
+
+    if (item := items[0]).format == "FLAC":
+        summary_parts.append(
+            f"{item.samplerate / 1000:.1f}kHz/{item.bitdepth} bit"
+        )
+
+    duration = sum(item.length for item in items)
+    summary_parts.append(f"{duration // 60:n}:{duration % 60:.0f}")
+    total_filesize = sum(item.filesize for item in items)
+    summary_parts.append(human_bytes(total_filesize))
 
     return ", ".join(summary_parts)
 
@@ -748,7 +741,11 @@ class TerminalImportSession(importer.ImportSession):
                 assert isinstance(choice, TrackMatch)
                 return choice
 
-    def resolve_duplicate(self, task, found_duplicates):
+    def decide_duplicates(
+        self,
+        task: importer.ImportTask[AnyMatch],
+        duplicates: list[library.AnyLibModel],
+    ) -> str:
         """Decide what to do when a new album or item seems similar to one
         that's already in the library.
         """
@@ -760,57 +757,25 @@ class TerminalImportSession(importer.ImportSession):
         if config["import"]["quiet"]:
             # In quiet mode, don't prompt -- just skip.
             log.info("Skipping.")
-            sel = "s"
-        else:
-            # Print some detail about the existing and new items so the
-            # user can make an informed decision.
-            for duplicate in found_duplicates:
-                print_(
-                    "Old: "
-                    + summarize_items(
-                        (
-                            list(duplicate.items())
-                            if task.is_album
-                            else [duplicate]
-                        ),
-                        not task.is_album,
-                    )
-                )
-                if config["import"]["duplicate_verbose_prompt"]:
-                    if task.is_album:
-                        for dup in duplicate.items():
-                            print(f"  {dup}")
-                    else:
-                        print(f"  {duplicate}")
+            return "s"
+        # Print some detail about the existing and new items so the
+        # user can make an informed decision.
+        for duplicate in duplicates:
+            dupes = list(duplicate.items()) if task.is_album else [duplicate]
+            print_("Old: " + summarize_items(dupes, not task.is_album))
 
-            print_(
-                "New: "
-                + summarize_items(
-                    task.imported_items(),
-                    not task.is_album,
-                )
-            )
             if config["import"]["duplicate_verbose_prompt"]:
-                for item in task.imported_items():
-                    print(f"  {item}")
+                for dup in dupes:
+                    print(f"  {dup}")
 
-            sel = ui.input_options(
-                ("Skip new", "Keep all", "Remove old", "Merge all")
-            )
+        items = task.imported_items()
+        print_("New: " + summarize_items(items, not task.is_album))
 
-        if sel == "s":
-            # Skip new.
-            task.set_choice(importer.Action.SKIP)
-        elif sel == "k":
-            # Keep both. Do nothing; leave the choice intact.
-            pass
-        elif sel == "r":
-            # Remove old.
-            task.should_remove_duplicates = True
-        elif sel == "m":
-            task.should_merge_duplicates = True
-        else:
-            assert False
+        if config["import"]["duplicate_verbose_prompt"]:
+            for item in task.imported_items():
+                print(f"  {item}")
+
+        return ui.input_options(importer.DuplicateAction.options())
 
     def should_resume(self, path):
         return ui.input_yn(
