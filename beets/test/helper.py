@@ -615,12 +615,7 @@ class ImportHelper(TestHelper):
             self.prepare_album_for_import(1, album_id=album_id)
 
     def _get_import_session(self, import_dir: bytes) -> ImportSession:
-        return ImportSessionFixture(
-            self.lib,
-            loghandler=None,
-            query=None,
-            paths=[import_dir],
-        )
+        return ImportSessionFixture(self.lib, query=None, paths=[import_dir])
 
     def setup_importer(
         self, import_dir: bytes | None = None, **kwargs
@@ -761,11 +756,7 @@ class TerminalImportMixin(IOMixin, ImportHelper):
     def _get_import_session(self, import_dir: bytes) -> importer.ImportSession:
         self.io.install()
         return TerminalImportSessionFixture(
-            self.lib,
-            loghandler=None,
-            query=None,
-            io=self.io,
-            paths=[import_dir],
+            self.lib, query=None, io=self.io, paths=[import_dir]
         )
 
 

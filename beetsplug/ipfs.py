@@ -185,9 +185,7 @@ class IPFSPlugin(BeetsPlugin):
             return False
 
         self._log.info("Getting {} from ipfs", _hash)
-        imp = ui.commands.TerminalImportSession(
-            lib, loghandler=None, query=None, paths=[_hash]
-        )
+        imp = ui.commands.TerminalImportSession(lib, paths=[_hash])
         imp.run()
         # This uses a relative path, hence we cannot use util.syspath(_hash,
         # prefix=True). However, that should be fine since the hash will not
