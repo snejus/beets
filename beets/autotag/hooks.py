@@ -441,6 +441,10 @@ class Match:
         return self.info.type
 
     @cached_property
+    def name(self) -> str:
+        return self.info.name
+
+    @cached_property
     def from_scratch(self) -> bool:
         return bool(config["import"]["from_scratch"])
 
