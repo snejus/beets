@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from beets import dbcore, library
+    from beets.autotag.hooks import AnyMatch
     from beets.util import PathBytes
 
     from .tasks import ImportTask
@@ -155,7 +156,7 @@ class ImportSession:
         """
         self.logger.info("{} {}", status, displayable_path(paths))
 
-    def log_choice(self, task: ImportTask, duplicate=False):
+    def log_choice(self, task: ImportTask[AnyMatch], duplicate=False):
         """Logs the task's current choice if it should be logged. If
         ``duplicate``, then this is a secondary choice after a duplicate was
         detected and a decision was made.
@@ -185,13 +186,13 @@ class ImportSession:
     def should_resume(self, path: PathBytes):
         raise NotImplementedError
 
-    def choose_match(self, task: ImportTask):
+    def choose_match(self, task: ImportTask[AnyMatch]):
         raise NotImplementedError
 
-    def resolve_duplicate(self, task: ImportTask, found_duplicates):
+    def resolve_duplicate(self, task: ImportTask[AnyMatch], found_duplicates):
         raise NotImplementedError
 
-    def choose_item(self, task: ImportTask):
+    def choose_item(self, task: ImportTask[AnyMatch]):
         raise NotImplementedError
 
     def run(self):
