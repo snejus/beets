@@ -28,12 +28,14 @@ import time
 from bisect import bisect_left, insort
 from collections import defaultdict
 from contextlib import contextmanager
+from dataclasses import dataclass, field
 from enum import Enum
 from functools import cached_property
 from tempfile import mkdtemp
 from typing import TYPE_CHECKING, Any, AnyStr, ClassVar, Generic, Sequence
 
 import mediafile
+from typing_extensions import Self
 
 from beets import config, dbcore, logging, plugins, util
 from beets.autotag import hooks, match
@@ -43,11 +45,12 @@ from beets.util import (
     ancestry,
     cached_classproperty,
     displayable_path,
-    normpath,
     pipeline,
     sorted_walk,
     syspath,
 )
+
+from .exceptions import UserError
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
@@ -196,37 +199,39 @@ def history_get():
 # Abstract session class.
 
 
+@dataclass
 class ImportSession:
     """Controls an import action. Subclasses should implement methods to
     communicate with the user or otherwise make decisions.
     """
 
-    def __init__(self, lib, loghandler, paths, query):
-        """Create a session. `lib` is a Library object. `loghandler` is a
-        logging.Handler. Either `paths` or `query` is non-null and indicates
-        the source of files to be imported.
-        """
-        self.lib = lib
-        self.logger = self._setup_logging(loghandler)
-        self.paths = paths
-        self.query = query
-        self._is_resuming = {}
-        self._merged_items = set()
-        self._merged_dirs = set()
+    lib: Library
+    query: str | None
+    paths: list[bytes]
+    _is_resuming: dict[bytes, bool] = field(default_factory=dict, init=False)
+    _merged_items: set[bytes] = field(default_factory=set, init=False)
+    _merged_dirs: set[bytes] = field(default_factory=set, init=False)
 
-        # Normalize the paths.
-        if self.paths:
-            self.paths = list(map(normpath, self.paths))
+    @classmethod
+    def make(cls, *args, **kwargs) -> Self:
+        kwargs["paths"] = kwargs.get("paths") or []
+        cls.update_logger()
+        return cls(*args, **kwargs)
 
-    def _setup_logging(
-        self, loghandler: logging.Handler
-    ) -> logging.BeetsLogger:
-        logger = logging.getLogger(__name__)
-        logger.propagate = False
-        if not loghandler:
-            loghandler = logging.NullHandler()
-        logger.handlers = [loghandler]
-        return logger
+    @staticmethod
+    def update_logger() -> None:
+        if not (view := config["import"]["log"]):
+            return
+
+        path = syspath(view.as_filename())
+        try:
+            handler = logging.FileHandler(path, encoding="utf-8")
+        except OSError as e:
+            raise UserError(f"Could not open file for writing: {path}") from e
+
+        handler.setFormatter(logging.Formatter("%(asctime)s | %(message)s"))
+        log.propagate = True
+        log.handlers.append(handler)
 
     def set_config(self, config):
         """Set `config` property from global import config and make
@@ -284,7 +289,7 @@ class ImportSession:
         """Log a message about a given album to the importer log. The status
         should reflect the reason the album couldn't be tagged.
         """
-        self.logger.info("{0} {1}", status, displayable_path(paths))
+        log.info("{0} {1}", status, displayable_path(paths))
 
     def log_choice(self, task, duplicate=False):
         """Logs the task's current choice if it should be logged. If
@@ -327,7 +332,7 @@ class ImportSession:
 
     def run(self):
         """Run the import task."""
-        self.logger.info("import started {0}", time.asctime())
+        log.info("import started {0}", time.asctime())
         self.set_config(config["import"])
 
         # Set up the pipeline.
