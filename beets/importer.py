@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from functools import cached_property
 from tempfile import mkdtemp
-from typing import TYPE_CHECKING, Any, AnyStr, ClassVar, Generic, Sequence
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, Sequence
 
 import mediafile
 from typing_extensions import Self
@@ -62,6 +62,26 @@ action = Enum("action", ["SKIP", "ASIS", "TRACKS", "APPLY", "ALBUMS", "RETAG"])
 # The RETAG action represents "don't apply any match, but do record
 # new metadata". It's not reachable via the standard command prompt but
 # can be used by plugins.
+
+
+class DuplicateAction(str, Enum):
+    text: str
+
+    def __new__(cls, value: str) -> Self:
+        obj = str.__new__(cls, [value])
+        obj._value_ = value[0].lower()
+        obj.text = value
+        return obj
+
+    @classmethod
+    def options(cls):
+        return [d.text for d in cls]
+
+    SKIP = "Skip new"
+    MERGE = "Merge all"
+    REMOVE = "Remove old"
+    KEEP = "Keep all"
+
 
 QUEUE_SIZE = 128
 SINGLE_ARTIST_THRESH = 0.25
@@ -285,46 +305,15 @@ class ImportSession:
 
         self.want_resume = config["resume"].as_choice([True, False, "ask"])
 
-    def tag_log(self, status: str, paths: Iterable[AnyStr]) -> None:
-        """Log a message about a given album to the importer log. The status
-        should reflect the reason the album couldn't be tagged.
-        """
-        log.info("{0} {1}", status, displayable_path(paths))
-
-    def log_choice(self, task, duplicate=False):
-        """Logs the task's current choice if it should be logged. If
-        ``duplicate``, then this is a secondary choice after a duplicate was
-        detected and a decision was made.
-        """
-        paths = task.paths
-        if duplicate:
-            # Duplicate: log all three choices (skip, keep both, and trump).
-            if task.should_remove_duplicates:
-                self.tag_log("duplicate-replace", paths)
-            elif task.choice_flag in (action.ASIS, action.APPLY):
-                self.tag_log("duplicate-keep", paths)
-            elif task.choice_flag is (action.SKIP):
-                self.tag_log("duplicate-skip", paths)
-        else:
-            # Non-duplicate: log "skip" and "asis" choices.
-            if task.choice_flag is action.ASIS:
-                self.tag_log("asis", paths)
-            elif task.choice_flag is action.SKIP:
-                self.tag_log("skip", paths)
-            elif task.choice_flag is action.APPLY:
-                if task.is_album:
-                    tolog = ["album", task.match.info["album"]]
-                else:
-                    tolog = ["track", task.match.info["title"]]
-                self.tag_log("apply", tolog)
-
     def should_resume(self, path):
         raise NotImplementedError
 
     def choose_match(self, task):
         raise NotImplementedError
 
-    def resolve_duplicate(self, task, found_duplicates):
+    def decide_duplicates(
+        self, task: ImportTask[hooks.AnyMatch], duplicates: list[AnyLibModel]
+    ) -> str:
         raise NotImplementedError
 
     def choose_item(self, task):
@@ -518,6 +507,7 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
     search_ids: list[str]
     rec: match.Recommendation | None
     choice_flag: action | hooks.AnyMatch | None
+    duplicate_action: DuplicateAction | None
     album: Album
 
     @cached_classproperty
@@ -539,8 +529,7 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
         self.choice_flag = None
         self.candidates = []
         self.rec = None
-        self.should_remove_duplicates = False
-        self.should_merge_duplicates = False
+        self.duplicate_action = None
         self.search_ids = []  # user-supplied candidate IDs.
 
     @classmethod
@@ -573,24 +562,22 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
 
         return overwritten
 
-    def set_choice(self, choice: hooks.AnyMatch | action):
+    def set_choice(self, choice: hooks.AnyMatch | action) -> None:
         """Given an AlbumMatch or TrackMatch object or an action constant,
         indicates that an action has been selected for this task.
         """
         # Not part of the task structure:
-        assert choice != action.APPLY  # Only used internally.
+        to_log: Iterable[bytes] | Iterable[str]
         if isinstance(choice, hooks.Match):
             self.choice_flag = action.APPLY  # Implicit choice.
             self.match = choice
-        elif choice in (
-            action.SKIP,
-            action.ASIS,
-            action.TRACKS,
-            action.ALBUMS,
-            action.RETAG,
-        ):
+            to_log = [self.match.type, self.match.name]
+        else:
             self.choice_flag = choice
             self.match = None
+            to_log = self.paths
+
+        self.tag_log(self.choice_flag.name, to_log)
 
     def apply_metadata(self) -> None:
         """Copy metadata from match info to the items."""
@@ -617,7 +604,10 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
 
     @property
     def skip(self) -> bool:
-        return self.choice_flag == action.SKIP
+        return (
+            self.choice_flag == action.SKIP
+            or self.duplicate_action is DuplicateAction.SKIP
+        )
 
     # Convenient data.
 
@@ -888,6 +878,36 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
                 clutter=config["clutter"].as_str_seq(),
             )
 
+    @staticmethod
+    def tag_log(status: str, paths: Iterable[str] | Iterable[bytes]) -> None:
+        """Log a message about a given album to the importer log. The status
+        should reflect the reason the album couldn't be tagged.
+        """
+        log.info("{0} {1}", status, displayable_path(tuple(paths)))
+
+    def resolve_duplicates(self, session: ImportSession) -> None:
+        """Check if a task conflicts with items or albums already imported
+        and ask the session to resolve this.
+        """
+        if self.choice_flag in (action.ASIS, action.APPLY, action.RETAG):
+            duplicates = self.find_duplicates(session.lib)
+            if duplicates:
+                log.debug("found duplicates: {}", [o.id for o in duplicates])
+
+                # Get the default action to follow from config.
+                choice = config["import"]["duplicate_action"].as_choice(
+                    {
+                        "skip": "s",
+                        "keep": "k",
+                        "remove": "r",
+                        "merge": "m",
+                        "ask": "a",
+                    }
+                ) or session.decide_duplicates(self, duplicates)
+
+                self.duplicate_action = DuplicateAction(choice)
+                self.tag_log(self.duplicate_action.name, self.paths)
+
 
 class SingletonImportTask(ImportTask[hooks.TrackMatch]):
     """ImportTask for a single track that is not associated to an album."""
@@ -949,7 +969,6 @@ class SingletonImportTask(ImportTask[hooks.TrackMatch]):
         """Ask the session which match should apply and apply it."""
         choice = session.choose_item(self)
         self.set_choice(choice)
-        session.log_choice(self)
 
     def reload(self) -> None:
         self.item.load()
@@ -1084,7 +1103,6 @@ class AlbumImportTask(ImportTask[hooks.AlbumMatch]):
         """Ask the session which match should apply and apply it."""
         choice = session.choose_match(self)
         self.set_choice(choice)
-        session.log_choice(self)
 
     def reload(self) -> None:
         """Reload albums and items from the database."""
@@ -1131,7 +1149,7 @@ class SentinelImportTask(ImportTask):
     def __init__(self, toppath, paths):
         super().__init__(toppath, paths, ())
         # TODO Remove the remaining attributes eventually
-        self.should_remove_duplicates = False
+        self.duplicate_action = None
         self.choice_flag = None
 
     def save_history(self):
@@ -1588,9 +1606,9 @@ def user_query(session: ImportSession, task: ImportTask[Any]):
             user_query(session),
         )
 
-    resolve_duplicates(session, task)
+    task.resolve_duplicates(session)
 
-    if task.should_merge_duplicates:
+    if task.duplicate_action is DuplicateAction.MERGE:
         # Create a new task for tagging the current items
         # and duplicates together
         duplicate_items = task.duplicate_items(session.lib)
@@ -1612,48 +1630,6 @@ def user_query(session: ImportSession, task: ImportTask[Any]):
 
     apply_choice(session, task)
     return task
-
-
-def resolve_duplicates(session, task):
-    """Check if a task conflicts with items or albums already imported
-    and ask the session to resolve this.
-    """
-    if task.choice_flag in (action.ASIS, action.APPLY, action.RETAG):
-        found_duplicates = task.find_duplicates(session.lib)
-        if found_duplicates:
-            log.debug(
-                "found duplicates: {}".format([o.id for o in found_duplicates])
-            )
-
-            # Get the default action to follow from config.
-            duplicate_action = config["import"]["duplicate_action"].as_choice(
-                {
-                    "skip": "s",
-                    "keep": "k",
-                    "remove": "r",
-                    "merge": "m",
-                    "ask": "a",
-                }
-            )
-            log.debug("default action for duplicates: {0}", duplicate_action)
-
-            if duplicate_action == "s":
-                # Skip new.
-                task.set_choice(action.SKIP)
-            elif duplicate_action == "k":
-                # Keep both. Do nothing; leave the choice intact.
-                pass
-            elif duplicate_action == "r":
-                # Remove old.
-                task.should_remove_duplicates = True
-            elif duplicate_action == "m":
-                # Merge duplicates together
-                task.should_merge_duplicates = True
-            else:
-                # No default action set; ask the session.
-                session.resolve_duplicate(task, found_duplicates)
-
-            session.log_choice(task, True)
 
 
 @pipeline.mutator_stage
@@ -1718,7 +1694,7 @@ def manipulate_files(session, task):
     finalizes each task.
     """
     if not task.skip:
-        if task.should_remove_duplicates:
+        if task.duplicate_action is DuplicateAction.REMOVE:
             task.remove_duplicates(session.lib)
 
         if session.config["move"]:

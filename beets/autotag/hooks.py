@@ -682,6 +682,10 @@ class Match:
     def disambig_fields(cls) -> Sequence[str]:
         return config["match"][cls.disambig_fields_key].as_str_seq()
 
+    @cached_classproperty
+    def type(cls) -> str:
+        return cls.__name__.lower().removesuffix("match")  # type: ignore[attr-defined]
+
     @property
     def dist(self) -> str:
         if self.distance <= config["match"]["strong_rec_thresh"].as_number():
