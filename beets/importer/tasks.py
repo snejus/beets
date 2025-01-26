@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
     from beets.autotag.match import Recommendation
+    from beets.dbcore.db import AnyModel, LazyDict
     from beets.library import Album
 
     from .session import ImportSession
@@ -56,9 +57,9 @@ SINGLE_ARTIST_THRESH = 0.25
 #
 # from beets import importer
 # def extend_reimport_fresh_fields_item():
-#     importer.REIMPORT_FRESH_FIELDS_ITEM.extend(['tidal_track_popularity']
+#     importer.REIMPORT_FLEX_ATTRS.extend(['tidal_track_popularity']
 # )
-REIMPORT_FRESH_FIELDS_ITEM = [
+REIMPORT_FLEX_ATTRS = {
     "data_source",
     "bandcamp_album_id",
     "spotify_album_id",
@@ -66,11 +67,8 @@ REIMPORT_FRESH_FIELDS_ITEM = [
     "beatport_album_id",
     "tidal_album_id",
     "data_url",
-]
-REIMPORT_FRESH_FIELDS_ALBUM = [*REIMPORT_FRESH_FIELDS_ITEM, "media"]
-
-# Global logger.
-log = logging.getLogger(__name__)
+    "media",
+}
 
 
 class ImportAbortError(Exception):
@@ -170,6 +168,12 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
     rec: Recommendation | None
     album: Album
 
+    @util.cached_classproperty
+    def overwrite_flex_fields(cls) -> set[str]:
+        return REIMPORT_FLEX_ATTRS | set(
+            config["overwrite_attributes"].as_str_seq()
+        )
+
     @property
     def item(self):
         return self.items[0]
@@ -185,6 +189,35 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
         self.rec = None
         self.should_remove_duplicates = False
         self.should_merge_duplicates = False
+
+    @classmethod
+    def _get_flex_attrs(
+        cls, new_obj: AnyModel, flex_data: LazyDict
+    ) -> dict[str, str]:
+        """Some flexible attributes should be overwritten (rather than
+        preserved) on reimports; Copies existing_fields, logs and removes
+        entries that should not be preserved and returns a dict containing
+        those fields left to actually be preserved.
+        """
+        overwritten = {
+            k: new
+            for k, old in flex_data.items()
+            if k in cls.overwrite_flex_fields and old != (new := new_obj.get(k))
+        }
+        overwritten_keys = overwritten.keys()
+        if overwritten:
+            log.debug(
+                (
+                    "Reimported {0} {1.id}. Overwriting {2} flex attrs, "
+                    "preserving: {3}. Path: {1.filepath}"
+                ),
+                new_obj.__class__.__name__.lower(),
+                new_obj,
+                sorted(overwritten_keys),
+                sorted(flex_data.keys() - overwritten_keys),
+            )
+
+        return overwritten
 
     def set_choice(self, choice: Action | AnyMatch):
         """Given an AlbumMatch or TrackMatch object or an action constant,
@@ -527,82 +560,12 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
                 self.replaced_albums[replaced_album.path] = replaced_album
 
     def reimport_metadata(self, lib: library.Library) -> None:
-        """For reimports, preserves metadata for reimported items and
-        albums.
-        """
-
-        def _reduce_and_log(new_obj, existing_fields, overwrite_keys):
-            """Some flexible attributes should be overwritten (rather than
-            preserved) on reimports; Copies existing_fields, logs and removes
-            entries that should not be preserved and returns a dict containing
-            those fields left to actually be preserved.
-            """
-            noun = "album" if isinstance(new_obj, library.Album) else "item"
-            existing_fields = dict(existing_fields)
-            overwritten_fields = [
-                k
-                for k in existing_fields
-                if k in overwrite_keys
-                and existing_fields.get(k) != new_obj.get(k)
-            ]
-            if overwritten_fields:
-                log.debug(
-                    "Reimported {0} {1.id}. Not preserving flexible attributes {2}. "
-                    "Path: {1.filepath}",
-                    noun,
-                    new_obj,
-                    overwritten_fields,
-                )
-                for key in overwritten_fields:
-                    del existing_fields[key]
-            return existing_fields
-
-        if self.is_album:
-            replaced_album = self.replaced_albums.get(self.album.path)
-            if replaced_album:
-                album_fields = _reduce_and_log(
-                    self.album,
-                    replaced_album._values_flex,
-                    REIMPORT_FRESH_FIELDS_ALBUM,
-                )
-                self.album.added = replaced_album.added
-                self.album.update(album_fields)
-                self.album.artpath = replaced_album.artpath
-                self.album.store()
-                log.debug(
-                    "Reimported album {0.album.id}. Preserving attribute ['added']. "
-                    "Path: {0.album.filepath}",
-                    self,
-                )
-                log.debug(
-                    "Reimported album {0.album.id}. Preserving flexible"
-                    " attributes {1}. Path: {0.album.filepath}",
-                    self,
-                    list(album_fields.keys()),
-                )
-        overwrite_props = set(config["overwrite_attributes"].as_str_seq())
+        """Preserve metadata for reimported items."""
         for item in self.imported_items():
             dup_items = self.replaced_items[item.path]
             for dup_item in dup_items:
-                if dup_item.added and dup_item.added != item.added:
-                    item.added = dup_item.added
-                    log.debug(
-                        "Reimported item {0.id}. Preserving attribute ['added']. "
-                        "Path: {0.filepath}",
-                        item,
-                    )
-                item_fields = _reduce_and_log(
-                    item,
-                    dup_item._values_flex,
-                    set(REIMPORT_FRESH_FIELDS_ITEM) | overwrite_props,
-                )
-                item.update(item_fields)
-                log.debug(
-                    "Reimported item {0.id}. Preserving flexible attributes {1}. "
-                    "Path: {0.filepath}",
-                    item,
-                    list(item_fields.keys()),
-                )
+                item.added = dup_item.added
+                item.update(self._get_flex_attrs(item, dup_item._values_flex))
                 item.store()
 
     def remove_replaced(self, lib):
@@ -758,6 +721,20 @@ class AlbumImportTask(ImportTask[AlbumMatch]):
         initial lookup is restricted to only those IDs.
         """
         self.candidates, self.rec = tag_album(self.items, search_ids=search_ids)
+
+    def reimport_metadata(self, lib: library.Library) -> None:
+        """Preserve metadata for reimported items and albums."""
+        replaced_album = self.replaced_albums.get(self.album.path)
+        if replaced_album:
+            album = self.album
+            album.added = replaced_album.added
+            album.update(
+                self._get_flex_attrs(album, replaced_album._values_flex)
+            )
+            album.artpath = replaced_album.artpath
+            album.store()
+
+        super().reimport_metadata(lib)
 
 
 # FIXME The inheritance relationships are inverted. This is why there
