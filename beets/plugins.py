@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 
     # TYPE_CHECKING guard is needed for any derived type
     # which uses an import from `beets.library` and `beets.imported`
-    ImportStageFunc = Callable[[ImportSession, ImportTask], None]
+    ImportStageFunc = Callable[[ImportSession, ImportTask[Any]], None]
     T = TypeVar("T", Album, Item, str)
     TFunc = Callable[[T], str]
     TFuncMap = dict[str, TFunc[T]]
