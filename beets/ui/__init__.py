@@ -64,7 +64,7 @@ if not log.handlers:
         tracebacks_show_locals=True,
         tracebacks_width=console.width,
         tracebacks_extra_lines=1,
-        keywords=["Sending event", "import"],
+        keywords=["Sending event"],
         markup=True,
     )
     handler.setFormatter(
