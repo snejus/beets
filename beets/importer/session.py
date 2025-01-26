@@ -22,15 +22,16 @@ from typing_extensions import Self
 
 from beets import config, library, logging, plugins, util
 from beets.exceptions import UserError
-from beets.importer.tasks import Action
-from beets.util import displayable_path, pipeline, syspath
+from beets.util import pipeline, syspath
 
 from . import stages as stagefuncs
 from .state import ImportState
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Sequence
 
+    from beets.autotag.hooks import AnyMatch
+    from beets.library.models import AnyModel
     from beets.util import PathBytes
 
     from .tasks import ImportTask
@@ -135,46 +136,15 @@ class ImportSession:
 
         self.want_resume = config["resume"].as_choice([True, False, "ask"])
 
-    def tag_log(self, status: str, paths: Iterable[PathBytes]) -> None:
-        """Log a message about a given album to the importer log. The status
-        should reflect the reason the album couldn't be tagged.
-        """
-        log.info("{} {}", status, displayable_path(paths))
-
-    def log_choice(self, task: ImportTask, duplicate=False):
-        """Logs the task's current choice if it should be logged. If
-        ``duplicate``, then this is a secondary choice after a duplicate was
-        detected and a decision was made.
-        """
-        paths = task.paths
-        if duplicate:
-            # Duplicate: log all three choices (skip, keep both, and trump).
-            if task.should_remove_duplicates:
-                self.tag_log("duplicate-replace", paths)
-            elif task.choice_flag in (Action.ASIS, Action.APPLY):
-                self.tag_log("duplicate-keep", paths)
-            elif task.choice_flag is Action.SKIP:
-                self.tag_log("duplicate-skip", paths)
-        else:
-            # Non-duplicate: log "skip" and "asis" choices.
-            if task.choice_flag is Action.ASIS:
-                self.tag_log("asis", paths)
-            elif task.choice_flag is Action.SKIP:
-                self.tag_log("skip", paths)
-            elif task.choice_flag is Action.APPLY:
-                if task.is_album:
-                    tolog = ["album", task.match.info["album"]]
-                else:
-                    tolog = ["track", task.match.info["title"]]
-                self.tag_log("apply", tolog)
-
     def should_resume(self, path: PathBytes):
         raise NotImplementedError
 
     def choose_match(self, task: ImportTask):
         raise NotImplementedError
 
-    def resolve_duplicate(self, task: ImportTask, found_duplicates):
+    def decide_duplicates(
+        self, task: ImportTask[AnyMatch], duplicates: list[AnyModel]
+    ) -> str:
         raise NotImplementedError
 
     def choose_item(self, task: ImportTask):
