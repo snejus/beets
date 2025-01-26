@@ -591,10 +591,7 @@ class ImporterMixin(PathsMixin, ConfigMixin):
 
     def _get_import_session(self, import_dir: Path) -> ImportSession:
         return ImportSessionFixture(
-            self.lib,
-            loghandler=None,
-            query=None,
-            paths=[os.fsencode(import_dir)],
+            self.lib, query=None, paths=[os.fsencode(import_dir)]
         )
 
     def setup_importer(
@@ -748,7 +745,6 @@ class TerminalImportMixin(IOMixin, ImportHelper):
     def _get_import_session(self, import_dir: Path) -> importer.ImportSession:
         return TerminalImportSessionFixture(
             self.lib,
-            loghandler=None,
             query=None,
             io=self.request.getfixturevalue("io"),
             paths=[os.fsencode(import_dir)],

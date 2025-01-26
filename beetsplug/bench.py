@@ -76,7 +76,7 @@ def match_benchmark(lib: Library, opts: BenchMatch, args: list[str]) -> None:
     plugins.send(
         "import_task_start",
         task=importer.AlbumImportTask(None, None, items),
-        session=importer.ImportSession(lib, None, None, None),
+        session=importer.ImportSession.make(lib),
     )
 
     # Run the match.

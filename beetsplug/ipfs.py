@@ -193,9 +193,7 @@ class IPFSPlugin(BeetsPlugin):
             return False
 
         self._log.info("Getting {} from ipfs", _hash)
-        imp = ui.commands.TerminalImportSession(
-            lib, loghandler=None, query=None, paths=[_hash]
-        )
+        imp = ui.commands.TerminalImportSession(lib, paths=[_hash])
         imp.run()
         shutil.rmtree(_hash)
         return None

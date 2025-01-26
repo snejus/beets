@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import os
 import time
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from beets import config, logging, plugins, util
-from beets.util import displayable_path, normpath, pipeline, syspath
+from typing_extensions import Self
+
+from beets import config, library, logging, plugins, util
+from beets.exceptions import UserError
+from beets.importer.tasks import Action
+from beets.util import cached_classproperty, displayable_path, pipeline, syspath
 
 from . import stages as stagefuncs
-from .actions import Action, DuplicateAction
+from .actions import DuplicateAction
 from .state import ImportState
 
 if TYPE_CHECKING:
@@ -34,59 +39,41 @@ class ImportAbortError(Exception):
     """Raised when the user aborts the tagging operation."""
 
 
+@dataclass
 class ImportSession:
     """Controls an import action. Subclasses should implement methods to
     communicate with the user or otherwise make decisions.
     """
 
-    logger: logging.Logger
-    paths: list[PathBytes]
     lib: library.Library
+    paths: list[PathBytes] = field(default_factory=list)
+    query: str | Sequence[str] | dbcore.Query | None = None
 
-    _is_resuming: dict[bytes, bool]
-    _merged_items: set[PathBytes]
-    _merged_dirs: set[PathBytes]
+    _is_resuming: dict[bytes, bool] = field(default_factory=dict, init=False)
+    _merged_items: set[bytes] = field(default_factory=set, init=False)
+    _merged_dirs: set[bytes] = field(default_factory=set, init=False)
 
-    def __init__(
-        self,
-        lib: library.Library,
-        loghandler: logging.Handler | None,
-        paths: Sequence[PathBytes] | None,
-        query: str | Sequence[str] | dbcore.Query | None = None,
-    ) -> None:
-        """Create a session.
+    @cached_classproperty
+    def logger(cls) -> logging.Logger:
+        """Get the logger for this class."""
+        if not (view := config["import"]["log"]):
+            return log
 
-        Parameters
-        ----------
-        lib : library.Library
-            The library instance to which items will be imported.
-        loghandler : logging.Handler or None
-            A logging handler to use for the session's logger. If None, a
-            NullHandler will be used.
-        paths : os.PathLike or None
-            The paths to be imported.
-        query : dbcore.Query or None
-            A query to filter items for import.
-        """
-        self.lib = lib
-        self.logger = self._setup_logging(loghandler)
-        self.query = query
-        self._is_resuming = {}
-        self._merged_items = set()
-        self._merged_dirs = set()
+        path = syspath(view.as_filename())
+        try:
+            handler = logging.FileHandler(path, encoding="utf-8")
+        except OSError as e:
+            raise UserError(f"Could not open file for writing: {path}") from e
 
-        # Normalize the paths.
-        self.paths = list(map(normpath, paths or []))
+        handler.setFormatter(logging.Formatter("%(asctime)s | %(message)s"))
+        log.propagate = True
+        log.handlers.append(handler)
+        return log
 
-    def _setup_logging(
-        self, loghandler: logging.Handler | None
-    ) -> logging.BeetsLogger:
-        logger = logging.getLogger(__name__)
-        logger.propagate = False
-        if not loghandler:
-            loghandler = logging.NullHandler()
-        logger.handlers = [loghandler]
-        return logger
+    @classmethod
+    def make(cls, *args, **kwargs) -> Self:
+        kwargs["paths"] = kwargs.get("paths") or []
+        return cls(*args, **kwargs)
 
     def set_config(self, config: confuse.ConfigView) -> None:
         """Set `config` property from global import config and make
