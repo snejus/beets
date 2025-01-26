@@ -17,6 +17,8 @@
 autotagging music files.
 """
 
+from __future__ import annotations
+
 import itertools
 import os
 import pickle
@@ -27,11 +29,14 @@ from bisect import bisect_left, insort
 from collections import defaultdict
 from contextlib import contextmanager
 from enum import Enum
+from functools import cached_property
 from tempfile import mkdtemp
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, Sequence
 
 import mediafile
 
 from beets import autotag, config, dbcore, library, logging, plugins, util
+from beets.autotag import hooks, match
 from beets.util import (
     MoveOperation,
     ancestry,
@@ -41,6 +46,9 @@ from beets.util import (
     sorted_walk,
     syspath,
 )
+
+if TYPE_CHECKING:
+    from beets.library import Album
 
 action = Enum("action", ["SKIP", "ASIS", "TRACKS", "APPLY", "ALBUMS", "RETAG"])
 # The RETAG action represents "don't apply any match, but do record
@@ -466,7 +474,7 @@ class BaseImportTask:
         self.items = items
 
 
-class ImportTask(BaseImportTask):
+class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
     """Represents a single set of items to be imported along with its
     intermediate state. May represent an album or a single item.
 
@@ -498,25 +506,34 @@ class ImportTask(BaseImportTask):
       system.
     """
 
+    is_album: ClassVar[bool]
+
+    match: hooks.AnyMatch | None
+    candidates: Sequence[hooks.AnyMatch]
+    search_ids: list[str]
+    rec: match.Recommendation | None
+    choice_flag: action | hooks.AnyMatch | None
+    album: Album
+
     def __init__(self, toppath, paths, items):
         super().__init__(toppath, paths, items)
         self.choice_flag = None
-        self.cur_album = None
-        self.cur_artist = None
         self.candidates = []
         self.rec = None
         self.should_remove_duplicates = False
         self.should_merge_duplicates = False
-        self.is_album = True
         self.search_ids = []  # user-supplied candidate IDs.
 
-    def set_choice(self, choice):
+    def set_choice(self, choice: hooks.AnyMatch | action):
         """Given an AlbumMatch or TrackMatch object or an action constant,
         indicates that an action has been selected for this task.
         """
         # Not part of the task structure:
         assert choice != action.APPLY  # Only used internally.
-        if choice in (
+        if isinstance(choice, hooks.Match):
+            self.choice_flag = action.APPLY  # Implicit choice.
+            self.match = choice
+        elif choice in (
             action.SKIP,
             action.ASIS,
             action.TRACKS,
@@ -685,19 +702,6 @@ class ImportTask(BaseImportTask):
             # The plugins gave us a list of lists of tasks. Flatten it.
             tasks = [t for inner in tasks for t in inner]
         return tasks
-
-    def lookup_candidates(self):
-        """Retrieve and store candidates for this album. User-specified
-        candidate IDs are stored in self.search_ids: if present, the
-        initial lookup is restricted to only those IDs.
-        """
-        artist, album, prop = autotag.tag_album(
-            self.items, search_ids=self.search_ids
-        )
-        self.cur_artist = artist
-        self.cur_album = album
-        self.candidates = prop.candidates
-        self.rec = prop.recommendation
 
     def find_duplicates(self, lib):
         """Return a list of albums from `lib` with the same artist and
@@ -988,13 +992,14 @@ class ImportTask(BaseImportTask):
             )
 
 
-class SingletonImportTask(ImportTask):
+class SingletonImportTask(ImportTask[hooks.TrackMatch]):
     """ImportTask for a single track that is not associated to an album."""
+
+    is_album = False
 
     def __init__(self, toppath, item):
         super().__init__(toppath, [item.path], [item])
         self.item = item
-        self.is_album = False
         self.paths = [item.path]
 
     def chosen_info(self):
@@ -1016,10 +1021,12 @@ class SingletonImportTask(ImportTask):
         for item in self.imported_items():
             plugins.send("item_imported", lib=lib, item=item)
 
-    def lookup_candidates(self):
-        prop = autotag.tag_item(self.item, search_ids=self.search_ids)
-        self.candidates = prop.candidates
-        self.rec = prop.recommendation
+    def lookup_candidates(self, **kwargs) -> None:
+        if not kwargs:
+            kwargs = {"search_ids": self.search_ids}
+
+        proposal = match.tag_item(self.items, **kwargs)
+        self.candidates, self.rec = proposal.candidates, proposal.recommendation
 
     def find_duplicates(self, lib):
         """Return a list of items from `lib` that have the same artist
@@ -1077,6 +1084,34 @@ class SingletonImportTask(ImportTask):
         self.item.store()
 
 
+class AlbumImportTask(ImportTask[hooks.AlbumMatch]):
+    is_album = True
+
+    @cached_property
+    def likelies(self) -> dict[str, Any]:
+        likelies, _ = match.current_metadata(self.items)
+        return likelies
+
+    @cached_property
+    def cur_album(self) -> str:
+        return self.likelies["album"]
+
+    @cached_property
+    def cur_artist(self) -> str:
+        return self.likelies["artist"]
+
+    def lookup_candidates(self, **kwargs) -> None:
+        """Retrieve and store candidates for this album. User-specified
+        candidate IDs are stored in self.search_ids: if present, the
+        initial lookup is restricted to only those IDs.
+        """
+        if not kwargs:
+            kwargs = {"search_ids": self.search_ids}
+
+        proposal = match.tag_album(self.items, **kwargs)
+        self.candidates, self.rec = proposal.candidates, proposal.recommendation
+
+
 # FIXME The inheritance relationships are inverted. This is why there
 # are so many methods which pass. More responsibility should be delegated to
 # the BaseImportTask class.
@@ -1089,11 +1124,12 @@ class SentinelImportTask(ImportTask):
     indicates the progress in the `toppath` import.
     """
 
+    is_album = True
+
     def __init__(self, toppath, paths):
         super().__init__(toppath, paths, ())
         # TODO Remove the remaining attributes eventually
         self.should_remove_duplicates = False
-        self.is_album = True
         self.choice_flag = None
 
     def save_history(self):
@@ -1329,7 +1365,7 @@ class ImportTaskFactory:
             return None
 
     def album(self, paths, dirs=None):
-        """Return a `ImportTask` with all media files from paths.
+        """Return a `AlbumImportTask` with all media files from paths.
 
         `dirs` is a list of parent directories used to record already
         imported albums.
@@ -1351,7 +1387,7 @@ class ImportTaskFactory:
         items = [item for item in items if item]
 
         if items:
-            return ImportTask(self.toppath, dirs, items)
+            return AlbumImportTask(self.toppath, dirs, items)
         else:
             return None
 
@@ -1480,7 +1516,7 @@ def query_tasks(session):
             items = list(album.items())
             _freshen_items(items)
 
-            task = ImportTask(None, [album.item_dir()], items)
+            task = AlbumImportTask(None, [album.item_dir()], items)
             for task in task.handle_created(session):
                 yield task
 
@@ -1489,7 +1525,7 @@ def query_tasks(session):
 def lookup_candidates(session, task):
     """A coroutine for performing the initial MusicBrainz lookup for an
     album. It accepts lists of Items and yields
-    (items, cur_artist, cur_album, candidates, rec) tuples. If no match
+    (items, candidates, rec) tuples. If no match
     is found, all of the yielded parameters (except items) are None.
     """
     if task.skip:
@@ -1567,7 +1603,7 @@ def user_query(session, task):
         # Record merged paths in the session so they are not reimported
         session.mark_merged(duplicate_paths)
 
-        merged_task = ImportTask(
+        merged_task = AlbumImportTask(
             None, task.paths + duplicate_paths, task.items + duplicate_items
         )
 
@@ -1636,7 +1672,7 @@ def import_asis(session, task):
     apply_choice(session, task)
 
 
-def apply_choice(session, task):
+def apply_choice(session: ImportSession, task: ImportTask[hooks.AnyMatch]):
     """Apply the task's choice to the Album or Item it contains and add
     it to the library.
     """
@@ -1742,7 +1778,7 @@ def group_albums(session):
         sorted_items = sorted(task.items, key=group)
         for _, items in itertools.groupby(sorted_items, group):
             items = list(items)
-            task = ImportTask(task.toppath, [i.path for i in items], items)
+            task = AlbumImportTask(task.toppath, [i.path for i in items], items)
             tasks += task.handle_created(session)
         tasks.append(SentinelImportTask(task.toppath, task.paths))
 

@@ -583,7 +583,7 @@ def get_distance(config, data_source, info):
     """Returns the ``data_source`` weight and the maximum source weight
     for albums or individual tracks.
     """
-    dist = beets.autotag.Distance()
+    dist = beets.autotag.hooks.Distance()
     if info.data_source == data_source:
         dist.add("data_source", config["source_weight"].as_number())
     return dist

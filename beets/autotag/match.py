@@ -23,21 +23,23 @@ import re
 from collections.abc import Iterable, Sequence
 from enum import IntEnum
 from functools import cache
-from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Generic, cast
 
 import lap
 import numpy as np
 
 from beets import config, logging, plugins
-from beets.autotag import (
+from beets.util import plurality
+
+from . import hooks
+from .hooks import (
     AlbumInfo,
     AlbumMatch,
+    AnyMatch,
     Distance,
     TrackInfo,
     TrackMatch,
-    hooks,
 )
-from beets.util import plurality
 
 if TYPE_CHECKING:
     from beets.library import Item
@@ -71,9 +73,20 @@ class Recommendation(IntEnum):
 # objects) and a recommendation value.
 
 
-class Proposal(NamedTuple):
-    candidates: Sequence[AlbumMatch | TrackMatch]
+class Proposal(Generic[AnyMatch]):
+    __slots__ = ("candidates", "recommendation")
+
+    candidates: Sequence[AnyMatch]
     recommendation: Recommendation
+
+    def __init__(
+        self, candidates: Sequence[AnyMatch], recommendation: Recommendation
+    ):
+        self.candidates = candidates
+        self.recommendation = recommendation
+
+    def __iter__(self):
+        return iter([self.candidates, self.recommendation])
 
 
 # Primary matching functionality.
@@ -182,7 +195,7 @@ def track_distance(
     cached because this function is called many times during the matching
     process and their access comes with a performance overhead.
     """
-    dist = hooks.Distance()
+    dist = Distance()
 
     # Length.
     if info_length := track_info.length:
@@ -233,7 +246,7 @@ def distance(
     """
     likelies, _ = current_metadata(items)
 
-    dist = hooks.Distance()
+    dist = Distance()
 
     # Artist, if not various.
     if not album_info.va:
@@ -404,7 +417,7 @@ def _recommendation(
     # Downgrade to the max rec if it is lower than the current rec for an
     # applied penalty.
     keys = set(min_dist.keys())
-    if isinstance(results[0], hooks.AlbumMatch):
+    if isinstance(results[0], AlbumMatch):
         for track_dist in min_dist.tracks.values():
             keys.update(list(track_dist.keys()))
     max_rec_view = config["match"]["max_rec"]
@@ -421,9 +434,6 @@ def _recommendation(
             rec = min(rec, max_rec)
 
     return rec
-
-
-AnyMatch = TypeVar("AnyMatch", TrackMatch, AlbumMatch)
 
 
 def _sort_candidates(candidates: Iterable[AnyMatch]) -> Sequence[AnyMatch]:
@@ -478,17 +488,17 @@ def _add_candidate(
             return
 
     log.debug("Success. Distance: {0}", dist)
-    results[info.album_id] = hooks.AlbumMatch(
+    results[info.album_id] = AlbumMatch(
         dist, info, mapping, extra_items, extra_tracks
     )
 
 
 def tag_album(
-    items,
+    items: list[Item],
     search_artist: str | None = None,
-    search_album: str | None = None,
-    search_ids: list[str] = [],
-) -> tuple[str, str, Proposal]:
+    search_name: str | None = None,
+    search_ids: list[str] | None = None,
+) -> Proposal[AlbumMatch]:
     """Return a tuple of the current artist name, the current album
     name, and a `Proposal` containing `AlbumMatch` candidates.
 
@@ -536,17 +546,13 @@ def tag_album(
                 # matches.
                 if rec == Recommendation.strong:
                     log.debug("ID match.")
-                    return (
-                        cur_artist,
-                        cur_album,
-                        Proposal(list(candidates.values()), rec),
-                    )
+                    return Proposal(list(candidates.values()), rec)
 
         # Search terms.
-        if not (search_artist and search_album):
+        if not (search_artist and search_name):
             # No explicit search terms -- use current metadata.
-            search_artist, search_album = cur_artist, cur_album
-        log.debug("Search terms: {0} - {1}", search_artist, search_album)
+            search_artist, search_name = cur_artist, cur_album
+        log.debug("Search terms: {0} - {1}", search_artist, search_name)
 
         extra_tags = None
         if config["musicbrainz"]["extra_tags"]:
@@ -564,7 +570,7 @@ def tag_album(
 
         # Get the results from the data sources.
         for matched_candidate in hooks.album_candidates(
-            items, search_artist, search_album, va_likely, extra_tags
+            items, search_artist, search_name, va_likely, extra_tags
         ):
             _add_candidate(items, candidates, matched_candidate)
 
@@ -572,15 +578,15 @@ def tag_album(
     # Sort and get the recommendation.
     candidates_sorted = _sort_candidates(candidates.values())
     rec = _recommendation(candidates_sorted)
-    return cur_artist, cur_album, Proposal(candidates_sorted, rec)
+    return Proposal(candidates_sorted, rec)
 
 
 def tag_item(
-    item,
+    items: list[Item],
     search_artist: str | None = None,
-    search_title: str | None = None,
+    search_name: str | None = None,
     search_ids: list[str] | None = None,
-) -> Proposal:
+) -> Proposal[TrackMatch]:
     """Find metadata for a single track. Return a `Proposal` consisting
     of `TrackMatch` objects.
 
@@ -594,6 +600,7 @@ def tag_item(
     candidates = {}
     rec: Recommendation | None = None
 
+    item = items[0]
     # First, try matching by MusicBrainz ID.
     trackids = search_ids or [t for t in [item.mb_trackid] if t]
     if trackids:
@@ -601,7 +608,7 @@ def tag_item(
             log.debug("Searching for track ID: {0}", trackid)
             for track_info in hooks.tracks_for_id(trackid):
                 dist = track_distance(item, track_info, incl_artist=True)
-                candidates[track_info.track_id] = hooks.TrackMatch(
+                candidates[track_info.track_id] = TrackMatch(
                     dist, track_info, item
                 )
                 # If this is a good match, then don't keep searching.
@@ -622,16 +629,14 @@ def tag_item(
             return Proposal([], Recommendation.none)
 
     # Search terms.
-    if not (search_artist and search_title):
-        search_artist, search_title = item.artist, item.title
-    log.debug("Item search terms: {0} - {1}", search_artist, search_title)
+    if not (search_artist and search_name):
+        search_artist, search_name = item.artist, item.title
+    log.debug("Item search terms: {0} - {1}", search_artist, search_name)
 
     # Get and evaluate candidate metadata.
-    for track_info in hooks.item_candidates(item, search_artist, search_title):
+    for track_info in hooks.item_candidates(item, search_artist, search_name):
         dist = track_distance(item, track_info, incl_artist=True)
-        candidates[track_info.track_id] = hooks.TrackMatch(
-            dist, track_info, item
-        )
+        candidates[track_info.track_id] = TrackMatch(dist, track_info, item)
 
     # Sort by distance and return with recommendation.
     log.debug("Found {0} candidates.", len(candidates))

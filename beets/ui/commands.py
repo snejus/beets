@@ -37,7 +37,6 @@ from rich_tables.utils import border_panel, make_difftext, new_table, wrap
 
 import beets
 from beets import autotag, config, importer, library, logging, plugins, ui, util
-from beets.autotag import Recommendation, hooks
 from beets.ui import decargs, input_, print_
 from beets.util import (
     MoveOperation,
@@ -54,6 +53,10 @@ from . import _store_dict
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
+
+    from beets.autotag.hooks import AnyMatch
+    from beets.importer import AlbumImportTask, SingletonImportTask, action
+
 
 # Global logger.
 log = logging.getLogger(__name__)
@@ -233,12 +236,12 @@ album_overwrite_fields = set(config["overwrite_null"]["album"].as_str_seq())
 
 
 def get_track_diff(
-    old: library.Item, new: hooks.TrackInfo, fields: list[str]
-) -> hooks.AttrDict:
+    old: library.Item, new: autotag.hooks.TrackInfo, fields: list[str]
+) -> autotag.hooks.AttrDict:
     skip = {"data_url", "artist_id", "track_id"}
     saved_fields = new.keys()
     fields = [f for f in fields if f not in skip]
-    diffs = hooks.AttrDict({f: new.get(f, "") for f in fields})
+    diffs = autotag.hooks.AttrDict({f: new.get(f, "") for f in fields})
     for field in fields:
         new_value = new.get(field)
         old_value = old.get(track_info_to_item_field.get(field, field))
@@ -254,7 +257,7 @@ track_fields = config["match"]["singleton_disambig_fields"].as_str_seq()
 
 
 def show_album_change(
-    cur_artist: str, cur_album: str, match: hooks.AlbumMatch
+    cur_artist: str, cur_album: str, match: autotag.hooks.AlbumMatch
 ) -> None:
     """Print out a representation of the changes that will be made if an
     album's tags are changed according to `match`, which must be an AlbumMatch
@@ -315,7 +318,7 @@ def show_item_change(
     new_meta = new_table()  # for all new metadata
     upd_meta = new_table()  # for changes only
 
-    if isinstance(new, hooks.AlbumInfo):
+    if isinstance(new, autotag.hooks.AlbumInfo):
         info_to_item_field = album_info_to_item_field
         overwrite_fields = album_overwrite_fields
     else:
@@ -343,7 +346,9 @@ def show_item_change(
         old["comments"] += "\n\nTracklist\n\n" + old["tracklist"]
 
     if upd_meta.row_count:
-        _type = "Album" if isinstance(new, hooks.AlbumInfo) else "Singleton"
+        _type = (
+            "Album" if isinstance(new, autotag.hooks.AlbumInfo) else "Singleton"
+        )
         color = "magenta" if _type == "Album" else "cyan"
         updates_panel = border_panel(
             upd_meta, title="Updates", border_style="yellow"
@@ -406,7 +411,7 @@ def _summary_judgment(rec):
     """
 
     if config["import"]["quiet"]:
-        if rec == Recommendation.strong:
+        if rec == autotag.match.Recommendation.strong:
             return importer.action.APPLY
         else:
             action = config["import"]["quiet_fallback"].as_choice(
@@ -417,7 +422,7 @@ def _summary_judgment(rec):
             )
     elif config["import"]["timid"]:
         return None
-    elif rec == Recommendation.none:
+    elif rec == autotag.match.Recommendation.none:
         action = config["import"]["none_rec_action"].as_choice(
             {
                 "skip": importer.action.SKIP,
@@ -441,7 +446,9 @@ class PromptChoice(NamedTuple):
     callback: Any
 
 
-def print_singleton_candidates(candidates: Sequence[hooks.TrackMatch]) -> None:
+def print_singleton_candidates(
+    candidates: Sequence[autotag.hooks.TrackMatch],
+) -> None:
     candidata = [
         {"id": str(i), **m.disambig_data} for i, m in enumerate(candidates, 1)
     ]
@@ -451,7 +458,9 @@ def print_singleton_candidates(candidates: Sequence[hooks.TrackMatch]) -> None:
     console.print("")
 
 
-def print_album_candidates(candidates: Sequence[hooks.AlbumMatch]) -> None:
+def print_album_candidates(
+    candidates: Sequence[autotag.hooks.AlbumMatch],
+) -> None:
     candidata = []
     track_diffs_table = new_table("id", *track_fields)
     for idx, candidate in enumerate(candidates, 1):
@@ -520,13 +529,13 @@ def choose_candidate(
 
     # Is the change good enough?
     bypass_candidates = False
-    if rec != Recommendation.none:
+    if rec != autotag.match.Recommendation.none:
         match = candidates[0]
         bypass_candidates = True
 
     while True:
         # Display and choose from candidates.
-        require = rec <= Recommendation.low
+        require = rec <= autotag.match.Recommendation.low
 
         if not bypass_candidates:
             # Display list of candidates.
@@ -559,7 +568,10 @@ def choose_candidate(
             show_album_change(cur_artist, cur_album, match)
 
         # Exact match => tag automatically if we're not in timid mode.
-        if rec == Recommendation.strong and not config["import"]["timid"]:
+        if (
+            rec == autotag.match.Recommendation.strong
+            and not config["import"]["timid"]
+        ):
             return match
 
         # Ask for confirmation.
@@ -587,35 +599,31 @@ def choose_candidate(
             return choice_actions[sel]
 
 
-def manual_search(session, task):
-    """Get a new `Proposal` using manual search criteria.
+def manual_search(
+    session: importer.ImportSession, task: importer.ImportTask[AnyMatch]
+) -> None:
+    """Update task with candidates using manual search criteria.
 
     Input either an artist and album (for full albums) or artist and
     track name (for singletons) for manual search.
     """
-    artist = input_("Artist:").strip()
-    name = input_("Album:" if task.is_album else "Track:").strip()
-
-    if task.is_album:
-        _, _, prop = autotag.tag_album(task.items, artist, name)
-        return prop
-    else:
-        return autotag.tag_item(task.item, artist, name)
+    task.lookup_candidates(
+        search_artist=input_("Artist:").strip(),
+        search_name=input_("Album:" if task.is_album else "Track:").strip(),
+    )
 
 
-def manual_id(session, task):
-    """Get a new `Proposal` using a manually-entered ID.
+def manual_id(
+    session: importer.ImportSession, task: importer.ImportTask[AnyMatch]
+) -> None:
+    """Update task with candidates using a manually-entered ID.
 
     Input an ID, either for an album ("release") or a track ("recording").
     """
-    prompt = "Enter {} ID:".format("release" if task.is_album else "recording")
-    search_id = input_(prompt).strip()
-
-    if task.is_album:
-        _, _, prop = autotag.tag_album(task.items, search_ids=search_id.split())
-        return prop
-    else:
-        return autotag.tag_item(task.item, search_ids=search_id.split())
+    _type = "release" if task.is_album else "recording"
+    task.lookup_candidates(
+        search_ids=input_(f"Enter {_type} ID:").strip().split()
+    )
 
 
 def abort_action(session, task):
@@ -626,11 +634,9 @@ def abort_action(session, task):
 class TerminalImportSession(importer.ImportSession):
     """An import session that runs in a terminal."""
 
-    def choose_match(self, task):
-        """Given an initial autotagging of items, go through an interactive
-        dance with the user to ask for a choice of metadata. Returns an
-        AlbumMatch object, ASIS, or SKIP.
-        """
+    def choose_match(
+        self, task: AlbumImportTask
+    ) -> autotag.hooks.AlbumMatch | action:
         # Show what we're tagging.
         print_()
 
@@ -692,7 +698,7 @@ class TerminalImportSession(importer.ImportSession):
                 post_choice = choice.callback(self, task)
                 if isinstance(post_choice, importer.action):
                     return post_choice
-                elif isinstance(post_choice, autotag.Proposal):
+                elif isinstance(post_choice, autotag.match.Proposal):
                     # Use the new candidates and continue around the loop.
                     task.candidates = post_choice.candidates
                     task.rec = post_choice.recommendation
@@ -701,10 +707,12 @@ class TerminalImportSession(importer.ImportSession):
             else:
                 # We have a candidate! Finish tagging. Here, choice is an
                 # AlbumMatch object.
-                assert isinstance(choice, autotag.AlbumMatch)
+                assert isinstance(choice, autotag.hooks.AlbumMatch)
                 return choice
 
-    def choose_item(self, task):
+    def choose_item(
+        self, task: SingletonImportTask
+    ) -> autotag.hooks.TrackMatch | action:
         """Ask the user for a choice about tagging a single item. Returns
         either an action constant or a TrackMatch object.
         """
@@ -735,13 +743,10 @@ class TerminalImportSession(importer.ImportSession):
                 post_choice = choice.callback(self, task)
                 if isinstance(post_choice, importer.action):
                     return post_choice
-                elif isinstance(post_choice, autotag.Proposal):
-                    candidates = post_choice.candidates
-                    rec = post_choice.recommendation
 
             else:
                 # Chose a candidate.
-                assert isinstance(choice, autotag.TrackMatch)
+                assert isinstance(choice, autotag.hooks.TrackMatch)
                 return choice
 
     def resolve_duplicate(self, task, found_duplicates):

@@ -23,7 +23,7 @@ import requests
 import unidecode
 
 from beets import ui
-from beets.autotag import AlbumInfo, TrackInfo
+from beets.autotag.hooks import AlbumInfo, TrackInfo
 from beets.dbcore import types
 from beets.plugins import BeetsPlugin, MetadataSourcePlugin
 from beets.util.id_extractors import deezer_id_regex
