@@ -21,6 +21,7 @@ from .tasks import (
     Action,
     AlbumImportTask,
     ArchiveImportTask,
+    DuplicateAction,
     ImportTask,
     SentinelImportTask,
     SingletonImportTask,
@@ -30,11 +31,12 @@ from .tasks import (
 
 __all__ = [
     "Action",
+    "AlbumImportTask",
     "ArchiveImportTask",
+    "DuplicateAction",
     "ImportAbortError",
     "ImportSession",
     "ImportTask",
     "SentinelImportTask",
     "SingletonImportTask",
-    "AlbumImportTask",
 ]
