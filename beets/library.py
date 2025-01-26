@@ -24,7 +24,7 @@ import time
 import unicodedata
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, KeysView
+from typing import TYPE_CHECKING, Any, KeysView, TypeVar
 
 import platformdirs
 from mediafile import MediaFile, UnreadableFileError
@@ -51,6 +51,10 @@ if TYPE_CHECKING:
     from .dbcore.db import Results
     from .dbcore.query import FieldQuery, FieldQueryType
 
+if TYPE_CHECKING:
+    AnyLibModel = TypeVar("AnyLibModel", bound="LibModel", default=Any)
+else:
+    AnyLibModel = TypeVar("AnyLibModel", bound="LibModel")
 
 log = logging.getLogger("beets")
 
