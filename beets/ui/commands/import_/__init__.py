@@ -73,27 +73,11 @@ def import_files(
     if config["import"]["quiet"] and config["import"]["timid"]:
         raise UserError("can't be both quiet and timid")
 
-    # Open the log.
-    if config["import"]["log"].get() is not None:
-        logpath = syspath(config["import"]["log"].as_filename())
-        try:
-            loghandler = logging.FileHandler(logpath, encoding="utf-8")
-            loghandler.setFormatter(
-                logging.Formatter("%(asctime)s | %(message)s")
-            )
-        except OSError:
-            raise UserError(
-                "Could not open log file for writing:"
-                f" {displayable_path(logpath)}"
-            )
-    else:
-        loghandler = None
-
     # Never ask for input in quiet mode.
     if config["import"]["resume"].get() == "ask" and config["import"]["quiet"]:
         config["import"]["resume"] = False
 
-    session = TerminalImportSession(lib, loghandler, paths, query)
+    session = TerminalImportSession(lib, paths, query)
     session.run()
 
     # Emit event.
