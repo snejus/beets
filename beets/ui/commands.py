@@ -898,35 +898,19 @@ class TerminalImportSession(importer.ImportSession):
 # The import command.
 
 
-def import_files(lib, paths: list[bytes], query):
-    """Import the files in the given list of paths or matching the
-    query.
-    """
+def import_files(
+    lib: library.Library, paths: list[bytes] | None, **kwargs
+) -> None:
+    """Import the files in the given list of paths or matching the query."""
     # Check parameter consistency.
     if config["import"]["quiet"] and config["import"]["timid"]:
         raise UserError("can't be both quiet and timid")
-
-    # Open the log.
-    if config["import"]["log"].get() is not None:
-        logpath = syspath(config["import"]["log"].as_filename())
-        try:
-            loghandler = logging.FileHandler(logpath, encoding="utf-8")
-            loghandler.setFormatter(
-                logging.Formatter("%(asctime)s | %(message)s")
-            )
-        except OSError:
-            raise UserError(
-                "Could not open log file for writing:"
-                f" {displayable_path(logpath)}"
-            )
-    else:
-        loghandler = None
 
     # Never ask for input in quiet mode.
     if config["import"]["resume"].get() == "ask" and config["import"]["quiet"]:
         config["import"]["resume"] = False
 
-    session = TerminalImportSession(lib, loghandler, paths, query)
+    session = TerminalImportSession.make(lib, paths=paths, **kwargs)
     session.run()
 
     # Emit event.
@@ -959,18 +943,17 @@ def import_func(lib, opts, args: list[str]):
         paths_from_logfiles = [os.fsencode(p) for p in paths_from_logfiles]
 
         # Check the user-specified directories.
-        for path in byte_paths:
-            if not os.path.exists(syspath(normpath(path))):
-                raise UserError(
-                    f"no such file or directory: {displayable_path(path)}"
-                )
+        for invalid_path in (p for p in byte_paths if not os.path.exists(p)):
+            raise UserError(
+                f"No such file or directory: {displayable_path(invalid_path)}"
+            )
 
         # Check the directories from the logfiles, but don't throw an error in
         # case those paths don't exist. Maybe some of those paths have already
         # been imported and moved separately, so logging a warning should
         # suffice.
         for path in paths_from_logfiles:
-            if not os.path.exists(syspath(normpath(path))):
+            if not os.path.exists(path):
                 log.warning(
                     "No such file or directory: {}", displayable_path(path)
                 )
@@ -983,7 +966,7 @@ def import_func(lib, opts, args: list[str]):
         if not paths:
             raise UserError("none of the paths are importable")
 
-    import_files(lib, byte_paths, query)
+    import_files(lib, paths=byte_paths, query=query)
 
 
 import_cmd = ui.Subcommand(
