@@ -29,7 +29,6 @@ from urllib.parse import urljoin
 from confuse.exceptions import NotFoundError
 from requests_ratelimiter import LimiterMixin
 
-import beets
 from beets import config, plugins, util
 from beets.autotag.hooks import AlbumInfo, TrackInfo
 from beets.metadata_plugins import MetadataSourcePlugin
@@ -405,6 +404,16 @@ def _merge_pseudo_and_actual_album(
     return merged
 
 
+def get_genre(genre_items: list[dict[str, Any]]) -> list[str]:
+    from beetsplug.bandcamp.helpers import Helpers
+
+    flat = [i["name"] for i in genre_items for _ in range(i["count"])]
+    genres = list(dict(Counter(flat).most_common()))
+    return list(
+        Helpers.get_genre(genres, config["bandcamp"]["genre"].flatten(), "")
+    )
+
+
 class MusicBrainzPlugin(MetadataSourcePlugin):
     @cached_property
     def genres_field(self) -> str:
@@ -484,6 +493,11 @@ class MusicBrainzPlugin(MetadataSourcePlugin):
             data_url=track_url(recording["id"]),
             comments=(
                 unescape(ann) if (ann := recording.get("annotation")) else None
+            ),
+            genre=(
+                ", ".join(genres)
+                if (genres := get_genre(recording.get(self.genres_field, [])))
+                else None
             ),
         )
 
@@ -803,9 +817,8 @@ class MusicBrainzPlugin(MetadataSourcePlugin):
                 self.genres_field, []
             ) + release.get(self.genres_field, [])
 
-            flat = [i["name"] for i in genre_items for _ in range(i["count"])]
-            if flat:
-                info.genre = "; ".join(dict(Counter(flat).most_common()))
+            if genres := get_genre(genre_items):
+                info.genre = ", ".join(genres)
 
         # We might find links to external sources (Discogs, Bandcamp, ...)
         external_ids = self.config["external_ids"].get()
