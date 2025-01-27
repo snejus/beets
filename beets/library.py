@@ -23,7 +23,7 @@ import string
 import sys
 import time
 import unicodedata
-from functools import cached_property
+from functools import cache, cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, KeysView, TypeVar
 
@@ -1373,6 +1373,7 @@ def parse_query_parts(
     return query, sort
 
 
+@cache
 def parse_query_string(
     s: str, model_cls: type[LibModel]
 ) -> tuple[dbcore.Query, dbcore.Sort]:
