@@ -72,6 +72,8 @@ RECORDING_INCLUDES = [
     "isrcs",
     "work-level-rels",
     "artist-rels",
+    "genres",
+    "tags",
 ]
 
 
