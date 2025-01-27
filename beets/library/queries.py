@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shlex
+from functools import cache
 from typing import TYPE_CHECKING
 
 import beets
@@ -52,6 +53,7 @@ def parse_query_parts(
     return query, sort
 
 
+@cache
 def parse_query_string(
     s: str, model_cls: type[LibModel]
 ) -> tuple[dbcore.Query, dbcore.Sort]:
