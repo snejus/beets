@@ -17,7 +17,6 @@
 from __future__ import annotations
 
 import traceback
-from collections import Counter
 from contextlib import suppress
 from functools import cached_property
 from itertools import product
@@ -359,6 +358,17 @@ def _merge_pseudo_and_actual_album(
     return merged
 
 
+def get_genre(data: dict[str, Any]) -> str:
+    from beetsplug.bandcamp.helpers import Helpers
+
+    tags = data.get("tag-list", [])
+    tags.sort(key=lambda t: t["count"], reverse=True)
+    genres = Helpers.get_genre(
+        [t["name"] for t in tags], config["bandcamp"]["genre"].flatten(), ""
+    )
+    return ", ".join(sorted(genres))
+
+
 class MusicBrainzPlugin(MetadataSourcePlugin):
     def __init__(self):
         """Set up the python-musicbrainz-ngs module according to settings
@@ -426,6 +436,7 @@ class MusicBrainzPlugin(MetadataSourcePlugin):
             medium_total=medium_total,
             data_source=self.data_source,
             data_url=track_url(recording["id"]),
+            genre=get_genre(recording) or None,
         )
 
         if recording.get("artist-credit"):
@@ -746,21 +757,10 @@ class MusicBrainzPlugin(MetadataSourcePlugin):
                 info.media = "Media"
 
         if self.config["genres"]:
-            sources = [
-                release["release-group"].get("tag-list", []),
-                release.get("tag-list", []),
-            ]
-            genres: Counter[str] = Counter()
-            for source in sources:
-                for genreitem in source:
-                    genres[genreitem["name"]] += int(genreitem["count"])
-            if genres:
-                info.genre = "; ".join(
-                    genre
-                    for genre, _count in sorted(
-                        genres.items(), key=lambda g: -g[1]
-                    )
-                )
+            if genre := get_genre(release) or get_genre(
+                release["release-group"]
+            ):
+                info.genre = genre
 
         # We might find links to external sources (Discogs, Bandcamp, ...)
         external_ids = self.config["external_ids"].get()
