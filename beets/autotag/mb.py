@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import re
 import traceback
-from collections import Counter
 from collections.abc import Iterator, Sequence
 from itertools import product
 from typing import Any, cast
@@ -36,6 +35,7 @@ from beets.util.id_extractors import (
     extract_discogs_id_regex,
     spotify_id_regex,
 )
+from beetsplug.bandcamp.helpers import Helpers
 
 VARIOUS_ARTISTS_ID = "89ad4ac3-39f7-470e-963a-56509c546377"
 
@@ -89,6 +89,7 @@ RELEASE_INCLUDES = [
     "isrcs",
     "url-rels",
     "release-rels",
+    "tags",
 ]
 BROWSE_INCLUDES = [
     "artist-credits",
@@ -299,6 +300,7 @@ def track_info(
         medium_total=medium_total,
         data_source="MusicBrainz",
         data_url=track_url(recording["id"]),
+        genre=get_genre(recording) or None,
     )
 
     if recording.get("artist-credit"):
@@ -375,6 +377,15 @@ def track_info(
         info.update(extra_trackdata)
 
     return info
+
+
+def get_genre(data: dict[str, Any]) -> str:
+    tags = data.get("tag-list", [])
+    tags.sort(key=lambda t: t["count"], reverse=True)
+    genres = Helpers.get_genre(
+        [t["name"] for t in tags], config["bandcamp"]["genre"].flatten(), ""
+    )
+    return ", ".join(sorted(genres))
 
 
 def _set_date_str(
@@ -617,19 +628,8 @@ def album_info(release: dict) -> beets.autotag.hooks.AlbumInfo:
             info.media = "Media"
 
     if config["musicbrainz"]["genres"]:
-        sources = [
-            release["release-group"].get("genre-list", []),
-            release.get("genre-list", []),
-        ]
-        genres: Counter[str] = Counter()
-        for source in sources:
-            for genreitem in source:
-                genres[genreitem["name"]] += int(genreitem["count"])
-        if genres:
-            info.genre = "; ".join(
-                genre
-                for genre, _count in sorted(genres.items(), key=lambda g: -g[1])
-            )
+        if genre := get_genre(release["release-group"]):
+            info.genre = genre
 
     # We might find links to external sources (Discogs, Bandcamp, ...)
     external_ids = config["musicbrainz"]["external_ids"].get()
