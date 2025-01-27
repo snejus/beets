@@ -18,9 +18,8 @@ from __future__ import annotations
 
 import re
 import traceback
-from collections.abc import Iterator, Sequence
 from itertools import product
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urljoin
 
 import musicbrainzngs
@@ -36,6 +35,9 @@ from beets.util.id_extractors import (
     spotify_id_regex,
 )
 from beetsplug.bandcamp.helpers import Helpers
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator, Sequence
 
 VARIOUS_ARTISTS_ID = "89ad4ac3-39f7-470e-963a-56509c546377"
 
@@ -173,8 +175,7 @@ def _preferred_release_event(release: dict[str, Any]) -> tuple[str, str]:
     event as a tuple of (country, release_date). Fall back to the
     default release event if a preferred event is not found.
     """
-    countries = config["match"]["preferred"]["countries"].as_str_seq()
-    countries = cast(Sequence, countries)
+    countries: Sequence = config["match"]["preferred"]["countries"].as_str_seq()
 
     for country in countries:
         for event in release.get("release-event-list", {}):
@@ -184,7 +185,7 @@ def _preferred_release_event(release: dict[str, Any]) -> tuple[str, str]:
             except KeyError:
                 pass
 
-    return (cast(str, release.get("country")), cast(str, release.get("date")))
+    return release.get("country", ""), release.get("date", "")
 
 
 def _multi_artist_credit(
@@ -398,18 +399,10 @@ def _set_date_str(
     `original`, then set the original_year, etc., fields.
     """
     if date_str:
-        date_parts = date_str.split("-")
-        for key in ("year", "month", "day"):
-            if date_parts:
-                date_part = date_parts.pop(0)
-                try:
-                    date_num = int(date_part)
-                except ValueError:
-                    continue
-
-                if original:
-                    key = "original_" + key
-                setattr(info, key, date_num)
+        for key, value in zip(("year", "month", "day"), date_str.split("-")):
+            if original:
+                key = "original_" + key
+            setattr(info, key, int(value))
 
 
 def album_info(release: dict) -> beets.autotag.hooks.AlbumInfo:
