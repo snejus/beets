@@ -16,7 +16,7 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter
 from contextlib import suppress
 from functools import cached_property
 from itertools import product
@@ -45,11 +45,13 @@ if TYPE_CHECKING:
         Alias,
         ArtistCredit,
         ArtistRelation,
+        Genre,
         LabelInfo,
         Medium,
         Recording,
         Release,
         ReleaseGroup,
+        Tag,
         UrlRelation,
         WorkRelation,
     )
@@ -252,6 +254,19 @@ def _merge_pseudo_and_actual_album(
     }
     merged.update(from_actual)
     return merged
+
+
+def get_genre(genre_items: list[Genre] | list[Tag]) -> list[str] | None:
+    from beetcamp.helpers import Helpers
+
+    flat = [i["name"] for i in genre_items for _ in range(i["count"])]
+    genres = list(dict(Counter(flat).most_common()))
+    return (
+        list(
+            Helpers.get_genre(genres, config["bandcamp"]["genre"].flatten(), "")
+        )
+        or None
+    )
 
 
 class MusicBrainzPlugin(
@@ -465,6 +480,11 @@ class MusicBrainzPlugin(
             **self._parse_artist_relations(
                 recording.get("artist_relations", [])
             ),
+            genres=(
+                get_genre(recording.get(field, []))
+                if (field := self.genres_field)
+                else None
+            ),
         )
 
         # Supplementary fields provided by plugins
@@ -519,14 +539,7 @@ class MusicBrainzPlugin(
                 *release[self.genres_field],
             ]
         ):
-            count_by_genre: dict[str, int] = defaultdict(int)
-            for genre in genres:
-                count_by_genre[genre["name"]] += genre["count"]
-
-            return [
-                g
-                for g, _ in sorted(count_by_genre.items(), key=lambda g: -g[1])
-            ]
+            return get_genre(genres)
 
         return None
 
