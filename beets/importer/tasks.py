@@ -256,8 +256,8 @@ class ImportTask(ImportLog, BaseImportTask, Generic[AnyMatch]):
     album: library.Album
 
     # Keep track of the current task item
-    candidates: Sequence[AnyMatch] | None = None
-    rec: Recommendation | None = None
+    candidates: Sequence[AnyMatch]
+    rec: Recommendation
     duplicate_action: DuplicateAction | None = None
 
     # Set by `apply_upgrade` when `duplicate_action` is UPGRADE; consumed
@@ -288,7 +288,6 @@ class ImportTask(ImportLog, BaseImportTask, Generic[AnyMatch]):
     ) -> None:
         super().__init__(toppath, paths, items)
         self.choice_flag = None
-        self.rec = None
 
     @classmethod
     def _get_flex_attrs(
@@ -578,14 +577,9 @@ class ImportTask(ImportLog, BaseImportTask, Generic[AnyMatch]):
     def find_duplicates(self, lib: library.Library) -> list[library.LibModel]:
         raise NotImplementedError
 
-    def lookup_candidates(self, search_ids: list[str]) -> None:
-        """Retrieve and store candidates for this album. User-specified
-        candidate IDs are stored in self.search_ids: if present, the
-        initial lookup is restricted to only those IDs.
-        """
-        self.candidates, self.rec = self.proposal_func(
-            self.source, search_ids=search_ids
-        )
+    def lookup_candidates(self, **kwargs) -> None:
+        """Retrieve and store candidates for this model."""
+        self.candidates, self.rec = self.proposal_func(self.source, **kwargs)
 
     def align_album_level_fields(self) -> None:
         """Make some album fields equal across `self.items`. For the
