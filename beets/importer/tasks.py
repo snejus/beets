@@ -185,7 +185,7 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
     match: AnyMatch | None
     is_album: ClassVar[bool]
 
-    candidates: Sequence[AnyMatch] = []
+    candidates: Sequence[AnyMatch]
     rec: Recommendation | None
     duplicate_action: DuplicateAction | None
     album: Album
@@ -386,14 +386,9 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
     def find_duplicates(self, lib: library.Library) -> list[library.LibModel]:
         raise NotImplementedError
 
-    def lookup_candidates(self, search_ids: list[str]) -> None:
-        """Retrieve and store candidates for this album. User-specified
-        candidate IDs are stored in self.search_ids: if present, the
-        initial lookup is restricted to only those IDs.
-        """
-        self.candidates, self.rec = self.proposal_func(
-            self.items, search_ids=search_ids
-        )
+    def lookup_candidates(self, **kwargs) -> None:
+        """Retrieve and store candidates for this model."""
+        self.candidates, self.rec = self.proposal_func(self.items, **kwargs)
 
     def align_album_level_fields(self):
         """Make some album fields equal across `self.items`. For the
