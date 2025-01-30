@@ -131,26 +131,6 @@ def group_albums(session: ImportSession):
         task = pipeline.multiple(tasks)
 
 
-@pipeline.mutator_stage
-def lookup_candidates(session: ImportSession, task: ImportTask[Any]):
-    """A coroutine for performing the initial MusicBrainz lookup for an
-    album. It accepts lists of Items and yields
-    (items, candidates, rec) tuples. If no match
-    is found, all of the yielded parameters (except items) are None.
-    """
-    if task.skip:
-        # FIXME This gets duplicated a lot. We need a better
-        # abstraction.
-        return
-
-    plugins.send("import_task_start", session=session, task=task)
-    log.debug("Looking up: {}", displayable_path(task.paths))
-
-    # Restrict the initial lookup to IDs specified by the user via the -m
-    # option. Currently all the IDs are passed onto the tasks directly.
-    task.lookup_candidates(session.config["search_ids"].as_str_seq())
-
-
 @pipeline.stage
 def user_query(session: ImportSession, task: ImportTask[Any]):
     """A coroutine for interfacing with the user about the tagging
@@ -171,6 +151,13 @@ def user_query(session: ImportSession, task: ImportTask[Any]):
     if session.already_merged(task.paths):
         return pipeline.BUBBLE
 
+    plugins.send("import_task_start", session=session, task=task)
+    log.debug("Looking up: {}", displayable_path(task.paths))
+
+    # Restrict the initial lookup to IDs specified by the user via the -m
+    # option. Currently all the IDs are passed onto the tasks directly.
+    task.lookup_candidates(search_ids=session.search_ids)
+
     # Ask the user for a choice.
     task.choose_match(session)
     plugins.send("import_task_choice", session=session, task=task)
@@ -184,17 +171,12 @@ def user_query(session: ImportSession, task: ImportTask[Any]):
                 yield from task.handle_created(session)
             yield SentinelImportTask(task.toppath, task.paths)
 
-        return _extend_pipeline(
-            emitter(task), lookup_candidates(session), user_query(session)
-        )
+        return _extend_pipeline(emitter(task), user_query(session))
 
     # As albums: group items by albums and create task for each album
     if task.choice_flag is Action.ALBUMS:
         return _extend_pipeline(
-            [task],
-            group_albums(session),
-            lookup_candidates(session),
-            user_query(session),
+            [task], group_albums(session), user_query(session)
         )
 
     task.resolve_duplicates(session)
@@ -215,9 +197,7 @@ def user_query(session: ImportSession, task: ImportTask[Any]):
             None, task.paths + duplicate_paths, task.items + duplicate_items
         )
 
-        return _extend_pipeline(
-            [merged_task], lookup_candidates(session), user_query(session)
-        )
+        return _extend_pipeline([merged_task], user_query(session))
 
     _apply_choice(session, task)
     return task
