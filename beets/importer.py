@@ -232,6 +232,10 @@ class ImportSession:
     _merged_items: set[bytes] = field(default_factory=set, init=False)
     _merged_dirs: set[bytes] = field(default_factory=set, init=False)
 
+    @cached_property
+    def search_ids(self) -> list[str]:
+        return self.config["search_ids"].as_str_seq()
+
     @classmethod
     def make(cls, *args, **kwargs) -> Self:
         kwargs["paths"] = kwargs.get("paths") or []
@@ -344,7 +348,7 @@ class ImportSession:
             # also add the music to the library database, so later
             # stages need to read and write data from there.
             if self.config["autotag"]:
-                stages += [lookup_candidates(self), user_query(self)]
+                stages += [user_query(self)]
             else:
                 stages += [import_asis(self)]
 
@@ -504,7 +508,6 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
 
     match: hooks.AnyMatch | None
     candidates: Sequence[hooks.AnyMatch]
-    search_ids: list[str]
     rec: match.Recommendation | None
     choice_flag: action | hooks.AnyMatch | None
     duplicate_action: DuplicateAction | None
@@ -530,7 +533,6 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
         self.candidates = []
         self.rec = None
         self.duplicate_action = None
-        self.search_ids = []  # user-supplied candidate IDs.
 
     @classmethod
     def _get_flex_attrs(
@@ -704,13 +706,7 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
         return tasks
 
     def lookup_candidates(self, **kwargs) -> None:
-        """Retrieve and store candidates for this model. User-specified
-        candidate IDs are stored in self.search_ids: if present, the
-        initial lookup is restricted to only those IDs.
-        """
-        if not kwargs:
-            kwargs = {"search_ids": self.search_ids}
-
+        """Retrieve and store candidates for this model."""
         proposal = self.proposal_func(self.items, **kwargs)
         self.candidates, self.rec = proposal.candidates, proposal.recommendation
 
@@ -1538,28 +1534,6 @@ def query_tasks(session):
                 yield task
 
 
-@pipeline.mutator_stage
-def lookup_candidates(session, task):
-    """A coroutine for performing the initial MusicBrainz lookup for an
-    album. It accepts lists of Items and yields
-    (items, candidates, rec) tuples. If no match
-    is found, all of the yielded parameters (except items) are None.
-    """
-    if task.skip:
-        # FIXME This gets duplicated a lot. We need a better
-        # abstraction.
-        return
-
-    plugins.send("import_task_start", session=session, task=task)
-    log.debug("Looking up: {0}", displayable_path(task.paths))
-
-    # Restrict the initial lookup to IDs specified by the user via the -m
-    # option. Currently all the IDs are passed onto the tasks directly.
-    task.search_ids = session.config["search_ids"].as_str_seq()
-
-    task.lookup_candidates()
-
-
 @pipeline.stage
 def user_query(session: ImportSession, task: ImportTask[Any]):
     """A coroutine for interfacing with the user about the tagging
@@ -1580,6 +1554,13 @@ def user_query(session: ImportSession, task: ImportTask[Any]):
     if session.already_merged(task.paths):
         return pipeline.BUBBLE
 
+    plugins.send("import_task_start", session=session, task=task)
+    log.debug("Looking up: {0}", displayable_path(task.paths))
+
+    # Restrict the initial lookup to IDs specified by the user via the -m
+    # option. Currently all the IDs are passed onto the tasks directly.
+    task.lookup_candidates(search_ids=session.search_ids)
+
     # Ask the user for a choice.
     task.choose_match(session)
     plugins.send("import_task_choice", session=session, task=task)
@@ -1593,17 +1574,12 @@ def user_query(session: ImportSession, task: ImportTask[Any]):
                 yield from task.handle_created(session)
             yield SentinelImportTask(task.toppath, task.paths)
 
-        return _extend_pipeline(
-            emitter(task), lookup_candidates(session), user_query(session)
-        )
+        return _extend_pipeline(emitter(task), user_query(session))
 
     # As albums: group items by albums and create task for each album
     if task.choice_flag is action.ALBUMS:
         return _extend_pipeline(
-            [task],
-            group_albums(session),
-            lookup_candidates(session),
-            user_query(session),
+            [task], group_albums(session), user_query(session)
         )
 
     task.resolve_duplicates(session)
@@ -1624,9 +1600,7 @@ def user_query(session: ImportSession, task: ImportTask[Any]):
             None, task.paths + duplicate_paths, task.items + duplicate_items
         )
 
-        return _extend_pipeline(
-            [merged_task], lookup_candidates(session), user_query(session)
-        )
+        return _extend_pipeline([merged_task], user_query(session))
 
     apply_choice(session, task)
     return task
