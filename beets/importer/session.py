@@ -16,6 +16,7 @@ from __future__ import annotations
 import os
 import time
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import TYPE_CHECKING
 
 from typing_extensions import Self
@@ -63,6 +64,10 @@ class ImportSession:
     _is_resuming: dict[bytes, bool] = field(default_factory=dict, init=False)
     _merged_items: set[bytes] = field(default_factory=set, init=False)
     _merged_dirs: set[bytes] = field(default_factory=set, init=False)
+
+    @cached_property
+    def search_ids(self) -> list[str]:
+        return self.config["search_ids"].as_str_seq()
 
     @classmethod
     def make(cls, *args, **kwargs) -> Self:
@@ -176,10 +181,7 @@ class ImportSession:
             # also add the music to the library database, so later
             # stages need to read and write data from there.
             if self.config["autotag"]:
-                stages += [
-                    stagefuncs.lookup_candidates(self),
-                    stagefuncs.user_query(self),
-                ]
+                stages += [stagefuncs.user_query(self)]
             else:
                 stages += [stagefuncs.import_asis(self)]
 
