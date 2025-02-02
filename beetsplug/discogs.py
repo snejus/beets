@@ -338,7 +338,7 @@ class DiscogsPlugin(BeetsPlugin):
 
         if not artist and not title:
             self._log.debug(
-                "Skipping Discogs query. File missing artist and " "title tags."
+                "Skipping Discogs query. File missing artist and title tags."
             )
             return []
 
@@ -724,7 +724,7 @@ class DiscogsPlugin(BeetsPlugin):
                     # subtracks assuming they are logical divisions of a
                     # physical track (12.2.9 Subtracks).
                     tracklist[-1].data["position"] = (
-                        f'{idx or ""}{medium_idx or ""}'
+                        f"{idx or ''}{medium_idx or ''}"
                     )
                 else:
                     # Promote the subtracks to real tracks, discarding the
