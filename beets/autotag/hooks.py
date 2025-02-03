@@ -283,13 +283,17 @@ class TrackInfo(Info):
 
     @property
     def data(self) -> JSONDict:
-        data = super().data | {
-            "mb_releasetrackid": self.release_track_id or self.track_id,
-        }
+        data = super().data
         if not config["per_disc_numbering"]:
             data.update(track=self.index, tracktotal=None)
 
         return data
+
+    @property
+    def item_data(self) -> JSONDict:
+        return super().item_data | {
+            "mb_releasetrackid": self.release_track_id or self.track_id,
+        }
 
     # TYPING: are all of these correct? I've assumed optional strings
     def __init__(
@@ -677,6 +681,9 @@ class Match:
     disambig_fields_key: ClassVar[str]
     distance: Distance
     info: Info
+
+    def apply_metadata(self) -> None:
+        raise NotImplementedError
 
     @cached_classproperty
     def disambig_fields(cls) -> Sequence[str]:
