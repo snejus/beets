@@ -741,6 +741,9 @@ class TrackMatch(Match):
     info: TrackInfo
     item: Item
 
+    def __hash__(self) -> int:
+        return hash((id(self.item), *map(str, self.info.item_data.items())))
+
     def apply_metadata(self) -> None:
         """Apply metadata to the item."""
         self.item.update(self.info.item_data)
@@ -753,6 +756,9 @@ class AlbumMatch(Match):
     extra_items: list[Item] = field(default_factory=list)
     extra_tracks: list[TrackInfo] = field(default_factory=list)
     info: AlbumInfo
+
+    def __hash__(self) -> int:
+        return hash((id(self.items[0]), self.info.album_id))
 
     @cached_property
     def items(self) -> list[Item]:

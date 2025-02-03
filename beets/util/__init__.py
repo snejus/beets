@@ -1164,6 +1164,13 @@ def colordiff(a: str, b: str) -> str | tuple[str, str]:
         return str(a), str(b)
 
 
+def get_text(arg: Any, end=" ") -> str:
+    with console.capture() as capture:
+        console.print(arg, end=end)
+
+    return capture.get()
+
+
 def show_path_change(before: bytes, after: bytes):
     """Given a list of tuples (source, destination) that indicate the
     path changes, log the changes as INFO-level output to the beets log.
