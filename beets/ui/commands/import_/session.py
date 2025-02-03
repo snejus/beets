@@ -2,30 +2,26 @@ from __future__ import annotations
 
 from collections import Counter
 from itertools import chain
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from beets import config, importer, logging, plugins, ui
-from beets.autotag import AlbumMatch, Recommendation, TrackMatch
-from beets.importer import DuplicateAction, SingletonImportTask
+from beets.autotag import Match, Recommendation
+from beets.importer import DuplicateAction
 from beets.library import Album
 from beets.util import PromptChoice, displayable_path
-from beets.util.color import colorize
 from beets.util.units import human_bytes
 
-from .display import (
-    print_album_candidates,
-    print_singleton_candidates,
-    show_album_change,
-    show_item_change,
-)
+from .display import AlbumView, SingletonView
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from beets.autotag import AnyMatch, Source
-    from beets.importer import AlbumImportTask, ImportSession, ImportTask
+    from beets.autotag import AnyMatch
+    from beets.importer import ImportSession, ImportTask
     from beets.library import AlbumOrItem, Item
     from beets.util import PathBytes
+
+    from .display import View
 
 # Global logger.
 log = logging.getLogger(__name__)
@@ -34,24 +30,15 @@ log = logging.getLogger(__name__)
 class TerminalImportSession(importer.ImportSession):
     """An import session that runs in a terminal."""
 
-    def choose_match(
-        self, task: AlbumImportTask
-    ) -> AlbumMatch | importer.Action:
-        """Given an initial autotagging of items, go through an interactive
-        dance with the user to ask for a choice of metadata. Returns an
-        AlbumMatch object, ASIS, or SKIP.
-        """
-        # Show what we're tagging.
-        ui.print_()
-
-        path_str0 = displayable_path(task.paths, "\n")
-        path_str = colorize("import_path", path_str0)
-        items_str0 = f"({len(task.items)} items)"
-        items_str = colorize("import_path_items", items_str0)
-        ui.print_(" ".join([path_str, items_str]))
-
+    def choose_match(self, task: ImportTask[Any]) -> Match | importer.Action:
         # Let plugins display info or prompt the user before we go through the
         # process of selecting candidate.
+        view: View[Any]
+        if isinstance(task, importer.AlbumImportTask):
+            view = AlbumView(task)
+        else:
+            view = SingletonView(task)
+
         results = plugins.send(
             "import_task_before_choice", session=self, task=task
         )
@@ -71,11 +58,7 @@ class TerminalImportSession(importer.ImportSession):
         assert task.candidates is not None
         action = _summary_judgment(task.rec)
         if action == importer.Action.APPLY:
-            match = task.candidates[0]
-            # TODO: introduce AlbumImportTask to remove this assertion
-            assert isinstance(match, AlbumMatch)
-            show_album_change(task.source, match)
-            return match
+            return view.show_match(0)
         if action is not None:
             return action
 
@@ -87,83 +70,17 @@ class TerminalImportSession(importer.ImportSession):
             # `PromptChoice`.
             choices = self._get_choices(task)
             choice = choose_candidate(
-                # TODO: introduce AlbumImportTask to remove this ignore
-                task.candidates,  # type: ignore[arg-type]
-                task.rec,
-                task.source,
-                choices=choices,
+                view, task.candidates, task.rec, choices=choices
             )
-
-            # We have a specific match selection.
-            # or, basic choices that require no more action here.
-            if isinstance(choice, AlbumMatch) or (
-                isinstance(choice, importer.Action)
-                and choice in (importer.Action.SKIP, importer.Action.ASIS)
-            ):
-                # Pass selection to main control flow.
-                return choice
-
-            # Plugin-provided choices. We invoke the associated callback
-            # function.
-            if isinstance(choice, PromptChoice) and choice.callback:
-                post_choice = choice.callback(self, task)
-                if isinstance(post_choice, importer.Action):
-                    return post_choice
-            else:
+            if isinstance(choice, Match):
                 # We have a candidate! Finish tagging. Here, choice is an
                 # AlbumMatch object.
-                assert isinstance(choice, AlbumMatch)
-                return choice
-
-    def choose_item(
-        self, task: SingletonImportTask
-    ) -> TrackMatch | importer.Action:
-        """Ask the user for a choice about tagging a single item. Returns
-        either an action constant or a TrackMatch object.
-        """
-        ui.print_()
-        ui.print_(displayable_path(task.item.path))
-
-        # Take immediate action if appropriate.
-        # TODO: introduce beets.autotag.Candidates to remove these assertions
-        assert task.rec is not None
-        assert task.candidates is not None
-        action = _summary_judgment(task.rec)
-        if action == importer.Action.APPLY:
-            match = task.candidates[0]
-            # TODO: introduce AlbumImportTask to remove this assertion
-            assert isinstance(match, TrackMatch)
-            show_item_change(task.item, match.info)
-            return match
-        if action is not None:
-            return action
-
-        while True:
-            # Ask for a choice.
-            choices = self._get_choices(task)
-            choice = choose_candidate(
-                # TODO: introduce AlbumImportTask to remove this ignore
-                task.candidates,  # type: ignore[arg-type]
-                task.rec,
-                task.source,
-                choices=choices,
-            )
-
-            # We have a specific match selection.
-            # or, basic choices that require no more action here.
-            if isinstance(choice, TrackMatch) or (
-                isinstance(choice, importer.Action)
-                and choice in (importer.Action.SKIP, importer.Action.ASIS)
-            ):
-                # Pass selection to main control flow.
                 return choice
 
             # Plugin-provided choices. We invoke the associated callback
             # function.
-            if isinstance(choice, PromptChoice) and choice.callback:
-                post_choice = choice.callback(self, task)
-                if isinstance(post_choice, importer.Action):
-                    return post_choice
+            if post_choice := choice.callback(self, task):
+                return post_choice
 
     def _report_item_summary(
         self, prefix: Literal["Old", "New"], items: list[Item], is_album: bool
@@ -371,12 +288,14 @@ def _summary_judgment(rec: Recommendation) -> importer.Action | None:
 
 
 def choose_candidate(
-    candidates: Sequence[AlbumMatch | TrackMatch],
+    view: View[AnyMatch],
+    candidates: Sequence[AnyMatch],
     rec: Recommendation,
-    source: Source,
-    choices: list[PromptChoice] = [],
-) -> AlbumMatch | TrackMatch | PromptChoice:
-    """Ask the user for a selection of which candidate to use.
+    choices: list[PromptChoice],
+) -> PromptChoice | AnyMatch:
+    """Given a sorted list of candidates, ask the user for a selection
+    of which candidate to use. Applies to both full albums and
+    singletons  (tracks).
 
     Applies to both full albums and singletons (tracks). Candidates are either
     AlbumMatch or TrackMatch objects.
@@ -397,59 +316,37 @@ def choose_candidate(
     # Zero candidates.
     sel: str | int
     if not candidates:
-        if source.type == "track":
-            ui.print_("No matching recordings found.")
-        else:
-            ui.print_(
-                f"No matching release found for {len(source.items)} tracks."
-            )
-            ui.print_(
-                "For help, see: "
-                "https://beets.readthedocs.org/en/latest/faq.html#nomatch"
-            )
-        sel = ui.input_options(choice_opts)
-        if sel in choice_actions:
-            return choice_actions[sel]
-        assert False
+        view.print_not_found()
+        return choice_actions[ui.input_options(choice_opts)]
 
     # Is the change good enough?
-    bypass_candidates = False
-    if rec != Recommendation.none:
-        match = candidates[0]
-        bypass_candidates = True
+    selected_idx = 0
+    show_candidates = rec == Recommendation.none
 
     while True:
         # Display and choose from candidates.
-        highlight_default = rec > Recommendation.low
+        highlight_default_choice = rec > Recommendation.low
 
-        if not bypass_candidates:
+        if show_candidates:
             # Display list of candidates.
-            ui.print_(f'Finding tags for {source.type} "{source.desc}".')
-            if source.type == "track":
-                print_singleton_candidates(candidates)
-            else:
-                print_album_candidates(candidates)
+            view.print_candidates()
 
             # Ask the user for a choice.
             sel = ui.input_options(choice_opts, numrange=(1, len(candidates)))
             if isinstance(sel, int):  # Numerical selection.
-                match = candidates[sel - 1]
-                if sel != 1:
+                selected_idx = sel - 1
+                if selected_idx != 0:
                     # When choosing anything but the first match,
                     # disable the default action.
-                    highlight_default = False
+                    highlight_default_choice = False
             elif sel == "m":
                 pass
             elif sel in choice_actions:
                 return choice_actions[sel]
-        bypass_candidates = False
+        show_candidates = True
 
         # Show what we're about to do.
-        # TODO: introduce AlbumImportTask to remove these ignores
-        if source.type == "track":
-            show_item_change(source.items[0], match.info, {"data_url", "bpm"})  # type: ignore[arg-type]
-        else:
-            show_album_change(source, match)  # type: ignore[arg-type]
+        match = view.show_match(selected_idx)
 
         # Exact match => tag automatically if we're not in timid mode.
         if rec == Recommendation.strong and not config["import"]["timid"]:
@@ -460,13 +357,13 @@ def choose_candidate(
             {"apply": "a", "skip": "s", "asis": "u", "none": None}
         )
         if default is None:
-            highlight_default = False
+            highlight_default_choice = False
         # Bell ring when user interaction is needed.
         if config["import"]["bell"]:
             ui.print_("\a", end="")
         sel = ui.input_options(
             ("Apply", "More candidates", *choice_opts),
-            highlight_default=highlight_default,
+            highlight_default=highlight_default_choice,
             default=default,
         )
         if sel == "a":

@@ -1,177 +1,342 @@
 from __future__ import annotations
 
-from math import floor
-from time import localtime, strftime
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from functools import cached_property, lru_cache
+from operator import eq
+from typing import TYPE_CHECKING, Any, ClassVar, Generic
 
 from rich import box
 from rich.align import Align
-from rich_tables.diff import pretty_diff as diff
-from rich_tables.fields import FIELDS_MAP
+from rich_tables.diff import pretty_diff
 from rich_tables.generic import flexitable
 from rich_tables.utils import border_panel, new_table, wrap
 
-from beets import config, ui
-from beets.autotag import AlbumInfo, Source
+from beets import config, library, ui
+from beets.autotag import AlbumInfo, AlbumMatch, AnyMatch, TrackMatch
+from beets.util import cached_classproperty, displayable_path
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
+    from confuse import ConfigView
     from rich.console import RenderableType
+    from rich.text import Text
 
-    from beets.autotag import AlbumMatch, Info, TrackMatch
+    from beets import importer, library
+    from beets.autotag import AlbumInfo, Info, TrackInfo
     from beets.library import Item
 
     JSONDict = dict[str, Any]
 
 
-def get_diff(field_name: str, before: Any, after: Any) -> str:
-    if field_name == "length":
-        before = FIELDS_MAP["length"](int(float(before or 0)))
-        after = FIELDS_MAP["length"](int(float(after or 0)))
+@dataclass
+class Diff:
+    """Represent and format differences between an existing item and new info.
 
-    return diff(str(before or ""), str(after or ""))
-
-
-track_info_to_item_field: dict[str, str] = {
-    "artist_id": "mb_artistid",
-    "track_id": "mb_trackid",
-    "va": "comp",
-    "index": "track",
-    "mediums": "disctotal",
-    "medium_total": "tracktotal",
-    "medium_index": "track",
-    "medium": "disc",
-    "releasegroup_id": "mb_releasegroupid",
-    "release_track_id": "mb_releasetrackid",
-}
-album_info_to_item_field = {
-    **track_info_to_item_field,
-    "artist": "albumartist",
-    "album_id": "mb_albumid",
-    "artist_sort": "albumartist_sort",
-    "artist_credit": "albumartist_credit",
-}
-track_overwrite_fields = set(config["overwrite_null"]["track"].as_str_seq())
-album_overwrite_fields = set(config["overwrite_null"]["album"].as_str_seq())
-
-track_fields = config["match"]["singleton_disambig_fields"].as_str_seq()
-
-
-def get_track_diff(old: JSONDict, new: JSONDict) -> list[str]:
-    return [get_diff(f, old.get(f), new.get(f)) for f in track_fields]
-
-
-def show_album_change(source: Source, match: AlbumMatch) -> None:
-    """Print out a representation of the changes that will be made if an
-    album's tags are changed according to `match`, which must be an AlbumMatch
-    object.
+    This helper aggregates the relevant fields from an existing library item and
+    parsed incoming metadata, formats field-specific values for human-readable
+    comparison, and exposes computed views used by UI code to render what will
+    change during import.
     """
-    pairs = match.merged_pairs
-    new = match.info.copy()
-    old = pairs[0][0].copy()
-    old["album"] = source.name
 
-    show_item_change(old, new, {"tracks", "data_url"})
+    FORMAT_BY_FIELD: ClassVar[dict[str, Callable[..., str]]] = {
+        "length": lambda x: (
+            datetime.fromtimestamp(x).astimezone(timezone.utc).strftime("%T")
+        ),
+        "va": lambda x: str(bool(x)),
+    }
+    item: library.Item
+    info: Info
 
-    fields = track_fields
-    tracks_table = new_table(
-        *fields, highlight=False, box=box.HORIZONTALS, border_style="white"
-    )
-    for item, track_info in pairs:
-        tracks_table.add_row(*get_track_diff(dict(item), track_info))
-        tracks_table.rows[-1].style = "dim"
+    @cached_classproperty
+    def always_include_fields(cls) -> Sequence[str]:
+        return []
 
-    # Missing and unmatched tracks.
-    for n, tracks in [
-        ("Missing", match.extra_tracks),
-        ("Unmatched", match.extra_items),
-    ]:
-        if tracks:
-            tracks_table.add_row(end_section=True)
-            tracks_table.add_row(f"[b]{n}[/]")
-            for track in tracks:
-                track = track.copy()
-                if track.length:
-                    track.length = strftime(
-                        "%M:%S", localtime(floor(float(track.length)))
+    @cached_classproperty
+    def exclude_fields(cls) -> set[str]:
+        return {"data_url"}
+
+    @cached_property
+    def info_data(self) -> dict[str, Any]:
+        return {
+            k: v
+            for k, v in self.info.item_data.items()
+            if k not in self.exclude_fields
+        }
+
+    def get_value_pair(self, f: str) -> tuple[Any, ...]:
+        """Produce the (existing, incoming) value pair for a single field.
+
+        Applies special-case handling for particular fields (for example,
+        preserving lyric sources or formatting time-like and boolean values)
+        so comparisons and pretty-printing behave consistently.
+        """
+        pair = (
+            self.item.get(self.info.MEDIA_FIELD_MAP.get(f, f)),
+            self.info_data.get(f),
+        )
+        if fmt_func := self.FORMAT_BY_FIELD.get(f):
+            return tuple((fmt_func(i) if i is not None else i) for i in pair)
+
+        return pair
+
+    @property
+    def diff_data(self) -> dict[str, tuple[Any, Any]]:
+        """Compute the map of fields that differ between item and incoming info.
+
+        The result maps field names to their (existing, incoming) value pairs.
+        Only pairs that have non-empty 'after' value are included, except for
+        fields that must always be shown.
+        """
+        always_include = self.always_include_fields
+        fields = dict.fromkeys((*always_include, *self.info_data))
+        return {
+            f: pair
+            for f in fields
+            if (
+                any(pair := self.get_value_pair(f))
+                and (not eq(*pair) or f in always_include)
+            )
+        }
+
+    @property
+    def changes(self) -> dict[str, Text | str]:
+        return {f: pretty_diff(a, b) for f, (a, b) in self.diff_data.items()}
+
+
+@dataclass
+class TrackDiff(Diff):
+    info: TrackInfo
+
+    @cached_classproperty
+    def config(cls) -> ConfigView:
+        return config["ui"]["import"]["album_track_fields"]
+
+    @cached_classproperty
+    def always_include_fields(cls) -> Sequence[str]:
+        return cls.config["always"].as_str_seq()
+
+    @cached_classproperty
+    def exclude_fields(cls) -> set[str]:
+        return {*super().exclude_fields, *cls.config["never"].as_str_seq()}
+
+    @cached_property
+    def info_data(self) -> dict[str, Any]:
+        return super().info_data
+
+
+@dataclass
+class SingletonDiff(TrackDiff):
+    @cached_classproperty
+    def config(cls) -> ConfigView:
+        return config["ui"]["import"]["singleton_fields"]
+
+    @cached_classproperty
+    def exclude_fields(cls) -> set[str]:
+        return Diff.exclude_fields
+
+
+@dataclass
+class AlbumDiff(Diff):
+    info: AlbumInfo
+
+    @cached_classproperty
+    def exclude_fields(cls) -> set[str]:
+        return {*super().exclude_fields, "tracks"}
+
+
+class CachedShowMixin:
+    def show(self) -> None:
+        raise NotImplementedError
+
+    @property
+    def as_str(self) -> str:
+        raise NotImplementedError
+
+    def __str__(self) -> str:
+        return self.as_str
+
+
+@dataclass
+class Change(CachedShowMixin, Generic[AnyMatch]):
+    info_border_color: ClassVar[str]
+    match: AnyMatch
+
+    @cached_classproperty
+    def type(cls) -> str:
+        return cls.__name__.replace("Change", "")  # type: ignore[attr-defined]
+
+    @cached_property
+    def as_str(self) -> str:
+        with ui.console.capture() as capture:
+            self.show()
+
+        return capture.get()
+
+    def get_info_panel(self, diff: Diff) -> RenderableType:
+        table = new_table()
+
+        for field, value in sorted(
+            (k, (v if v is not None else "")) for k, v in diff.info_data.items()
+        ):
+            table.add_row(wrap(field, "b"), str(value))
+        return border_panel(
+            table, title=self.type, border_style=self.info_border_color
+        )
+
+    def show_item_change(self, diff: Diff) -> None:
+        """Print out the change that would occur by tagging `item` with the
+        metadata from `match` - either an album or a track.
+        """
+        row = [self.get_info_panel(diff)]
+        if changes := sorted(diff.changes.items()):
+            table = new_table(highlight=False)
+            for field, change in changes:
+                table.add_row(wrap(field, "b"), change)
+            panel = border_panel(table, title="Updates", border_style="yellow")
+            row.insert(0, Align.center(panel, vertical="bottom"))
+
+        ui.print_(new_table(rows=[row]))
+        ui.print_(wrap(self.match.info.data_url or "", "b grey35"))
+
+
+@dataclass
+class AlbumChange(Change[AlbumMatch]):
+    info_border_color = "magenta"
+
+    def show(self) -> None:
+        """Print out a representation of the changes that will be made if an
+        album's tags are changed according to `match`, which must be an AlbumMatch
+        object.
+        """
+        pairs = self.match.item_info_pairs
+        self.show_item_change(AlbumDiff(pairs[0][0], self.match.info))
+
+        tracks_table = new_table(
+            highlight=False,
+            box=box.HORIZONTALS,
+            border_style="white",
+            row_styles=["dim"],
+        )
+
+        for item, info in pairs:
+            tracks_table.add_dict_row(TrackDiff(item, info).changes)
+
+        # Missing and unmatched tracks.
+        t_pairs: list[tuple[str, list[Item] | list[TrackInfo]]] = [
+            ("Missing", self.match.extra_tracks),
+            ("Unmatched", self.match.extra_items),
+        ]
+
+        for name, tracks in t_pairs:
+            if tracks:
+                tracks_table.add_row(end_section=True)
+                tracks_table.add_row(f"[b]{name}[/]")
+                for extra_track in tracks:
+                    extra_track = extra_track.copy()
+                    if extra_track.length:
+                        extra_track.length = Diff.FORMAT_BY_FIELD["length"](  # type: ignore[assignment]
+                            extra_track.length
+                        )
+
+                    tracks_table.add_dict_row(
+                        dict(extra_track),
+                        style="b yellow",
+                        ignore_extra_fields=True,
                     )
 
-                values = map(str, (track.get(f) or "" for f in fields))
-                tracks_table.add_row(*values, style="b yellow")
-
-    title = wrap("Tracks", "b i cyan")
-    ui.print_(border_panel(tracks_table, title=title))
+        ui.print_(border_panel(tracks_table, title=wrap("Tracks", "b i cyan")))
 
 
-def show_item_change(old: Item, new: Info, skip: set[str] = set()) -> None:
-    """Print out the change that would occur by tagging `item` with the
-    metadata from `match` - either an album or a track.
-    """
-    new_meta = new_table()  # for all new metadata
-    upd_meta = new_table()  # for changes only
+@dataclass
+class SingletonChange(Change[TrackMatch]):
+    info_border_color = "cyan"
 
-    if isinstance(new, AlbumInfo):
-        info_to_item_field = album_info_to_item_field
-        overwrite_fields = album_overwrite_fields
-    else:
-        info_to_item_field = track_info_to_item_field
-        overwrite_fields = track_overwrite_fields
-
-    fields = sorted(new.keys() - skip)
-    saved_fields = new.keys()
-    for field in fields:
-        old_value = old.get(info_to_item_field.get(field, field), "")
-        new_value = new.get(field)
-        if field == "va":
-            old_value = bool(old_value)
-        elif field == "releasegroup_id" and old_value == "0":
-            old_value = ""
-        if field in saved_fields or (
-            new_value is not None or field in overwrite_fields
-        ):
-            new_meta.add_row(wrap(field, "b"), str(new_value))
-            if str(old_value or "") != str(new_value or ""):
-                diff = get_diff(field, old_value, new_value)
-                upd_meta.add_row(wrap(field, "b"), diff)
-
-    if "tracklist" in old:
-        old["comments"] += "\n\nTracklist\n\n" + old["tracklist"]
-
-    if upd_meta.row_count:
-        _type = "Album" if isinstance(new, AlbumInfo) else "Singleton"
-        color = "magenta" if _type == "Album" else "cyan"
-        updates_panel = border_panel(
-            upd_meta, title="Updates", border_style="yellow"
+    def show(self) -> None:
+        return self.show_item_change(
+            SingletonDiff(self.match.item, self.match.info)
         )
-        info_panel = border_panel(new_meta, title=_type, border_style=color)
-        row: list[RenderableType] = [
-            Align.center(updates_panel, vertical="bottom"),
-            info_panel,
+
+
+@dataclass
+class View(CachedShowMixin, Generic[AnyMatch]):
+    PRINT_CANDIDATES_TEMPLATE = 'Finding tags for {} "{}".'
+    PRINT_PATHS_TEMPLATE = (
+        "[import_path]{paths}[/] [import_path_items]({count} items)[/]"
+    )
+    CHANGE_CLASS: ClassVar[type[Change[AnyMatch]]]
+    task: importer.ImportTask[AnyMatch]
+
+    previous_hash: int | None = None
+    _as_str: str | None = None
+
+    @property
+    def candidates(self) -> Sequence[AnyMatch]:
+        return self.task.candidates
+
+    def __hash__(self) -> int:
+        return hash(tuple(map(hash, self.candidates)))
+
+    @property
+    def as_str(self):
+        if (new_hash := hash(self)) != self.previous_hash:
+            self._as_str = None
+            self.previous_hash = new_hash
+
+        if not self._as_str:
+            with ui.console.capture() as capture:
+                self.show()
+
+            self._as_str = capture.get()
+
+        return self._as_str
+
+    def show(self) -> None:
+        candidata = [
+            {"id": str(idx), **c.disambig_data}
+            for idx, c in enumerate(self.candidates, 1)
         ]
-        ui.print_(new_table(rows=[row]))
 
-    ui.print_(wrap(new.data_url or "", "b grey35"))
+        ui.print_(
+            border_panel(
+                flexitable(candidata),
+                title=f"{self.CHANGE_CLASS.type} candidates",
+            )
+        )
+        ui.print_("")
+
+    @lru_cache
+    def get_match_display(self, match: AnyMatch) -> Change[AnyMatch]:
+        return self.CHANGE_CLASS(match)
+
+    def show_match(self, idx: int) -> AnyMatch:
+        match = self.candidates[idx]
+        print(self.get_match_display(match))
+        return match
+
+    def print_paths(self) -> None:
+        ui.print_(
+            self.PRINT_PATHS_TEMPLATE.format(
+                paths=displayable_path(self.task.paths, "\n"),
+                count=len(self.task.items),
+            )
+        )
+
+    def print_candidates(self) -> None:
+        source = self.task.source
+        ui.print_(
+            self.PRINT_CANDIDATES_TEMPLATE.format(source.type, source.desc)
+        )
+        print(self)
+
+    def print_not_found(self) -> None:
+        ui.print_(f"No matching {self.CHANGE_CLASS.type} found")
 
 
-def print_singleton_candidates(candidates: Sequence[TrackMatch]) -> None:
-    candidata = [
-        {"id": str(i), **m.disambig_data} for i, m in enumerate(candidates, 1)
-    ]
-    ui.print_(border_panel(flexitable(candidata), title="Singleton candidates"))
-    ui.print_("")
+class SingletonView(View[TrackMatch]):
+    CHANGE_CLASS = SingletonChange
 
 
-def print_album_candidates(candidates: Sequence[AlbumMatch]) -> None:
-    candidata = []
-    track_diffs_table = new_table("id", *track_fields)
-    for idx, candidate in enumerate(candidates, 1):
-        i = str(idx)
-        candidata.append({"id": i, **candidate.disambig_data})
-        for old, new in candidate.merged_pairs:
-            track_diffs_table.add_row(i, *get_track_diff(dict(old), new))
-        track_diffs_table.add_row("")
-
-    ui.print_(border_panel(track_diffs_table, title="Album tracks"))
-    ui.print_(border_panel(flexitable(candidata), title="Album candidates"))
-    ui.print_("")
+class AlbumView(View[AlbumMatch]):
+    CHANGE_CLASS = AlbumChange

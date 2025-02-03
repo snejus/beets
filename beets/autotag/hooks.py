@@ -89,6 +89,7 @@ class Info(AttrDict[Any]):
     Identifier = tuple[str | None, str | None]
 
     type: ClassVar[str]
+    name_field: ClassVar[str]
 
     IGNORED_FIELDS: ClassVar[set[str]] = {"data_url"}
     MEDIA_FIELD_MAP: ClassVar[dict[str, str]] = {}
@@ -120,7 +121,7 @@ class Info(AttrDict[Any]):
 
     @cached_property
     def name(self) -> str:
-        raise NotImplementedError
+        return self[self.name_field] or ""
 
     @cached_property
     def raw_data(self) -> JSONDict:
@@ -220,6 +221,7 @@ class AlbumInfo(Info):
     """
 
     type = "Album"
+    name_field = "album"
 
     IGNORED_FIELDS: ClassVar[set[str]] = {*Info.IGNORED_FIELDS, "tracks"}
     MEDIA_FIELD_MAP: ClassVar[dict[str, str]] = {
@@ -242,10 +244,6 @@ class AlbumInfo(Info):
     @property
     def id(self) -> str | None:
         return self.album_id
-
-    @cached_property
-    def name(self) -> str:
-        return self.album or ""
 
     @cached_property
     def raw_data(self) -> JSONDict:
@@ -343,6 +341,7 @@ class TrackInfo(Info):
     """
 
     type = "Track"
+    name_field = "title"
 
     IGNORED_FIELDS: ClassVar[set[str]] = {
         *Info.IGNORED_FIELDS,
@@ -363,10 +362,6 @@ class TrackInfo(Info):
     @property
     def id(self) -> str | None:
         return self.track_id
-
-    @cached_property
-    def name(self) -> str:
-        return self.title or ""
 
     @cached_property
     def raw_data(self) -> JSONDict:
