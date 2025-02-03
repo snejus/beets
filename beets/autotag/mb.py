@@ -34,7 +34,6 @@ from beets.util.id_extractors import (
     extract_discogs_id_regex,
     spotify_id_regex,
 )
-from beetsplug.bandcamp.helpers import Helpers
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -76,23 +75,26 @@ class MusicBrainzAPIError(util.HumanReadableError):
 
 log = logging.getLogger(__name__)
 
-RELEASE_INCLUDES = [
-    "artists",
-    "media",
-    "recordings",
-    "release-groups",
-    "labels",
-    "artist-credits",
-    "aliases",
-    "recording-level-rels",
-    "work-rels",
-    "work-level-rels",
-    "artist-rels",
-    "isrcs",
-    "url-rels",
-    "release-rels",
-    "tags",
-]
+RELEASE_INCLUDES = list(
+    {
+        "artists",
+        "media",
+        "recordings",
+        "release-groups",
+        "labels",
+        "artist-credits",
+        "aliases",
+        "recording-level-rels",
+        "work-rels",
+        "work-level-rels",
+        "artist-rels",
+        "isrcs",
+        "url-rels",
+        "release-rels",
+        "tags",
+    }
+    & set(musicbrainzngs.VALID_INCLUDES["release"])
+)
 BROWSE_INCLUDES = [
     "artist-credits",
     "work-rels",
@@ -107,8 +109,6 @@ BROWSE_MAXTRACKS = 500
 TRACK_INCLUDES = ["artists", "aliases", "isrcs"]
 if "work-level-rels" in musicbrainzngs.VALID_INCLUDES["recording"]:
     TRACK_INCLUDES += ["work-level-rels", "artist-rels"]
-if "genres" in musicbrainzngs.VALID_INCLUDES["recording"]:
-    RELEASE_INCLUDES += ["genres"]
 
 
 def track_url(trackid: str) -> str:
@@ -381,6 +381,8 @@ def track_info(
 
 
 def get_genre(data: dict[str, Any]) -> str:
+    from beetsplug.bandcamp.helpers import Helpers
+
     tags = data.get("tag-list", [])
     tags.sort(key=lambda t: t["count"], reverse=True)
     genres = Helpers.get_genre(
