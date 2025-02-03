@@ -485,6 +485,9 @@ class AlbumMatch(Match):
     extra_items: list[Item] = field(default_factory=list)
     extra_tracks: list[TrackInfo] = field(default_factory=list)
 
+    def __hash__(self) -> int:
+        return hash((id(self.items[0]), self.info.album_id))
+
     @property
     def item_info_pairs(self) -> list[tuple[Item, TrackInfo]]:
         return list(self.mapping.items())
@@ -523,6 +526,9 @@ class TrackMatch(Match):
 
     info: TrackInfo
     item: Item
+
+    def __hash__(self) -> int:
+        return hash((id(self.item), self.info.track_id))
 
     def apply_metadata(self) -> None:
         """Apply metadata to the item."""

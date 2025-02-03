@@ -2,25 +2,22 @@ from __future__ import annotations
 
 from collections import Counter
 from itertools import chain
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from beets import config, importer, logging, plugins, ui
 from beets.autotag import Recommendation
-from beets.autotag.hooks import AlbumMatch, TrackMatch
-from beets.autotag.match import Proposal
+from beets.autotag.hooks import Match
 from beets.util import PromptChoice, displayable_path
 from beets.util.units import human_bytes
 
-from .display import (
-    print_album_candidates,
-    print_singleton_candidates,
-    show_album_change,
-    show_item_change,
-)
+from .display import AlbumView, SingletonView, View
 
 if TYPE_CHECKING:
-    from beets.autotag.hooks import AnyMatch, Match
-    from beets.importer import Action, AlbumImportTask, SingletonImportTask
+    from collections.abc import Sequence
+
+    from beets.autotag.hooks import AnyMatch
+    from beets.importer import Action
+    from beets.importer.tasks import ImportTask
     from beets.library.models import AnyModel, Item
 
 # Global logger.
@@ -30,18 +27,15 @@ log = logging.getLogger(__name__)
 class TerminalImportSession(importer.ImportSession):
     """An import session that runs in a terminal."""
 
-    def choose_match(self, task: AlbumImportTask) -> AlbumMatch | Action:
-        # Show what we're tagging.
-        ui.print_()
-
-        path_str0 = displayable_path(task.paths, "\n")
-        path_str = ui.colorize("import_path", path_str0)
-        items_str0 = f"({len(task.items)} items)"
-        items_str = ui.colorize("import_path_items", items_str0)
-        ui.print_(" ".join([path_str, items_str]))
-
+    def choose_match(self, task: ImportTask[Any]) -> Match | Action:
         # Let plugins display info or prompt the user before we go through the
         # process of selecting candidate.
+        view: View[Any]
+        if isinstance(task, importer.AlbumImportTask):
+            view = AlbumView(task)
+        else:
+            view = SingletonView(task)
+
         results = plugins.send(
             "import_task_before_choice", session=self, task=task
         )
@@ -58,9 +52,7 @@ class TerminalImportSession(importer.ImportSession):
         # Take immediate action if appropriate.
         action = _summary_judgment(task.rec)
         if action == importer.Action.APPLY:
-            match = task.candidates[0]
-            show_album_change(task.cur_artist, task.cur_album, match)
-            return match
+            return view.show_match(0)
         elif action is not None:
             return action
 
@@ -72,74 +64,17 @@ class TerminalImportSession(importer.ImportSession):
             # `PromptChoice`.
             choices = self._get_choices(task)
             choice = choose_candidate(
-                task.candidates,
-                False,
-                task.rec,
-                task.cur_artist,
-                task.cur_album,
-                itemcount=len(task.items),
-                choices=choices,
+                view, task.candidates, task.rec, choices=choices
             )
-
-            # Basic choices that require no more action here.
-            if choice in (importer.Action.SKIP, importer.Action.ASIS):
-                # Pass selection to main control flow.
+            if isinstance(choice, Match):
+                # We have a candidate! Finish tagging. Here, choice is an
+                # AlbumMatch object.
                 return choice
 
             # Plugin-provided choices. We invoke the associated callback
             # function.
-            elif choice in choices:
-                post_choice = choice.callback(self, task)
-                if isinstance(post_choice, importer.Action):
-                    return post_choice
-                elif isinstance(post_choice, Proposal):
-                    # Use the new candidates and continue around the loop.
-                    task.candidates = post_choice.candidates
-                    task.rec = post_choice.recommendation
-
-            # Otherwise, we have a specific match selection.
-            else:
-                # We have a candidate! Finish tagging. Here, choice is an
-                # AlbumMatch object.
-                assert isinstance(choice, AlbumMatch)
-                return choice
-
-    def choose_item(self, task: SingletonImportTask) -> TrackMatch | Action:
-        """Ask the user for a choice about tagging a single item. Returns
-        either an action constant or a TrackMatch object.
-        """
-        ui.print_()
-        ui.print_(displayable_path(task.item.path))
-        candidates, rec = task.candidates, task.rec
-
-        # Take immediate action if appropriate.
-        action = _summary_judgment(task.rec)
-        if action == importer.Action.APPLY:
-            match = candidates[0]
-            show_item_change(task.item, match)
-            return match
-        elif action is not None:
-            return action
-
-        while True:
-            # Ask for a choice.
-            choices = self._get_choices(task)
-            choice = choose_candidate(
-                candidates, True, rec, item=task.item, choices=choices
-            )
-
-            if choice in (importer.Action.SKIP, importer.Action.ASIS):
-                return choice
-
-            elif choice in choices:
-                post_choice = choice.callback(self, task)
-                if isinstance(post_choice, importer.Action):
-                    return post_choice
-
-            else:
-                # Chose a candidate.
-                assert isinstance(choice, TrackMatch)
-                return choice
+            if post_choice := choice.callback(self, task):
+                return post_choice
 
     def decide_duplicates(
         self,
@@ -335,21 +270,14 @@ def _summary_judgment(rec):
 
 
 def choose_candidate(
-    candidates: list[Match],
-    singleton,
-    rec,
-    cur_artist=None,
-    cur_album=None,
-    item=None,
-    itemcount=None,
-    choices=[],
-):
+    view: View[AnyMatch],
+    candidates: Sequence[AnyMatch],
+    rec: Recommendation,
+    choices: list[PromptChoice],
+) -> PromptChoice | AnyMatch:
     """Given a sorted list of candidates, ask the user for a selection
     of which candidate to use. Applies to both full albums and
-    singletons  (tracks). Candidates are either AlbumMatch or TrackMatch
-    objects depending on `singleton`. for albums, `cur_artist`,
-    `cur_album`, and `itemcount` must be provided. For singletons,
-    `item` must be provided.
+    singletons  (tracks).
 
     `choices` is a list of `PromptChoice`s to be used in each prompt.
 
@@ -358,52 +286,26 @@ def choose_candidate(
     * a candidate (an AlbumMatch/TrackMatch object)
     * a chosen `PromptChoice` from `choices`
     """
-    # Sanity check.
-    if singleton:
-        assert item is not None
-    else:
-        assert cur_artist is not None
-        assert cur_album is not None
-
     # Build helper variables for the prompt choices.
     choice_opts = tuple(c.long for c in choices)
     choice_actions = {c.short: c for c in choices}
 
     # Zero candidates.
     if not candidates:
-        if singleton:
-            ui.print_("No matching recordings found.")
-        else:
-            ui.print_(f"No matching release found for {itemcount} tracks.")
-            ui.print_(
-                "For help, see: "
-                "https://beets.readthedocs.org/en/latest/faq.html#nomatch"
-            )
-        sel = ui.input_options(choice_opts)
-        if sel in choice_actions:
-            return choice_actions[sel]
-        else:
-            assert False
+        view.print_not_found()
+        return choice_actions[ui.input_options(choice_opts)]
 
     # Is the change good enough?
-    bypass_candidates = False
-    if rec != Recommendation.none:
-        match = candidates[0]
-        bypass_candidates = True
+    selected_idx = 0
+    show_candidates = rec == Recommendation.none
 
     while True:
         # Display and choose from candidates.
-        highlight_default = rec > Recommendation.low
+        highlight_default_choice = rec > Recommendation.low
 
-        if not bypass_candidates:
+        if show_candidates:
             # Display list of candidates.
-            template = 'Finding tags for {} "{} - {}".'
-            if singleton:
-                ui.print_(template.format("track", item.artist, item.title))
-                print_singleton_candidates(ui.get_console(), candidates)
-            else:
-                ui.print_(template.format("album", cur_artist, cur_album))
-                print_album_candidates(ui.get_console(), candidates)
+            view.print_candidates()
 
             # Ask the user for a choice.
             sel = ui.input_options(choice_opts, numrange=(1, len(candidates)))
@@ -412,18 +314,15 @@ def choose_candidate(
             elif sel in choice_actions:
                 return choice_actions[sel]
             else:  # Numerical selection.
-                match = candidates[sel - 1]
-                if sel != 1:
+                selected_idx = int(sel) - 1
+                if selected_idx != 0:
                     # When choosing anything but the first match,
                     # disable the default action.
-                    highlight_default = False
-        bypass_candidates = False
+                    highlight_default_choice = False
+        show_candidates = True
 
         # Show what we're about to do.
-        if singleton:
-            show_item_change(item, match.info, {"data_url", "bpm"})
-        else:
-            show_album_change(cur_artist, cur_album, match)
+        match = view.show_match(selected_idx)
 
         # Exact match => tag automatically if we're not in timid mode.
         if rec == Recommendation.strong and not config["import"]["timid"]:
@@ -439,13 +338,13 @@ def choose_candidate(
             }
         )
         if default is None:
-            highlight_default = False
+            highlight_default_choice = False
         # Bell ring when user interaction is needed.
         if config["import"]["bell"]:
             ui.print_("\a", end="")
         sel = ui.input_options(
             ("Apply", "More candidates") + choice_opts,
-            highlight_default=highlight_default,
+            highlight_default=highlight_default_choice,
             default=default,
         )
         if sel == "a":
