@@ -531,7 +531,9 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
         )
 
     def choose_match(self, session: ImportSession) -> None:
-        raise NotImplementedError
+        """Ask the session which match should apply and apply it."""
+        choice = session.choose_match(self)
+        self.set_choice(choice)
 
     def reload(self) -> None:
         raise NotImplementedError
@@ -637,11 +639,6 @@ class SingletonImportTask(ImportTask[TrackMatch]):
             self.remove_replaced(lib)
             lib.add(self.item)
             self.reimport_metadata(lib)
-
-    def choose_match(self, session: ImportSession) -> None:
-        """Ask the session which match should apply and apply it."""
-        choice = session.choose_item(self)
-        self.set_choice(choice)
 
     def reload(self) -> None:
         self.item.load()
@@ -773,11 +770,6 @@ class AlbumImportTask(ImportTask[AlbumMatch]):
                 self.album.store()
 
             self.reimport_metadata(lib)
-
-    def choose_match(self, session: ImportSession) -> None:
-        """Ask the session which match should apply and apply it."""
-        choice = session.choose_match(self)
-        self.set_choice(choice)
 
     def reload(self) -> None:
         """Reload albums and items from the database."""

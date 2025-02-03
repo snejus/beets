@@ -416,6 +416,9 @@ class AlbumMatch(Match):
     extra_items: list[Item] = field(default_factory=list)
     extra_tracks: list[TrackInfo] = field(default_factory=list)
 
+    def __hash__(self) -> int:
+        return hash((id(self.items[0]), self.info.album_id))
+
     @property
     def name(self) -> str:
         return self.info.album or ""
@@ -447,6 +450,9 @@ class TrackMatch(Match):
     disambig_fields_key = "singleton_disambig_fields"
     info: TrackInfo
     item: Item
+
+    def __hash__(self) -> int:
+        return hash((id(self.item), *map(str, self.info.item_data.items())))
 
     @property
     def name(self) -> str:

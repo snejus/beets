@@ -309,7 +309,7 @@ def input_options(
             length += 1
 
             # Choose either the current line or the beginning of the next.
-            if line_length + length + 1 > max_width or get_console().width:
+            if line_length + length + 1 > (max_width or get_console().width):
                 prompt += "\n"
                 line_length = 0
 
