@@ -143,6 +143,11 @@ ui:
             match_details: 2
             match_tracklist: 5
         layout: column
+        album_track_fields:
+          always: [index, track_alt, artist, title, length]
+          never: []
+        singleton_fields:
+          always: [index, track_alt, artist, title, length]
 
 # --------------- Search ---------------
 
