@@ -789,7 +789,7 @@ class AlbumMatch(Match):
         album.update(self.info.item_data)
 
 
-AnyMatch = TypeVar("AnyMatch", TrackMatch, AlbumMatch)
+AnyMatch = TypeVar("AnyMatch", bound=Match)
 
 # Aggregation of sources.
 
