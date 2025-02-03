@@ -37,7 +37,7 @@ from beets import config, library, logging, plugins, util
 from beets.autotag import mb
 from beets.dbcore import db
 from beets.dbcore import query as db_query
-from beets.util import as_string, colordiff, colorize, console
+from beets.util import as_string, colordiff, colorize, console, get_text
 
 from ..exceptions import UserError
 
@@ -198,18 +198,7 @@ def input_(prompt=None):
     stdout rather than stderr. A printed between the prompt and the
     input cursor.
     """
-    # raw_input incorrectly sends prompts to stderr, not stdout, so we
-    # use print_() explicitly to display prompts.
-    # https://bugs.python.org/issue1927
-    if prompt:
-        print_(prompt, end=" ")
-
-    try:
-        resp = input()
-    except EOFError:
-        raise UserError("stdin stream ended while input required")
-
-    return resp
+    return input(get_text(prompt))
 
 
 def input_options(
