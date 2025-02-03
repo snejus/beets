@@ -544,9 +544,9 @@ class ImportTask(BaseImportTask, Generic[hooks.AnyMatch]):
         those fields left to actually be preserved.
         """
         overwritten = {
-            k: v
-            for k, v in flex_data.items()
-            if k in cls.overwrite_flex_fields and v != new_obj.get(k)
+            k: new
+            for k, old in flex_data.items()
+            if k in cls.overwrite_flex_fields and old != (new := new_obj.get(k))
         }
         overwritten_keys = overwritten.keys()
         if overwritten:
