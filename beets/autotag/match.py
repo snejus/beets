@@ -158,8 +158,7 @@ class Match:
     @cached_property
     def disambig_data(self) -> JSONDict:
         return {
-            k: str(self.all_disambig_data[k])
-            for k in self.chosen_disambig_fields
+            k: self.all_disambig_data[k] for k in self.chosen_disambig_fields
         }
 
 
@@ -177,6 +176,9 @@ class AlbumMatch(Match):
     def __post_init__(self) -> None:
         """Notify listeners when an album candidate has been matched."""
         plugins.send("album_matched", match=self)
+
+    def __hash__(self) -> int:
+        return hash((id(self.items[0]), self.info.album_id))
 
     @property
     def item_info_pairs(self) -> list[tuple[Item, TrackInfo]]:
@@ -225,6 +227,9 @@ class TrackMatch(Match):
 
     info: TrackInfo
     item: Item
+
+    def __hash__(self) -> int:
+        return hash((id(self.item), self.info.track_id))
 
     def apply_metadata(self, from_scratch: bool | None = None) -> None:
         """Apply metadata to the item.
