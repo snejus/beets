@@ -616,6 +616,9 @@ class AlbumMatch(Match):
         """Notify listeners when an album candidate has been matched."""
         plugins.send("album_matched", match=self)
 
+    def __hash__(self) -> int:
+        return hash((id(self.items[0]), self.info.album_id))
+
     @property
     def item_info_pairs(self) -> list[tuple[Item, TrackInfo]]:
         """Return matched items together with their selected track metadata."""
@@ -663,6 +666,9 @@ class TrackMatch(Match):
 
     info: TrackInfo
     item: Item
+
+    def __hash__(self) -> int:
+        return hash((id(self.item), self.info.track_id))
 
     def apply_metadata(self, from_scratch: bool | None = None) -> None:
         """Apply metadata to the item.
