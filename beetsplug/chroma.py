@@ -24,7 +24,8 @@ import acoustid
 import confuse
 
 from beets import config, plugins, ui, util
-from beets.autotag import hooks
+from beets.autotag.hooks import Distance
+from beetsplug import musicbrainz
 
 API_KEY = "1vOwZtEn"
 SCORE_THRESH = 0.5
@@ -186,7 +187,7 @@ class AcoustidPlugin(plugins.BeetsPlugin):
         return fingerprint_task(self._log, task, session)
 
     def track_distance(self, item, info):
-        dist = hooks.Distance()
+        dist = Distance()
         if item.path not in _matches or not info.track_id:
             # Match failed or no track ID.
             return dist
@@ -198,7 +199,7 @@ class AcoustidPlugin(plugins.BeetsPlugin):
     def candidates(self, items, artist, album, va_likely, extra_tags=None):
         albums = []
         for relid in prefix(_all_releases(items), MAX_RELEASES):
-            album = hooks.album_for_mbid(relid)
+            album = musicbrainz.album_for_id(relid)
             if album:
                 albums.append(album)
 
@@ -212,7 +213,7 @@ class AcoustidPlugin(plugins.BeetsPlugin):
         recording_ids, _ = _matches[item.path]
         tracks = []
         for recording_id in prefix(recording_ids, MAX_RECORDINGS):
-            track = hooks.track_for_mbid(recording_id)
+            track = musicbrainz.track_for_id(recording_id)
             if track:
                 tracks.append(track)
         self._log.debug("acoustid item candidates: {0}", len(tracks))

@@ -84,7 +84,7 @@ class MBSyncPlugin(BeetsPlugin):
                 continue
 
             # Get the MusicBrainz recording info.
-            track_info = hooks.track_for_mbid(item.mb_trackid)
+            track_info = hooks.tracks_for_id(item.mb_trackid)
             if not track_info:
                 self._log.info(
                     "Recording ID not found: {0} for track {0}",

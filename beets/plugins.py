@@ -14,17 +14,23 @@
 
 """Support for beets plugins."""
 
+from __future__ import annotations
+
 import abc
 import inspect
 import re
 import traceback
 from collections import defaultdict
 from functools import wraps
+from typing import TYPE_CHECKING
 
 import mediafile
 
 import beets
 from beets import logging
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 PLUGIN_NAMESPACE = "beetsplug"
 
@@ -271,7 +277,7 @@ def load_plugins(names=()):
             )
 
 
-_instances = {}
+_instances: dict[type[BeetsPlugin], BeetsPlugin] = {}
 
 
 def find_plugins():
@@ -378,7 +384,7 @@ def item_candidates(item, artist, title):
         yield from plugin.item_candidates(item, artist, title)
 
 
-def album_for_id(album_id):
+def album_for_id(album_id: str) -> Iterator[beets.autotag.hooks.AlbumInfo]:
     """Get AlbumInfo objects for a given ID string."""
     for plugin in find_plugins():
         album = plugin.album_for_id(album_id)
@@ -386,7 +392,7 @@ def album_for_id(album_id):
             yield album
 
 
-def track_for_id(track_id):
+def track_for_id(track_id: str) -> Iterator[beets.autotag.hooks.TrackInfo]:
     """Get TrackInfo objects for a given ID string."""
     for plugin in find_plugins():
         track = plugin.track_for_id(track_id)
@@ -649,11 +655,11 @@ class MetadataSourcePlugin(metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def album_for_id(self, album_id):
+    def album_for_id(self, album_id: str):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def track_for_id(self, track_id=None, track_data=None):
+    def track_for_id(self, track_id: str, track_data=None):
         raise NotImplementedError
 
     @staticmethod

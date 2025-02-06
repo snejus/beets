@@ -22,7 +22,7 @@ import datetime
 import re
 from collections.abc import Iterable, Sequence
 from enum import IntEnum
-from functools import cache
+from functools import cache, partial
 from typing import TYPE_CHECKING, Any, Generic, cast
 
 import lap
@@ -525,40 +525,34 @@ def tag_album(
     # The output result, keys are the MB album ID.
     candidates: dict[Any, AlbumMatch] = {}
 
+    ids = search_ids or {i.mb_albumid for i in items if i.mb_albumid}
     # Search by explicit ID.
-    if search_ids:
-        for search_id in search_ids:
-            log.debug("Searching for album ID: {0}", search_id)
-            for album_info_for_id in hooks.albums_for_id(search_id):
-                _add_candidate(items, candidates, album_info_for_id)
 
-    # Use existing metadata or text search.
+    if ids:
+        for _id in ids:
+            log.debug("Searching for album ID: {0}", _id)
+            for info in hooks.albums_for_id(_id):
+                _add_candidate(items, candidates, info)
+                rec = _recommendation(list(candidates.values()))
+                log.debug("Album ID match recommendation is {0}", rec)
+                if candidates and not config["import"]["timid"]:
+                    # If we have a very good MBID match, return immediately.
+                    # Otherwise, this match will compete against metadata-based
+                    # matches.
+                    if rec == Recommendation.strong:
+                        log.debug("ID match.")
+                        return Proposal(list(candidates.values()), rec)
     else:
         # Try search based on current ID.
         id_info = match_by_id(items)
         if id_info:
             _add_candidate(items, candidates, id_info)
-            rec = _recommendation(list(candidates.values()))
-            log.debug("Album ID match recommendation is {0}", rec)
-            if candidates and not config["import"]["timid"]:
-                # If we have a very good MBID match, return immediately.
-                # Otherwise, this match will compete against metadata-based
-                # matches.
-                if rec == Recommendation.strong:
-                    log.debug("ID match.")
-                    return Proposal(list(candidates.values()), rec)
 
         # Search terms.
         if not (search_artist and search_name):
             # No explicit search terms -- use current metadata.
             search_artist, search_name = cur_artist, cur_album
         log.debug("Search terms: {0} - {1}", search_artist, search_name)
-
-        extra_tags = None
-        if config["musicbrainz"]["extra_tags"]:
-            tag_list = config["musicbrainz"]["extra_tags"].get()
-            extra_tags = {k: v for (k, v) in likelies.items() if k in tag_list}
-            log.debug("Additional search terms: {0}", extra_tags)
 
         # Is this album likely to be a "various artist" release?
         va_likely = (
@@ -569,10 +563,10 @@ def tag_album(
         log.debug("Album might be VA: {0}", va_likely)
 
         # Get the results from the data sources.
-        for matched_candidate in hooks.album_candidates(
-            items, search_artist, search_name, va_likely, extra_tags
+        for info in hooks.album_candidates(
+            items, search_artist, search_name, va_likely
         ):
-            _add_candidate(items, candidates, matched_candidate)
+            _add_candidate(items, candidates, info)
 
     log.debug("Evaluating {0} candidates.", len(candidates))
     # Sort and get the recommendation.
@@ -634,9 +628,9 @@ def tag_item(
     log.debug("Item search terms: {0} - {1}", search_artist, search_name)
 
     # Get and evaluate candidate metadata.
-    for track_info in hooks.item_candidates(item, search_artist, search_name):
-        dist = track_distance(item, track_info, incl_artist=True)
-        candidates[track_info.track_id] = TrackMatch(dist, track_info, item)
+    for info in hooks.item_candidates(item, search_artist, search_name):
+        dist = track_distance(item, info, incl_artist=True)
+        candidates[info.track_id] = TrackMatch(dist, info, item)
 
     # Sort by distance and return with recommendation.
     log.debug("Found {0} candidates.", len(candidates))
