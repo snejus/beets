@@ -59,21 +59,24 @@ class AutoBPMPlugin(BeetsPlugin):
         for item in items:
             path = item.filepath
             if bpm := item.bpm:
-                self._log.info("BPM for {} already exists: {}", path, bpm)
+                action = (
+                    "recalculating" if self.config["overwrite"] else "skipping"
+                )
+                self._log.info("{}: BPM exists: {}, {}...", path, bpm, action)
                 if not self.config["overwrite"]:
                     continue
 
             try:
                 y, sr = librosa.load(item.filepath, res_type="kaiser_fast")
             except Exception as exc:
-                self._log.error("Failed to load {}: {}", path, exc)
+                self._log.error("{}: Failed to load: {}", path, exc)
                 continue
 
             kwargs = self.config["beat_track_kwargs"].flatten()
             try:
                 tempo, _ = librosa.beat.beat_track(y=y, sr=sr, **kwargs)
             except Exception as exc:
-                self._log.error("Failed to measure BPM for {}: {}", path, exc)
+                self._log.error("{}: Failed to measure BPM: {}", path, exc)
                 continue
 
             bpm = round(
@@ -81,7 +84,7 @@ class AutoBPMPlugin(BeetsPlugin):
             )
 
             item["bpm"] = bpm
-            self._log.info("Computed BPM for {}: {}", path, bpm)
+            self._log.info("{}: Computed BPM: {}", path, bpm)
 
             if write:
                 item.try_write()
