@@ -82,8 +82,7 @@ def print_query(sql, subvals=None):
     topr = sql
     for val in subvals or []:
         topr = topr.replace("?", str(val), 1)
-    for item in flexitable({"sql": topr}):
-        print(item, file=sys.stderr)
+    print(flexitable({"sql": topr}))
 
 
 class DBAccessError(Exception):
