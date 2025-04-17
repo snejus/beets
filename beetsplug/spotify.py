@@ -115,6 +115,31 @@ class AudioFeaturesUnavailableError(Exception):
     pass
 
 
+class SimplifiedArtist(TypedDict):
+    id: str
+    name: str
+
+
+class SimplifiedAlbum(TypedDict):
+    name: str
+
+
+class ExternalUrls(TypedDict):
+    spotify: str
+
+
+class Track(IDResponse):
+    album: SimplifiedAlbum
+    artists: list[SimplifiedArtist]
+    disc_number: int
+    duration_ms: int
+    external_urls: ExternalUrls
+    name: str
+    track_number: int
+    available_markets: list[str]
+    popularity: int
+
+
 class SpotifyPlugin(
     SearchApiMetadataSourcePlugin[SearchResponseAlbums | SearchResponseTracks]
 ):
@@ -427,7 +452,7 @@ class SpotifyPlugin(
             albumstatus="Official",
         )
 
-    def _get_track(self, track_data: JSONDict) -> TrackInfo:
+    def _get_track(self, track_data: Track) -> TrackInfo:
         """Convert a Spotify track object dict to a TrackInfo object.
 
         :param track_data: Simplified track object
@@ -464,7 +489,7 @@ class SpotifyPlugin(
             data_url=track_data["external_urls"]["spotify"],
         )
 
-    def track_for_id(self, track_id: str) -> None | TrackInfo:
+    def track_for_id(self, track_id: str) -> TrackInfo | None:
         """Fetch a track by its Spotify ID or URL.
 
         Returns a TrackInfo object or None if the track is not found.
@@ -475,6 +500,7 @@ class SpotifyPlugin(
             self._log.debug("Invalid Spotify ID: {}", track_id)
             return None
 
+        track_data: Track
         if not (
             track_data := self._handle_response(
                 "get", f"{self.track_url}/{spotify_id}"
