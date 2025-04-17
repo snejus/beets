@@ -34,7 +34,7 @@ Ret = TypeVar("Ret")
 QueryType = Literal["album", "track"]
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Iterator, Sequence
+    from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
     from .autotag import AlbumInfo, TrackInfo
     from .library.models import Item
@@ -281,7 +281,7 @@ class MetadataSourcePlugin(BeetsPlugin, metaclass=abc.ABCMeta):
 
     @staticmethod
     def get_artist(
-        artists: Iterable[dict[str | int, str]],
+        artists: Iterable[Mapping[str | int, str]],
         id_key: str | int = "id",
         name_key: str | int = "name",
         join_key: str | int | None = None,
