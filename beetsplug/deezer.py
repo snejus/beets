@@ -18,9 +18,10 @@ from __future__ import annotations
 
 import collections
 import time
-from typing import TYPE_CHECKING, ClassVar, Literal
+from typing import TYPE_CHECKING, ClassVar, Literal, TypedDict
 
 import requests
+from typing_extensions import NotRequired
 
 from beets import ui
 from beets.autotag.hooks import AlbumInfo, TrackInfo
@@ -34,6 +35,24 @@ if TYPE_CHECKING:
     from beets.metadata_plugins import SearchFilter
 
     from ._typing import JSONDict
+
+
+class Artist(TypedDict):
+    """Artist object returned by the Deezer API."""
+
+    id: int
+    name: str
+    link: str
+
+
+class Track(IDResponse):
+    title: str
+    artist: Artist
+    track_position: int
+    disk_number: int
+    duration: int
+    link: str
+    contributors: NotRequired[list[Artist]]
 
 
 class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
@@ -110,7 +129,8 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
         tracks = []
         medium_totals: dict[int | None, int] = collections.defaultdict(int)
         for i, track_data in enumerate(tracks_data, start=1):
-            track = self._get_track(track_data, tracks_total)
+            track = self._get_track(track_data)
+            track.medium_total = tracks_total
             track.index = i
             medium_totals[track.medium] += 1
             tracks.append(track)
@@ -118,6 +138,7 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             track.medium_total = medium_totals[track.medium]
 
         return AlbumInfo(
+            tracks,
             album=album,
             albumtype=albumtype,
             artist=artist,
@@ -126,7 +147,6 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             albumstatus="Official",
             album_id=deezer_id,
             artist_credit=self.get_artist([album_data["artist"]])[0],
-            tracks=tracks,
             mediums=max(filter(None, medium_totals.keys())),
             data_source=self.data_source,
             data_url=album_data["link"],
@@ -190,7 +210,7 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
         :param track_data: Deezer Track object dict
         """
         artist, artist_id = self.get_artist(
-            track_data.get("contributors", [track_data.get("artist") or ""])
+            track_data.get("contributors") or [track_data["artist"] or ""]
         )
         position = track_data.get("track_position")
         return TrackInfo(
@@ -202,10 +222,9 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             artist_id=str(artist_id),
             length=track_data["duration"],
             index=position,
-            medium=track_data.get("disk_number"),
+            medium=track_data["disk_number"],
             deezer_track_rank=track_data.get("rank"),
             medium_index=position,
-            medium_total=total,
             data_source=self.data_source,
             data_url=track_data["link"],
             deezer_updated=time.time(),
@@ -225,7 +244,7 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
         ],
         filters: SearchFilter,
         query_string: str = "",
-    ) -> Sequence[IDResponse]:
+    ) -> Sequence[Track]:
         """Query the Deezer Search API for the specified ``query_string``, applying
         the provided ``filters``.
 
