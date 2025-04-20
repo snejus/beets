@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from ..dbcore import types
     from ..dbcore.db import Results
     from ..dbcore.query import FieldQuery, FieldQueryType
+    from ..plugins import TFuncMap
     from .library import Library
 
     AnyModel = TypeVar("AnyModel", bound="LibModel")
@@ -149,8 +150,8 @@ class LibModel(dbcore.Model["Library"]):
     def _needs_moving(self, dest: bytes) -> bool:
         raise NotImplementedError
 
-    def _template_funcs(self):
-        funcs = DefaultTemplateFunctions(self, self._db).functions()
+    def _template_funcs(self) -> TFuncMap[str]:
+        funcs = DefaultTemplateFunctions(self, self._db).by_name()
         funcs.update(plugins.template_funcs())
         return funcs
 
@@ -1379,11 +1380,6 @@ class DefaultTemplateFunctions:
 
     _prefix = "tmpl_"
 
-    @cached_classproperty
-    def _func_names(cls) -> list[str]:
-        """Names of tmpl_* functions in this class."""
-        return [s for s in dir(cls) if s.startswith(cls._prefix)]
-
     def __init__(self, item=None, lib=None):
         """Parametrize the functions.
 
@@ -1393,17 +1389,18 @@ class DefaultTemplateFunctions:
         self.item = item
         self.lib = lib
 
-    def functions(self):
+    def by_name(self) -> TFuncMap[str]:
         """Return a dictionary containing the functions defined in this
         object.
 
         The keys are function names (as exposed in templates)
         and the values are Python functions.
         """
-        out = {}
-        for key in self._func_names:
-            out[key[len(self._prefix) :]] = getattr(self, key)
-        return out
+        return {
+            name.removeprefix(self._prefix): getattr(self, name)
+            for name in dir(self)
+            if name.startswith(self._prefix)
+        }
 
     @staticmethod
     def tmpl_lower(s):
