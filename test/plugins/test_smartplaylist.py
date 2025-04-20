@@ -152,7 +152,7 @@ class SmartPlaylistTest(BeetsTestCase):
         spl = SmartPlaylistPlugin()
 
         i = Mock(path=b"/tagada.mp3")
-        i.evaluate_template.side_effect = lambda pl, _: pl.replace(
+        i.evaluate_fmt.side_effect = lambda pl, _: pl.replace(
             b"$title", b"ta:ga:da"
         ).decode()
 
@@ -193,7 +193,7 @@ class SmartPlaylistTest(BeetsTestCase):
         type(i).title = PropertyMock(return_value="fake title")
         type(i).length = PropertyMock(return_value=300.123)
         type(i).path = PropertyMock(return_value=b"/tagada.mp3")
-        i.evaluate_template.side_effect = lambda pl, _: pl.replace(
+        i.evaluate_fmt.side_effect = lambda pl, _: pl.replace(
             b"$title",
             b"ta:ga:da",
         ).decode()
@@ -243,7 +243,7 @@ class SmartPlaylistTest(BeetsTestCase):
         type(i).path = PropertyMock(return_value=b"/tagada.mp3")
         a = {"id": 456, "genre": "Fake Genre"}
         i.__getitem__.side_effect = a.__getitem__
-        i.evaluate_template.side_effect = lambda pl, _: pl.replace(
+        i.evaluate_fmt.side_effect = lambda pl, _: pl.replace(
             b"$title",
             b"ta:ga:da",
         ).decode()
@@ -289,7 +289,7 @@ class SmartPlaylistTest(BeetsTestCase):
         i = MagicMock()
         type(i).id = PropertyMock(return_value=3)
         type(i).path = PropertyMock(return_value=b"/tagada.mp3")
-        i.evaluate_template.side_effect = lambda pl, _: pl.replace(
+        i.evaluate_fmt.side_effect = lambda pl, _: pl.replace(
             b"$title", b"ta:ga:da"
         ).decode()
 
