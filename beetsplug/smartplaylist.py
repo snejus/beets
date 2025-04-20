@@ -321,7 +321,7 @@ class SmartPlaylistPlugin(BeetsPlugin):
             # the items and generate the correct m3u file names.
             matched_items: list[tuple[Any, Any]] = []
             for item in items:
-                m3u_name = item.evaluate_template(name, True)
+                m3u_name = item.evaluate_fmt(name, True)
                 m3u_name = sanitize_path(m3u_name, lib.replacements)
                 if m3u_name not in m3us:
                     m3us[m3u_name] = []
