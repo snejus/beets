@@ -27,7 +27,6 @@ import threading
 import time
 from abc import ABC
 from collections import UserDict, defaultdict
-from collections.abc import Mapping
 from copy import deepcopy
 from sqlite3 import Connection, sqlite_version_info
 from typing import TYPE_CHECKING, Any, AnyStr, Generic
@@ -40,9 +39,7 @@ from typing_extensions import (
 )
 from unidecode import unidecode
 
-import beets
-
-from ..util import cached_classproperty, functemplate
+from ..util import cached_classproperty
 from . import types
 from .query import (
     FieldQueryType,
@@ -61,6 +58,7 @@ if TYPE_CHECKING:
         Iterable,
         Iterator,
         KeysView,
+        Mapping,
         Sequence,
     )
     from types import TracebackType
@@ -102,79 +100,6 @@ class DBCustomFunctionError(Exception):
             "beets defined SQLite function failed; "
             "see the other errors above for details"
         )
-
-
-class FormattedMapping(Mapping[str, str]):
-    """A `dict`-like formatted view of a model.
-
-    The accessor `mapping[key]` returns the formatted version of
-    `model[key]` as a unicode string.
-
-    The `included_keys` parameter allows filtering the fields that are
-    returned. By default all fields are returned. Limiting to specific keys can
-    avoid expensive per-item database queries.
-
-    If `for_path` is true, all path separators in the formatted values
-    are replaced.
-    """
-
-    ALL_KEYS = "*"
-
-    def __init__(
-        self,
-        model: Model,
-        included_keys: str | list[str] = ALL_KEYS,
-        for_path: bool = False,
-    ):
-        self.for_path = for_path
-        self.model = model
-        if isinstance(included_keys, list):
-            self.model_keys: KeysView[str] = dict.fromkeys(included_keys).keys()
-        elif included_keys == self.ALL_KEYS:
-            # Performance note: this triggers a database query.
-            self.model_keys = self.model.keys(True)
-
-    def __getitem__(self, key: str) -> str:
-        if key in self.model_keys:
-            return self._get_formatted(self.model, key)
-        else:
-            raise KeyError(key)
-
-    def __iter__(self) -> Iterator[str]:
-        return iter(self.model_keys)
-
-    def __len__(self) -> int:
-        return len(self.model_keys)
-
-    # The following signature is incompatible with `Mapping[str, str]`, since
-    # the return type doesn't include `None` (but `default` can be `None`).
-    def get(  # type: ignore
-        self,
-        key: str,
-        default: str | None = None,
-    ) -> str:
-        """Similar to Mapping.get(key, default), but always formats to str."""
-        if default is None:
-            default = self.model._type(key).format(None)
-        return super().get(key, default)
-
-    def _get_formatted(self, model: Model, key: str) -> str:
-        value = model._type(key).format(model.get(key))
-        if isinstance(value, bytes):
-            value = value.decode("utf-8", "ignore")
-
-        if self.for_path:
-            sep_repl: str = beets.config["path_sep_replace"].as_str()
-            sep_drive: str = beets.config["drive_sep_replace"].as_str()
-
-            if re.match(r"^\w:", value):
-                value = re.sub(r"(?<=^\w):", sep_drive, value)
-
-            for sep in (os.path.sep, os.path.altsep):
-                if sep:
-                    value = value.replace(sep, sep_repl)
-
-        return value
 
 
 class LazyDict(UserDict[str, Any]):
@@ -361,13 +286,6 @@ class Model(ABC, Generic[D]):
         """Return a mapping from field names to getter functions."""
         # We could cache this if it becomes a performance problem to
         # gather the getter mapping every time.
-        raise NotImplementedError()
-
-    def _template_funcs(self) -> Mapping[str, Callable[[str], str]]:
-        """Return a mapping from function names to text-transformer
-        functions.
-        """
-        # As above: we could consider caching this result.
         raise NotImplementedError()
 
     # Basic operation.
@@ -679,39 +597,6 @@ class Model(ABC, Generic[D]):
                 if self[key] is not None:
                     self._dirty.add(key)
             self.store()
-
-    # Formatting and templating.
-
-    _formatter = FormattedMapping
-
-    def formatted(
-        self,
-        included_keys: str = _formatter.ALL_KEYS,
-        for_path: bool = False,
-    ):
-        """Get a mapping containing all values on this object formatted
-        as human-readable unicode strings.
-        """
-        return self._formatter(self, included_keys, for_path)
-
-    def evaluate_template(
-        self,
-        template: str | functemplate.Template,
-        for_path: bool = False,
-    ) -> str:
-        """Evaluate a template (a string or a `Template` object) using
-        the object's fields. If `for_path` is true, then no new path
-        separators will be added to the template.
-        """
-        # Perform substitution.
-        if isinstance(template, str):
-            t = functemplate.template(template)
-        else:
-            # Help out mypy
-            t = template
-        return t.substitute(
-            self.formatted(for_path=for_path), self._template_funcs()
-        )
 
     # Parsing.
 

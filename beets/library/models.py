@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+import re
 import string
 import time
+from collections.abc import Mapping
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, KeysView, TypeVar
@@ -27,6 +29,8 @@ from .exceptions import FileOperationError, ReadError, WriteError
 from .queries import PF_KEY_DEFAULT, parse_query_string
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from ..dbcore import types
     from ..dbcore.db import Results
     from ..dbcore.query import FieldQuery, FieldQueryType
@@ -35,6 +39,82 @@ if TYPE_CHECKING:
     AnyModel = TypeVar("AnyModel", bound="LibModel")
 
 log = logging.getLogger(__name__)
+
+
+class FormattedMapping(Mapping[str, str]):
+    """A `dict`-like formatted view of a model.
+
+    The accessor `mapping[key]` returns the formatted version of
+    `model[key]` as a unicode string.
+
+    The `included_keys` parameter allows filtering the fields that are
+    returned. By default all fields are returned. Limiting to specific keys can
+    avoid expensive per-item database queries.
+
+    If `for_path` is true, all path separators in the formatted values
+    are replaced.
+    """
+
+    ALL_KEYS = "*"
+
+    def __init__(
+        self,
+        model: LibModel,
+        included_keys: str | list[str] = ALL_KEYS,
+        for_path: bool = False,
+    ):
+        self.for_path = for_path
+        self.model = model
+        if isinstance(included_keys, list):
+            self.model_keys: KeysView[str] = dict.fromkeys(included_keys).keys()
+        elif included_keys == self.ALL_KEYS:
+            # Performance note: this triggers a database query.
+            self.model_keys = self.model.keys(True)
+
+    def __getitem__(self, key: str) -> str:
+        if key in self.model_keys:
+            return self._get_formatted(self.model, key)
+        else:
+            raise KeyError(key)
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self.model_keys)
+
+    def __len__(self) -> int:
+        return len(self.model_keys)
+
+    # The following signature is incompatible with `Mapping[str, str]`, since
+    # the return type doesn't include `None` (but `default` can be `None`).
+    def get(  # type: ignore
+        self,
+        key: str,
+        default: str | None = None,
+    ) -> str:
+        """Similar to Mapping.get(key, default), but always formats to str."""
+        if default is None:
+            default = self.model._type(key).format(None)
+        return super().get(key, default)
+
+    def _get_formatted(self, model: LibModel, key: str) -> str:
+        value = model._type(key).format(model.get(key))
+        if isinstance(value, bytes):
+            value = value.decode("utf-8", "ignore")
+
+        if self.for_path:
+            sep_repl: str = beets.config["path_sep_replace"].as_str()
+            sep_drive: str = beets.config["drive_sep_replace"].as_str()
+
+            if re.match(r"^\w:", value):
+                value = re.sub(r"(?<=^\w):", sep_drive, value)
+
+            for sep in (os.path.sep, os.path.altsep):
+                if sep:
+                    value = value.replace(sep, sep_repl)
+
+        return value
+
+
+# Item and Album model classes.
 
 
 class LibModel(dbcore.Model["Library"]):
@@ -137,8 +217,39 @@ class LibModel(dbcore.Model["Library"]):
             ]
         )
 
+    _formatter = FormattedMapping
 
-class FormattedItemMapping(dbcore.db.FormattedMapping):
+    def formatted(
+        self,
+        included_keys: str = _formatter.ALL_KEYS,
+        for_path: bool = False,
+    ):
+        """Get a mapping containing all values on this object formatted
+        as human-readable unicode strings.
+        """
+        return self._formatter(self, included_keys, for_path)
+
+    def evaluate_template(
+        self,
+        tmpl: str | Template,
+        for_path: bool = False,
+    ) -> str:
+        """Evaluate a template (a string or a `Template` object) using
+        the object's fields. If `for_path` is true, then no new path
+        separators will be added to the template.
+        """
+        # Perform substitution.
+        if isinstance(tmpl, str):
+            t = template(tmpl)
+        else:
+            # Help out mypy
+            t = tmpl
+        return t.substitute(
+            self.formatted(for_path=for_path), self._template_funcs()
+        )
+
+
+class FormattedItemMapping(FormattedMapping):
     """Add lookup for album-level fields.
 
     Album-level fields take precedence if `for_path` is true.
