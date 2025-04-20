@@ -30,9 +30,9 @@ from __future__ import annotations
 
 import ast
 import dis
-import functools
 import re
 import types
+from functools import cache
 from typing import TYPE_CHECKING
 
 from typing_extensions import TypeAlias
@@ -525,8 +525,8 @@ def _parse(template):
     return Expression(parts)
 
 
-@functools.lru_cache(maxsize=128)
-def template(fmt):
+@cache
+def get_template(fmt):
     return Template(fmt)
 
 
@@ -586,7 +586,7 @@ class Template:
         return wrapper_func
 
 
-PathFormat: TypeAlias = "tuple[str, Template]"
+PathFormat: TypeAlias = "tuple[str, str]"
 
 
 def get_path_formats(
@@ -596,7 +596,7 @@ def get_path_formats(
     pairs.
     """
     return [
-        (PF_KEY_QUERIES.get(q, q), template(v.as_str()))
+        (PF_KEY_QUERIES.get(q, q), v.as_str())
         for q, v in (subview or beets.config["paths"]).items()
     ]
 
