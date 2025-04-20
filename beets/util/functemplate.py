@@ -30,9 +30,9 @@ from __future__ import annotations
 
 import ast
 import dis
-import functools
 import re
 import types
+from functools import cache
 from typing import TYPE_CHECKING
 
 import beets
@@ -52,7 +52,7 @@ FUNCTION_PREFIX = "__func_"
 
 PF_KEY_QUERIES = {"comp": "comp:true", "singleton": "singleton:true"}
 
-PathFormat = tuple[str, "Template"]
+PathFormat = tuple[str, str]
 
 
 class Environment:
@@ -525,8 +525,8 @@ def _parse(template):
     return Expression(parts)
 
 
-@functools.lru_cache(maxsize=128)
-def template(fmt):
+@cache
+def get_template(fmt):
     return Template(fmt)
 
 
@@ -593,7 +593,7 @@ def get_path_formats(
     pairs.
     """
     return [
-        (PF_KEY_QUERIES.get(q, q), template(v.as_str()))
+        (PF_KEY_QUERIES.get(q, q), v.as_str())
         for q, v in (subview or beets.config["paths"]).items()
     ]
 
