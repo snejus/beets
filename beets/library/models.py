@@ -22,7 +22,7 @@ from beets.util import (
     samefile,
     syspath,
 )
-from beets.util.functemplate import Template, template
+from beets.util.functemplate import PathFormat, get_template
 
 from ..dbcore.fields import TYPE_BY_FIELD
 from .exceptions import FileOperationError, ReadError, WriteError
@@ -168,10 +168,9 @@ class LibModel(dbcore.Model["Library"]):
         super().add(lib)
 
     def __format__(self, spec):
-        if not spec:
-            spec = beets.config[self._format_config_key].as_str()
-        assert isinstance(spec, str)
-        return self.evaluate_template(spec)
+        return self.evaluate_fmt(
+            spec or beets.config[self._format_config_key].as_str()
+        )
 
     def __str__(self):
         return format(self)
@@ -229,22 +228,13 @@ class LibModel(dbcore.Model["Library"]):
         """
         return self._formatter(self, included_keys, for_path)
 
-    def evaluate_template(
-        self,
-        tmpl: str | Template,
-        for_path: bool = False,
-    ) -> str:
-        """Evaluate a template (a string or a `Template` object) using
-        the object's fields. If `for_path` is true, then no new path
-        separators will be added to the template.
+    def evaluate_fmt(self, fmt: str, for_path: bool = False) -> str:
+        """Evaluate a format string using the object's fields.
+
+        If `for_path` is true, then no new path separators are added to the template.
         """
         # Perform substitution.
-        if isinstance(tmpl, str):
-            t = template(tmpl)
-        else:
-            # Help out mypy
-            t = tmpl
-        return t.substitute(
+        return get_template(fmt).substitute(
             self.formatted(for_path=for_path), self._template_funcs()
         )
 
@@ -647,8 +637,7 @@ class Album(LibModel):
         image = bytestring_path(image)
         item_dir = item_dir or self.item_dir()
 
-        filename_tmpl = template(beets.config["art_filename"].as_str())
-        subpath = self.evaluate_template(filename_tmpl, True)
+        subpath = self.evaluate_fmt(beets.config["art_filename"].as_str(), True)
         if beets.config["asciify_paths"]:
             subpath = util.asciify_path(subpath)
         subpath = util.sanitize_path(
@@ -1314,7 +1303,7 @@ class Item(LibModel):
         self,
         relative_to_libdir=False,
         basedir=None,
-        path_formats=None,
+        path_formats: list[PathFormat] | None = None,
     ) -> bytes:
         """Return the path in the library directory designated for the item
         (i.e., where the file ought to be).
@@ -1344,13 +1333,8 @@ class Item(LibModel):
                     break
             else:
                 assert False, "no default path format"
-        if isinstance(path_format, Template):
-            subpath_tmpl = path_format
-        else:
-            subpath_tmpl = template(path_format)
-
         # Evaluate the selected template.
-        subpath = self.evaluate_template(subpath_tmpl, True)
+        subpath = self.evaluate_fmt(path_format, True)
 
         if beets.config["asciify_paths"]:
             subpath = util.asciify_path(subpath)

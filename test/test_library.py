@@ -1155,13 +1155,13 @@ class TemplateTest(ItemInDBTestCase):
     def test_year_formatted_in_template(self):
         self.i.year = 123
         self.i.store()
-        assert self.i.evaluate_template("$year") == "0123"
+        assert self.i.evaluate_fmt("$year") == "0123"
 
     def test_album_flexattr_appears_in_item_template(self):
         self.album = self.lib.add_album([self.i])
         self.album.foo = "baz"
         self.album.store()
-        assert self.i.evaluate_template("$foo") == "baz"
+        assert self.i.evaluate_fmt("$foo") == "baz"
 
     def test_album_and_item_format(self):
         config["format_album"] = "foö $foo"
