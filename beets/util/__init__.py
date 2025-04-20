@@ -310,15 +310,7 @@ def fnmatch_all(names: Sequence[bytes], patterns: Sequence[bytes]) -> bool:
     """Determine whether all strings in `names` match at least one of
     the `patterns`, which should be shell glob expressions.
     """
-    for name in names:
-        matches = False
-        for pattern in patterns:
-            matches = fnmatch.fnmatch(name, pattern)
-            if matches:
-                break
-        if not matches:
-            return False
-    return True
+    return all(any(fnmatch.fnmatch(n, p) for p in patterns) for n in names)
 
 
 def prune_dirs(
