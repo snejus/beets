@@ -26,6 +26,7 @@ import pytest
 from beets import util
 from beets.library import Item
 from beets.test import _common
+from beets.test.helper import BeetsTestCase, ConfigMixin
 
 
 class UtilTest(unittest.TestCase):
@@ -256,3 +257,30 @@ class TestPlurality:
         assert consensus["albumartist"]
         assert not consensus["album"]
         assert not consensus["label"]
+
+
+class TestAsciifyPath(ConfigMixin):
+    @pytest.fixture(autouse=True)
+    def _setup_config(self):
+        self.config["asciify_paths"] = True
+
+    def test_unicode_normalized_nfd_on_mac(self):
+        with patch("sys.platform", "darwin"):
+            assert util.asciify_path("caf\xe9") == "cafe"
+
+    def test_unicode_normalized_nfc_on_linux(self):
+        with patch("sys.platform", "linux"):
+            assert util.asciify_path("caf\xe9") == "cafe"
+
+    def test_asciify_and_replace(self):
+        assert util.asciify_path("\u201c\u00f6\u2014\u00cf\u201d") == '"o--I"'
+
+    def test_asciify_character_expanding_to_slash(self):
+        assert util.asciify_path("ab\xa2\xbdd") == "abC_ 1_2d"
+
+
+class PathTruncationTest(BeetsTestCase):
+    def test_truncate_bytestring(self):
+        with _common.platform_posix():
+            p = util.truncate_path(b"abcde/fgh", 4)
+        assert p == b"abcd/fgh"

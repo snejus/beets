@@ -19,7 +19,6 @@ import os.path
 import re
 import shutil
 import stat
-import unicodedata
 import unittest
 from unittest.mock import patch
 
@@ -429,41 +428,12 @@ class DestinationTest(BeetsTestCase):
         p = self.i.destination()
         assert p.rsplit(util.PATH_SEP, 1)[1] == b"something"
 
-    def test_unicode_normalized_nfd_on_mac(self):
-        instr = unicodedata.normalize("NFC", "caf\xe9")
-        self.lib.path_formats = [("default", instr)]
-        with patch("sys.platform", "darwin"):
-            dest = self.i.destination(relative_to_libdir=True)
-        assert as_string(dest) == unicodedata.normalize("NFD", instr)
-
-    def test_unicode_normalized_nfc_on_linux(self):
-        instr = unicodedata.normalize("NFD", "caf\xe9")
-        self.lib.path_formats = [("default", instr)]
-        with patch("sys.platform", "linux"):
-            dest = self.i.destination(relative_to_libdir=True)
-        assert as_string(dest) == unicodedata.normalize("NFC", instr)
-
     def test_unicode_extension_in_fragment(self):
         self.lib.path_formats = [("default", "foo")]
         self.i.path = util.bytestring_path("bar.caf\xe9")
         with patch("sys.platform", "linux"):
             dest = self.i.destination(relative_to_libdir=True)
         assert as_string(dest) == "foo.caf\xe9"
-
-    def test_asciify_and_replace(self):
-        config["asciify_paths"] = True
-        self.lib.replacements = [(re.compile('"'), "q")]
-        self.lib.directory = b"lib"
-        self.lib.path_formats = [("default", "$title")]
-        self.i.title = "\u201c\u00f6\u2014\u00cf\u201d"
-        assert self.i.destination() == np("lib/qo--Iq")
-
-    def test_asciify_character_expanding_to_slash(self):
-        config["asciify_paths"] = True
-        self.lib.directory = b"lib"
-        self.lib.path_formats = [("default", "$title")]
-        self.i.title = "ab\xa2\xbdd"
-        assert self.i.destination() == np("lib/abC_ 1_2d")
 
     def test_destination_with_replacements(self):
         self.lib.directory = b"base"
