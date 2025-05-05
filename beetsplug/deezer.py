@@ -49,7 +49,7 @@ class Track(IDResponse):
     title: str
     artist: Artist
     track_position: int
-    disk_number: int
+    disk_number: NotRequired[int]
     duration: int
     link: str
     contributors: NotRequired[list[Artist]]
@@ -197,7 +197,7 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             return None
         medium_total = 0
         for i, track_data in enumerate(album_tracks_data, start=1):
-            if track_data["disk_number"] == track.medium:
+            if track_data.get("disk_number") == track.medium:
                 medium_total += 1
                 if track_data["id"] == track.track_id:
                     track.index = i
@@ -222,7 +222,7 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             artist_id=str(artist_id),
             length=track_data["duration"],
             index=position,
-            medium=track_data["disk_number"],
+            medium=track_data.get("disk_number"),
             deezer_track_rank=track_data.get("rank"),
             medium_index=position,
             data_source=self.data_source,
