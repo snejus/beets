@@ -318,7 +318,12 @@ class DiscogsPlugin(MetadataSourcePlugin):
                 exc_info=True,
             )
         else:
-            yield from filter(None, map(self.get_album_info, releases))
+            yield from map(
+                self.get_album_info,
+                filter(
+                    lambda r: "Box Set" not in str(r.data["formats"]), releases
+                ),
+            )
 
     @cache
     def get_master_year(self, master_id: str) -> int | None:
