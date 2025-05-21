@@ -223,7 +223,7 @@ cmd = "ruff format --check --diff"
 
 [tool.poe.tasks.check-types]
 help = "Check the code for typing issues. Accepts mypy options."
-cmd = "mypy"
+cmd = "mypy beets beetsplug test extra"
 
 [tool.poe.tasks.docs]
 help = "Build documentation"
