@@ -17,15 +17,24 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 
 from typing_extensions import Self
 
+from beets import config
+from beets.util import colorize
+
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from beets.library import Item
 
     from .distance import Distance
+
+    JSONDict = dict[str, Any]
+
 
 V = TypeVar("V")
 
@@ -215,21 +224,87 @@ class TrackInfo(Info):
 
 
 # Structures that compose all the information for a candidate match.
-class Match(NamedTuple):
+@dataclass
+class Match:
+    disambig_fields_key: ClassVar[str]
     distance: Distance
     info: Info
 
+    @property
+    def dist(self) -> str:
+        if self.distance <= config["match"]["strong_rec_thresh"].as_number():
+            color = "text_success"
+        elif self.distance <= config["match"]["medium_rec_thresh"].as_number():
+            color = "text_warning"
+        else:
+            color = "text_error"
+        return colorize(color, "%.1f%%" % ((1 - self.distance) * 100))
 
+    @property
+    def name(self) -> str:
+        raise NotImplementedError
+
+    @cached_property
+    def penalty(self) -> str | None:
+        """Returns a colorized string that indicates all the penalties
+        applied to a distance object.
+        """
+        if penalties := self.distance.penalties:
+            return colorize("text_warning", f"({', '.join(penalties)})")
+        return None
+
+    @property
+    def disambig_fields(self) -> Sequence[str]:
+        return config["match"][self.disambig_fields_key].as_str_seq()
+
+    @property
+    def dist_data(self) -> JSONDict:
+        return {
+            "name": self.name,
+            "distance": self.dist,
+            "penalty": self.penalty,
+            "dist_count": round(float(1 - self.distance), 2),
+            "dist": round(float(1 - self.distance), 2),
+        }
+
+    @property
+    def disambig_data(self) -> JSONDict:
+        """Return data for an AlbumInfo or TrackInfo object that
+        provides context that helps disambiguate similar-looking albums and
+        tracks.
+        """
+        dist_fields = self.dist_data.keys()
+        match_fields = [k for k in self.disambig_fields if k not in dist_fields]
+        data = {
+            **self.dist_data,
+            **{k: self.info.get(k, None) for k in match_fields},
+        }
+
+        return {k: v for k, v in data.items() if k in self.disambig_fields}
+
+
+@dataclass
 class AlbumMatch(Match):
+    disambig_fields_key = "album_disambig_fields"
     info: AlbumInfo
     mapping: list[tuple[Item, TrackInfo]]
     extra_items: list[Item]
     extra_tracks: list[TrackInfo]
+
+    @property
+    def name(self) -> str:
+        return self.info.album or ""
 
     @cached_property
     def items(self) -> list[Item]:
         return [i for i, _ in self.mapping]
 
 
+@dataclass
 class TrackMatch(Match):
+    disambig_fields_key = "singleton_disambig_fields"
     info: TrackInfo
+
+    @property
+    def name(self) -> str:
+        return self.info.title or ""

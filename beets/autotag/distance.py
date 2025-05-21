@@ -139,6 +139,13 @@ class Distance:
             weights[key] = weights_view[key].as_number()
         return weights
 
+    @property
+    def penalties(self) -> list[str]:
+        return [
+            k.replace("album_", "").replace("track_", "").replace("_", " ")
+            for k in self._penalties
+        ]
+
     # Access the components and their aggregates.
 
     @property
