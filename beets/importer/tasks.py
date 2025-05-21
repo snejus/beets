@@ -26,7 +26,8 @@ from typing import TYPE_CHECKING, Any
 
 import mediafile
 
-from beets import autotag, config, library, logging, plugins, util
+from beets import config, library, logging, plugins, util
+from beets.autotag.hooks import AlbumMatch, TrackMatch
 from beets.dbcore.query import OrQuery, PathQuery
 
 from .state import ImportState
@@ -158,12 +159,12 @@ class ImportTask(BaseImportTask):
     """
 
     choice_flag: Action | None = None
-    match: autotag.AlbumMatch | autotag.TrackMatch | None = None
+    match: AlbumMatch | TrackMatch | None = None
 
     # Keep track of the current task item
     cur_album: str | None = None
     cur_artist: str | None = None
-    candidates: Sequence[autotag.AlbumMatch | autotag.TrackMatch] = []
+    candidates: Sequence[AlbumMatch | TrackMatch] = []
     rec: Recommendation | None = None
 
     def __init__(
@@ -177,9 +178,7 @@ class ImportTask(BaseImportTask):
         self.should_merge_duplicates = False
         self.is_album = True
 
-    def set_choice(
-        self, choice: Action | autotag.AlbumMatch | autotag.TrackMatch
-    ):
+    def set_choice(self, choice: Action | AlbumMatch | TrackMatch):
         """Given an AlbumMatch or TrackMatch object or an action constant,
         indicates that an action has been selected for this task.
 
@@ -248,7 +247,7 @@ class ImportTask(BaseImportTask):
         if self.choice_flag in (Action.ASIS, Action.RETAG):
             return self.items
         elif self.choice_flag == Action.APPLY and isinstance(
-            self.match, autotag.AlbumMatch
+            self.match, AlbumMatch
         ):
             return self.match.items
         else:
@@ -362,7 +361,7 @@ class ImportTask(BaseImportTask):
         restricted to only those IDs.
         """
         self.cur_artist, self.cur_album, (self.candidates, self.rec) = (
-            autotag.tag_album(self.items, search_ids=search_ids)
+            tag_album(self.items, search_ids=search_ids)
         )
 
     def find_duplicates(self, lib: library.Library) -> list[library.Album]:
@@ -499,7 +498,7 @@ class ImportTask(BaseImportTask):
 
             self.album = lib.add_album(self.imported_items())
             if self.choice_flag == Action.APPLY and isinstance(
-                self.match, autotag.AlbumMatch
+                self.match, AlbumMatch
             ):
                 # Copy album flexible fields to the DB
                 # TODO: change the flow so we create the `Album` object earlier,
@@ -681,9 +680,7 @@ class SingletonImportTask(ImportTask):
             plugins.send("item_imported", lib=lib, item=item)
 
     def lookup_candidates(self, search_ids: list[str]) -> None:
-        self.candidates, self.rec = autotag.tag_item(
-            self.item, search_ids=search_ids
-        )
+        self.candidates, self.rec = tag_item(self.item, search_ids=search_ids)
 
     def find_duplicates(self, lib: library.Library) -> list[library.Item]:  # type: ignore[override] # Need splitting Singleton and Album tasks into separate classes
         """Return a list of items from `lib` that have the same artist
