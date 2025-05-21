@@ -25,10 +25,10 @@ import lap
 import numpy as np
 
 from beets import config, logging, metadata_plugins, plugins
-from beets.autotag import AlbumMatch, TrackMatch, hooks
 from beets.util import get_most_common_tags
 
 from .distance import VA_ARTISTS, distance, track_distance
+from .hooks import AlbumInfo, AlbumMatch, TrackInfo, TrackMatch
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -161,7 +161,7 @@ def _recommendation(
     # Downgrade to the max rec if it is lower than the current rec for an
     # applied penalty.
     keys = set(min_dist.keys())
-    if isinstance(results[0], hooks.AlbumMatch):
+    if isinstance(results[0], AlbumMatch):
         for track_dist in min_dist.tracks.values():
             keys.update(list(track_dist.keys()))
     max_rec_view = config["match"]["max_rec"]
@@ -234,7 +234,7 @@ def _add_candidate(
             return
 
     log.debug("Success. Distance: {}", dist)
-    results[info.album_id] = hooks.AlbumMatch(
+    results[info.album_id] = AlbumMatch(
         dist, info, dict(item_info_pairs), extra_items, extra_tracks
     )
 
@@ -356,7 +356,7 @@ def tag_item(
             log.debug("Searching for track ID: {}", trackid)
             if info := metadata_plugins.track_for_id(trackid):
                 dist = track_distance(item, info, incl_artist=True)
-                candidates[info.track_id] = hooks.TrackMatch(dist, info, item)
+                candidates[info.track_id] = TrackMatch(dist, info, item)
                 # If this is a good match, then don't keep searching.
                 rec = _recommendation(_sort_candidates(candidates.values()))
                 if (
@@ -384,9 +384,7 @@ def tag_item(
         item, search_artist, search_name
     ):
         dist = track_distance(item, track_info, incl_artist=True)
-        candidates[track_info.track_id] = hooks.TrackMatch(
-            dist, track_info, item
-        )
+        candidates[track_info.track_id] = TrackMatch(dist, track_info, item)
 
     # Sort by distance and return with recommendation.
     log.debug("Found {} candidates.", len(candidates))
