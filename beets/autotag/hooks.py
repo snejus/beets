@@ -451,3 +451,6 @@ class TrackMatch(Match):
     def apply_metadata(self) -> None:
         """Apply metadata to the item."""
         self.item.update(self.info.item_data)
+
+
+AnyMatch = TypeVar("AnyMatch", bound=Match)

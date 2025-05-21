@@ -46,7 +46,7 @@ from beets.autotag.hooks import (
     TrackInfo,
     TrackMatch,
 )
-from beets.autotag.match import Proposal, Recommendation, tag_album, tag_item
+from beets.autotag.match import Proposal, Recommendation
 from beets.ui import input_, print_
 from beets.util import (
     MoveOperation,
@@ -63,6 +63,10 @@ from . import _store_dict
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from beets.autotag.hooks import AnyMatch
+    from beets.importer import Action, AlbumImportTask, SingletonImportTask
+
 
 # Global logger.
 log = logging.getLogger(__name__)
@@ -595,35 +599,31 @@ def choose_candidate(
             return choice_actions[sel]
 
 
-def manual_search(session, task):
-    """Get a new `Proposal` using manual search criteria.
+def manual_search(
+    session: importer.ImportSession, task: importer.ImportTask[AnyMatch]
+) -> None:
+    """Update task with candidates using manual search criteria.
 
     Input either an artist and album (for full albums) or artist and
     track name (for singletons) for manual search.
     """
-    artist = input_("Artist:").strip()
-    name = input_("Album:" if task.is_album else "Track:").strip()
-
-    if task.is_album:
-        _, _, prop = tag_album(task.items, artist, name)
-        return prop
-    else:
-        return tag_item(task.item, artist, name)
+    task.lookup_candidates(
+        search_artist=input_("Artist:").strip(),
+        search_name=input_("Album:" if task.is_album else "Track:").strip(),
+    )
 
 
-def manual_id(session, task):
-    """Get a new `Proposal` using a manually-entered ID.
+def manual_id(
+    session: importer.ImportSession, task: importer.ImportTask[AnyMatch]
+) -> None:
+    """Update task with candidates using a manually-entered ID.
 
     Input an ID, either for an album ("release") or a track ("recording").
     """
-    prompt = f"Enter {'release' if task.is_album else 'recording'} ID:"
-    search_id = input_(prompt).strip()
-
-    if task.is_album:
-        _, _, prop = tag_album(task.items, search_ids=search_id.split())
-        return prop
-    else:
-        return tag_item(task.item, search_ids=search_id.split())
+    _type = "release" if task.is_album else "recording"
+    task.lookup_candidates(
+        search_ids=input_(f"Enter {_type} ID:").strip().split()
+    )
 
 
 def abort_action(session, task):
@@ -634,11 +634,7 @@ def abort_action(session, task):
 class TerminalImportSession(importer.ImportSession):
     """An import session that runs in a terminal."""
 
-    def choose_match(self, task):
-        """Given an initial autotagging of items, go through an interactive
-        dance with the user to ask for a choice of metadata. Returns an
-        AlbumMatch object, ASIS, or SKIP.
-        """
+    def choose_match(self, task: AlbumImportTask) -> AlbumMatch | Action:
         # Show what we're tagging.
         print_()
 
@@ -712,7 +708,7 @@ class TerminalImportSession(importer.ImportSession):
                 assert isinstance(choice, AlbumMatch)
                 return choice
 
-    def choose_item(self, task):
+    def choose_item(self, task: SingletonImportTask) -> TrackMatch | Action:
         """Ask the user for a choice about tagging a single item. Returns
         either an action constant or a TrackMatch object.
         """
@@ -743,9 +739,6 @@ class TerminalImportSession(importer.ImportSession):
                 post_choice = choice.callback(self, task)
                 if isinstance(post_choice, importer.Action):
                     return post_choice
-                elif isinstance(post_choice, Proposal):
-                    candidates = post_choice.candidates
-                    rec = post_choice.recommendation
 
             else:
                 # Chose a candidate.
