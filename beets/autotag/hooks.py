@@ -214,16 +214,17 @@ class TrackInfo(Info):
 
 
 # Structures that compose all the information for a candidate match.
-
-
-class AlbumMatch(NamedTuple):
+class Match(NamedTuple):
     distance: Distance
+    info: Info
+
+
+class AlbumMatch(Match):
     info: AlbumInfo
     mapping: dict[Item, TrackInfo]
     extra_items: list[Item]
     extra_tracks: list[TrackInfo]
 
 
-class TrackMatch(NamedTuple):
-    distance: Distance
+class TrackMatch(Match):
     info: TrackInfo
