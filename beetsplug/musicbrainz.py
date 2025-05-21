@@ -21,19 +21,20 @@ from collections import Counter
 from contextlib import suppress
 from functools import cached_property
 from itertools import product
-from typing import TYPE_CHECKING, Any, Iterable, Sequence
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urljoin
 
 import musicbrainzngs
 from confuse.exceptions import NotFoundError
 
 import beets
-import beets.autotag.hooks
 from beets import config, plugins, util
+from beets.autotag.hooks import AlbumInfo, TrackInfo
 from beets.metadata_plugins import MetadataSourcePlugin
 from beets.util.id_extractors import extract_release_id
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator, Sequence
     from typing import Literal
 
     from beets.library import Item
@@ -273,11 +274,7 @@ def _preferred_release_event(
     return release.get("country"), release.get("date")
 
 
-def _set_date_str(
-    info: beets.autotag.hooks.AlbumInfo,
-    date_str: str,
-    original: bool = False,
-):
+def _set_date_str(info: AlbumInfo, date_str: str, original: bool = False):
     """Given a (possibly partial) YYYY-MM-DD string and an AlbumInfo
     object, set the object's release date fields appropriately. If
     `original`, then set the original_year, etc., fields.
@@ -322,8 +319,8 @@ def _find_actual_release_from_pseudo_release(
 
 
 def _merge_pseudo_and_actual_album(
-    pseudo: beets.autotag.hooks.AlbumInfo, actual: beets.autotag.hooks.AlbumInfo
-) -> beets.autotag.hooks.AlbumInfo | None:
+    pseudo: AlbumInfo, actual: AlbumInfo
+) -> AlbumInfo | None:
     """
     Merges a pseudo release with its actual release.
 
@@ -411,7 +408,7 @@ class MusicBrainzPlugin(MetadataSourcePlugin):
         medium: int | None = None,
         medium_index: int | None = None,
         medium_total: int | None = None,
-    ) -> beets.autotag.hooks.TrackInfo:
+    ) -> TrackInfo:
         """Translates a MusicBrainz recording result dictionary into a beets
         ``TrackInfo`` object. Three parameters are optional and are used
         only for tracks that appear on releases (non-singletons): ``index``,
@@ -419,7 +416,7 @@ class MusicBrainzPlugin(MetadataSourcePlugin):
         ``medium_index``, the track's index on its medium; ``medium_total``,
         the number of tracks on the medium. Each number is a 1-based index.
         """
-        info = beets.autotag.hooks.TrackInfo(
+        info = TrackInfo(
             title=recording["title"],
             track_id=recording["id"],
             index=index,
@@ -507,7 +504,7 @@ class MusicBrainzPlugin(MetadataSourcePlugin):
 
         return info
 
-    def album_info(self, release: JSONDict) -> beets.autotag.hooks.AlbumInfo:
+    def album_info(self, release: JSONDict) -> AlbumInfo:
         """Takes a MusicBrainz release result dictionary and returns a beets
         AlbumInfo object containing the interesting data about that release.
         """
@@ -624,7 +621,7 @@ class MusicBrainzPlugin(MetadataSourcePlugin):
                 track_infos.append(ti)
 
         album_artist_ids = _artist_ids(release["artist-credit"])
-        info = beets.autotag.hooks.AlbumInfo(
+        info = AlbumInfo(
             album=release["title"],
             album_id=release["id"],
             artist=artist_name,
@@ -838,7 +835,7 @@ class MusicBrainzPlugin(MetadataSourcePlugin):
         artist: str,
         album: str,
         va_likely: bool,
-    ) -> Iterable[beets.autotag.hooks.AlbumInfo]:
+    ) -> Iterator[AlbumInfo]:
         criteria = self.get_album_criteria(items, artist, album, va_likely)
         release_ids = (r["id"] for r in self._search_api("release", criteria))
 
@@ -846,16 +843,14 @@ class MusicBrainzPlugin(MetadataSourcePlugin):
 
     def item_candidates(
         self, item: Item, artist: str, title: str
-    ) -> Iterable[beets.autotag.hooks.TrackInfo]:
+    ) -> Iterator[TrackInfo]:
         criteria = {"artist": artist, "recording": title, "alias": title}
 
         yield from filter(
             None, map(self.track_info, self._search_api("recording", criteria))
         )
 
-    def album_for_id(
-        self, album_id: str
-    ) -> beets.autotag.hooks.AlbumInfo | None:
+    def album_for_id(self, album_id: str) -> AlbumInfo | None:
         """Fetches an album by its MusicBrainz ID and returns an AlbumInfo
         object or None if the album is not found. May raise a
         MusicBrainzAPIError.
@@ -892,9 +887,7 @@ class MusicBrainzPlugin(MetadataSourcePlugin):
         else:
             return release
 
-    def track_for_id(
-        self, track_id: str
-    ) -> beets.autotag.hooks.TrackInfo | None:
+    def track_for_id(self, track_id: str) -> TrackInfo | None:
         """Fetches a track by its MusicBrainz ID. Returns a TrackInfo object
         or None if no track is found. May raise a MusicBrainzAPIError.
         """

@@ -16,7 +16,8 @@
 
 from collections import defaultdict
 
-from beets import autotag, library, metadata_plugins, ui, util
+from beets import library, metadata_plugins, ui, util
+from beets.autotag.hooks import AlbumMatch
 from beets.plugins import BeetsPlugin, apply_item_changes
 
 
@@ -149,7 +150,7 @@ class MBSyncPlugin(BeetsPlugin):
             # Apply.
             self._log.debug("applying changes to {}", album)
             with lib.transaction():
-                album_match = autotag.hooks.AlbumMatch(0, album_info, mapping)
+                album_match = AlbumMatch(0, album_info, mapping)
                 album_match.apply_metadata()
                 changed = False
                 # Find any changed item to apply changes to album.

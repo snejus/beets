@@ -18,6 +18,7 @@ import warnings
 from importlib import import_module
 
 from ..util import deprecate_imports
+from . import distance, hooks, match
 from .hooks import AlbumInfo, AlbumMatch, TrackInfo, TrackMatch
 from .match import Proposal, Recommendation, tag_album, tag_item
 
@@ -46,6 +47,9 @@ __all__ = [
     "Recommendation",
     "TrackInfo",
     "TrackMatch",
+    "distance",
+    "hooks",
+    "match",
     "tag_album",
     "tag_item",
 ]

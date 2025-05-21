@@ -16,8 +16,14 @@
 
 import pytest
 
-from beets import autotag, config
-from beets.autotag import AlbumInfo, TrackInfo, correct_list_fields, match
+from beets import config
+from beets.autotag.hooks import (
+    AlbumInfo,
+    AlbumMatch,
+    TrackInfo,
+    correct_list_fields,
+)
+from beets.autotag.match import assign_items
 from beets.library import Item
 from beets.test.helper import BeetsTestCase, ConfigMixin
 
@@ -55,7 +61,7 @@ class TestAssignment(ConfigMixin):
         items = [Item(title=title) for title in item_titles]
         tracks = [TrackInfo(title=title) for title in track_titles]
 
-        mapping, extra_items, extra_tracks = match.assign_items(items, tracks)
+        mapping, extra_items, extra_tracks = assign_items(items, tracks)
 
         assert (
             {i.title: t.title for i, t in mapping},
@@ -107,7 +113,7 @@ class TestAssignment(ConfigMixin):
 
         expected = list(zip(items, trackinfo)), [], []
 
-        assert match.assign_items(items, trackinfo) == expected
+        assert assign_items(items, trackinfo) == expected
 
 
 class ApplyTestUtil:
@@ -115,9 +121,7 @@ class ApplyTestUtil:
         info = info or self.info
         config["per_disc_numbering"] = per_disc_numbering
         config["artist_credit"] = artist_credit
-        autotag.hooks.AlbumMatch(
-            0, info, list(zip(self.items, info.tracks))
-        ).apply_metadata()
+        AlbumMatch(0, info, list(zip(self.items, info.tracks))).apply_metadata()
 
 
 class ApplyTest(BeetsTestCase, ApplyTestUtil):

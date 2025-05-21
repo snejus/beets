@@ -37,14 +37,23 @@ from rich_tables.generic import flexitable
 from rich_tables.utils import border_panel, new_table, wrap
 
 import beets
-from beets import autotag, config, importer, library, logging, plugins, ui, util
-from beets.autotag import Recommendation, hooks
-from beets.ui import get_console, input_, print_
+from beets import config, importer, library, logging, plugins, ui, util
+from beets.autotag.hooks import (
+    AlbumInfo,
+    AlbumMatch,
+    AttrDict,
+    Info,
+    TrackInfo,
+    TrackMatch,
+)
+from beets.autotag.match import Proposal, Recommendation, tag_album, tag_item
+from beets.ui import input_, print_
 from beets.util import (
     MoveOperation,
     ancestry,
     displayable_path,
     functemplate,
+    get_console,
     normpath,
     syspath,
 )
@@ -228,12 +237,12 @@ album_overwrite_fields = set(config["overwrite_null"]["album"].as_str_seq())
 
 
 def get_track_diff(
-    old: library.Item, new: hooks.TrackInfo, fields: list[str]
-) -> hooks.AttrDict:
+    old: library.Item, new: TrackInfo, fields: list[str]
+) -> AttrDict:
     skip = {"data_url", "artist_id", "track_id"}
     saved_fields = new.keys()
     fields = [f for f in fields if f not in skip]
-    diffs = hooks.AttrDict({f: new.get(f, "") for f in fields})
+    diffs = AttrDict({f: new.get(f, "") for f in fields})
     for field in fields:
         new_value = new.get(field)
         old_value = old.get(track_info_to_item_field.get(field, field))
@@ -249,7 +258,7 @@ track_fields = config["match"]["singleton_disambig_fields"].as_str_seq()
 
 
 def show_album_change(
-    cur_artist: str, cur_album: str, match: hooks.AlbumMatch
+    cur_artist: str, cur_album: str, match: AlbumMatch
 ) -> None:
     """Print out a representation of the changes that will be made if an
     album's tags are changed according to `match`, which must be an AlbumMatch
@@ -302,7 +311,7 @@ def show_album_change(
 
 
 def show_item_change(
-    old: library.Item, new: autotag.hooks.Info, skip: set[str] = set()
+    old: library.Item, new: Info, skip: set[str] = set()
 ) -> None:
     """Print out the change that would occur by tagging `item` with the
     metadata from `match` - either an album or a track.
@@ -310,7 +319,7 @@ def show_item_change(
     new_meta = new_table()  # for all new metadata
     upd_meta = new_table()  # for changes only
 
-    if isinstance(new, hooks.AlbumInfo):
+    if isinstance(new, AlbumInfo):
         info_to_item_field = album_info_to_item_field
         overwrite_fields = album_overwrite_fields
     else:
@@ -339,7 +348,7 @@ def show_item_change(
 
     console = get_console()
     if upd_meta.row_count:
-        _type = "Album" if isinstance(new, hooks.AlbumInfo) else "Singleton"
+        _type = "Album" if isinstance(new, AlbumInfo) else "Singleton"
         color = "magenta" if _type == "Album" else "cyan"
         updates_panel = border_panel(
             upd_meta, title="Updates", border_style="yellow"
@@ -439,7 +448,7 @@ class PromptChoice(NamedTuple):
 
 
 def print_singleton_candidates(
-    console, candidates: Sequence[hooks.TrackMatch]
+    console, candidates: Sequence[TrackMatch]
 ) -> None:
     candidata = [
         {"id": str(i), **m.disambig_data} for i, m in enumerate(candidates, 1)
@@ -450,9 +459,7 @@ def print_singleton_candidates(
     console.print("")
 
 
-def print_album_candidates(
-    console, candidates: Sequence[hooks.AlbumMatch]
-) -> None:
+def print_album_candidates(console, candidates: Sequence[AlbumMatch]) -> None:
     candidata = []
     track_diffs_table = new_table("id", *track_fields)
     for idx, candidate in enumerate(candidates, 1):
@@ -598,10 +605,10 @@ def manual_search(session, task):
     name = input_("Album:" if task.is_album else "Track:").strip()
 
     if task.is_album:
-        _, _, prop = autotag.tag_album(task.items, artist, name)
+        _, _, prop = tag_album(task.items, artist, name)
         return prop
     else:
-        return autotag.tag_item(task.item, artist, name)
+        return tag_item(task.item, artist, name)
 
 
 def manual_id(session, task):
@@ -613,10 +620,10 @@ def manual_id(session, task):
     search_id = input_(prompt).strip()
 
     if task.is_album:
-        _, _, prop = autotag.tag_album(task.items, search_ids=search_id.split())
+        _, _, prop = tag_album(task.items, search_ids=search_id.split())
         return prop
     else:
-        return autotag.tag_item(task.item, search_ids=search_id.split())
+        return tag_item(task.item, search_ids=search_id.split())
 
 
 def abort_action(session, task):
@@ -693,7 +700,7 @@ class TerminalImportSession(importer.ImportSession):
                 post_choice = choice.callback(self, task)
                 if isinstance(post_choice, importer.Action):
                     return post_choice
-                elif isinstance(post_choice, autotag.Proposal):
+                elif isinstance(post_choice, Proposal):
                     # Use the new candidates and continue around the loop.
                     task.candidates = post_choice.candidates
                     task.rec = post_choice.recommendation
@@ -702,7 +709,7 @@ class TerminalImportSession(importer.ImportSession):
             else:
                 # We have a candidate! Finish tagging. Here, choice is an
                 # AlbumMatch object.
-                assert isinstance(choice, autotag.AlbumMatch)
+                assert isinstance(choice, AlbumMatch)
                 return choice
 
     def choose_item(self, task):
@@ -736,13 +743,13 @@ class TerminalImportSession(importer.ImportSession):
                 post_choice = choice.callback(self, task)
                 if isinstance(post_choice, importer.Action):
                     return post_choice
-                elif isinstance(post_choice, autotag.Proposal):
+                elif isinstance(post_choice, Proposal):
                     candidates = post_choice.candidates
                     rec = post_choice.recommendation
 
             else:
                 # Chose a candidate.
-                assert isinstance(choice, autotag.TrackMatch)
+                assert isinstance(choice, TrackMatch)
                 return choice
 
     def resolve_duplicate(self, task, found_duplicates):
