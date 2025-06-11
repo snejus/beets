@@ -393,6 +393,8 @@ class MusicBrainzPlugin(MetadataSourcePlugin):
                     "tidal": False,
                 },
                 "extra_tags": [],
+                "user": None,
+                "pass": None,
             },
         )
         # TODO: Remove in 3.0.0
@@ -404,6 +406,10 @@ class MusicBrainzPlugin(MetadataSourcePlugin):
                 "'musicbrainz.searchlimit' option is deprecated and will be "
                 "removed in 3.0.0. Use 'musicbrainz.search_limit' instead."
             )
+        self.config["pass"].redact = True
+        musicbrainzngs.auth(
+            self.config["user"].as_str(), self.config["pass"].as_str()
+        )
         hostname = self.config["host"].as_str()
         https = self.config["https"].get(bool)
         # Only call set_hostname when a custom server is configured. Since
