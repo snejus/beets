@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
     from beets import importer, library
     from beets.autotag.hooks import AlbumInfo, Info, TrackInfo
+    from beets.library import Item
 
     JSONDict = dict[str, Any]
 
@@ -150,11 +151,29 @@ class AlbumDiff(Diff):
         return {*super().exclude_fields, "tracks"}
 
 
+class CachedShowMixin:
+    def show(self) -> None:
+        raise NotImplementedError
+
+    @cached_property
+    def as_str(self):
+        with get_console().capture() as capture:
+            self.show()
+
+        return capture.get()
+
+    def __str__(self) -> str:
+        return self.as_str
+
+
 @dataclass
-class Change(Generic[AnyMatch]):
-    name: ClassVar[str]
+class Change(CachedShowMixin, Generic[AnyMatch]):
     info_border_color: ClassVar[str]
     match: AnyMatch
+
+    @cached_classproperty
+    def type(cls) -> str:
+        return cls.__name__.replace("Change", "")  # type: ignore[attr-defined]
 
     def get_info_panel(self, diff: Diff) -> RenderableType:
         table = new_table()
@@ -164,7 +183,7 @@ class Change(Generic[AnyMatch]):
         ):
             table.add_row(wrap(field, "b"), str(value))
         return border_panel(
-            table, title=self.name, border_style=self.info_border_color
+            table, title=self.type, border_style=self.info_border_color
         )
 
     def show_item_change(self, diff: Diff) -> None:
@@ -182,19 +201,9 @@ class Change(Generic[AnyMatch]):
         get_console().print(new_table(rows=[row]))
         get_console().print(wrap(self.match.info.data_url or "", "b grey35"))
 
-    def show(self) -> None:
-        raise NotImplementedError
-
-    def as_str(self):
-        with get_console().capture() as capture:
-            self.show()
-
-        return capture.get()
-
 
 @dataclass
 class AlbumChange(Change[AlbumMatch]):
-    name = "Album"
     info_border_color = "magenta"
 
     def show(self) -> None:
@@ -216,10 +225,12 @@ class AlbumChange(Change[AlbumMatch]):
             tracks_table.add_dict_row(TrackDiff(item, info).changes)
 
         # Missing and unmatched tracks.
-        for name, tracks in [
+        t_pairs: list[tuple[str, list[Item] | list[TrackInfo]]] = [
             ("Missing", self.match.extra_tracks),
             ("Unmatched", self.match.extra_items),
-        ]:
+        ]
+
+        for name, tracks in t_pairs:
             if tracks:
                 tracks_table.add_row(end_section=True)
                 tracks_table.add_row(f"[b]{name}[/]")
@@ -231,7 +242,9 @@ class AlbumChange(Change[AlbumMatch]):
                         )
 
                     tracks_table.add_dict_row(
-                        extra_track, style="b yellow", ignore_extra_fields=True
+                        dict(extra_track),
+                        style="b yellow",
+                        ignore_extra_fields=True,
                     )
 
         get_console().print(
@@ -240,8 +253,7 @@ class AlbumChange(Change[AlbumMatch]):
 
 
 @dataclass
-class TrackChange(Change[TrackMatch]):
-    name = "Singleton"
+class SingletonChange(Change[TrackMatch]):
     info_border_color = "cyan"
 
     def show(self) -> None:
@@ -251,12 +263,13 @@ class TrackChange(Change[TrackMatch]):
 
 
 @dataclass
-class View(Generic[AnyMatch]):
+class View(CachedShowMixin, Generic[AnyMatch]):
     PRINT_CANDIDATES_TEMPLATE = 'Finding tags for {} "{} - {}".'
     PRINT_PATHS_TEMPLATE = (
         "[import_path]{paths}[/] [import_path_items]({count} items)[/]"
     )
-    CHANGE_CLASS: ClassVar[type[Change]]
+    CHANGE_CLASS: ClassVar[type[Change[AnyMatch]]]
+    NAME_FIELD: ClassVar[str]
     task: importer.ImportTask[AnyMatch]
 
     @property
@@ -264,23 +277,30 @@ class View(Generic[AnyMatch]):
         return self.task.candidates
 
     def __hash__(self):
-        return hash(tuple(map(hash, self.task.candidates)))
+        return hash(tuple(map(hash, self.candidates)))
 
-    @lru_cache
-    def get_match_display(self, match: AnyMatch) -> str:
-        return self.CHANGE_CLASS(match).as_str()
+    def show(self) -> None:
+        candidata = [
+            {"id": str(idx), **c.disambig_data}
+            for idx, c in enumerate(self.candidates, 1)
+        ]
 
-    def show_match(self, idx: int) -> AnyMatch:
-        match = self.task.candidates[idx]
-        print(self.get_match_display(match))
-        return match
-
-    def _announce(self, _type: str, name: str) -> None:
-        ui.print_(
-            self.PRINT_CANDIDATES_TEMPLATE.format(
-                _type, self.task.item.artist, name
+        get_console().print(
+            border_panel(
+                flexitable(candidata),
+                title=f"{self.CHANGE_CLASS.type} candidates",
             )
         )
+        get_console().print("")
+
+    @lru_cache
+    def get_match_display(self, match: AnyMatch) -> Change[AnyMatch]:
+        return self.CHANGE_CLASS(match)
+
+    def show_match(self, idx: int) -> AnyMatch:
+        match = self.candidates[idx]
+        print(self.get_match_display(match))
+        return match
 
     def print_paths(self) -> None:
         ui.print_(
@@ -290,82 +310,25 @@ class View(Generic[AnyMatch]):
             )
         )
 
-    def show(self) -> None:
-        raise NotImplementedError
-
-    @lru_cache
-    def as_str(self) -> str:
-        with get_console().capture() as capture:
-            self.show()
-
-        return capture.get()
-
-    def print_candidates(self, *args, **kwargs) -> None:
-        self._announce(*args, **kwargs)
-        print(self.as_str())
+    def print_candidates(self) -> None:
+        ui.print_(
+            self.PRINT_CANDIDATES_TEMPLATE.format(
+                self.NAME_FIELD,
+                self.task.item.artist,
+                self.task.item[self.NAME_FIELD],
+            )
+        )
+        print(self)
 
     def print_not_found(self) -> None:
-        raise NotImplementedError
+        ui.print_(f"No matching {self.CHANGE_CLASS.type} found")
 
 
 class SingletonView(View[TrackMatch]):
-    CHANGE_CLASS = TrackChange
-
-    def show(self) -> None:
-        candidata = []
-        tracks_table = new_table(
-            highlight=False, overflow="ellipsis", max_width=20
-        )
-        for idx, candidate in enumerate(self.candidates, 1):
-            i = str(idx)
-            candidata.append({"id": i, **candidate.disambig_data})
-            old, new = candidate.item, candidate.info
-            data = {"id": i, **TrackDiff(old, new).changes}
-            tracks_table.add_dict_row(data)
-
-        get_console().print(border_panel(tracks_table, title=""))
-        get_console().print(
-            border_panel(flexitable(candidata), title="Singleton candidates")
-        )
-        get_console().print("")
-
-    def print_candidates(self) -> None:
-        super().print_candidates("track", self.task.item.title)
-
-    def print_not_found(self) -> None:
-        ui.print_("No matching recordings found.")
+    CHANGE_CLASS = SingletonChange
+    NAME_FIELD = "title"
 
 
 class AlbumView(View[AlbumMatch]):
     CHANGE_CLASS = AlbumChange
-
-    def show(self) -> None:
-        candidata = []
-        tracks_table = new_table(
-            highlight=False, overflow="ellipsis", max_width=20
-        )
-        for idx, album_candidate in enumerate(self.candidates, 1):
-            i = str(idx)
-            candidata.append({"id": i, **album_candidate.disambig_data})
-            for old, new in album_candidate.item_info_pairs:
-                data = {"id": i, **TrackDiff(old, new).changes}
-                tracks_table.add_dict_row(data)
-            tracks_table.add_section()
-
-        get_console().print(border_panel(tracks_table, title="Album tracks"))
-        get_console().print(
-            border_panel(flexitable(candidata), title="Album candidates")
-        )
-        get_console().print("")
-
-    def print_candidates(self) -> None:
-        super().print_candidates("album", self.task.item.album)
-
-    def print_not_found(self) -> None:
-        ui.print_(
-            f"No matching release found for {len(self.task.paths)} tracks."
-        )
-        ui.print_(
-            "For help, see: "
-            "https://beets.readthedocs.org/en/latest/faq.html#nomatch"
-        )
+    NAME_FIELD = "album"
