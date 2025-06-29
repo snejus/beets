@@ -242,7 +242,7 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
         if query_type == "track" or not va_likely:
             query += f' artist:"{artist}"'
 
-        return query, {}
+        return query, {query_type: name} if name else {}
 
     def get_search_response(self, params: SearchParams) -> list[IDResponse]:
         """Search Deezer and return the raw result payload entries."""
