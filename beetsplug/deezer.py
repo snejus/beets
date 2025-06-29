@@ -253,6 +253,8 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
         :return: JSON data for the class:`Response <Response>` object or None
             if no search results are returned.
         """
+        if query_string:
+            filters[query_type] = query_string
         query = self._construct_search_query(
             query_string=query_string, filters=filters
         )
