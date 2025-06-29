@@ -251,7 +251,7 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             # Plain free text lets Deezer's own relevance ranking do the work.
             query = f"{name} {artist}".strip()
 
-        return query, {}
+        return query, {query_type: name} if name else {}
 
     def get_search_response(self, params: SearchParams) -> list[IDResponse]:
         """Search Deezer and return the raw result payload entries."""
