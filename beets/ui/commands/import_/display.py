@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from rich.text import Text
 
     from beets.autotag.hooks import AlbumInfo, Info, TrackInfo
+    from beets.library import Item
 
     JSONDict = dict[str, Any]
 
@@ -215,10 +216,12 @@ class AlbumChange(Change[AlbumMatch]):
             tracks_table.add_dict_row(TrackDiff(item, info).changes)
 
         # Missing and unmatched tracks.
-        for name, tracks in [
+        t_pairs: list[tuple[str, list[Item] | list[TrackInfo]]] = [
             ("Missing", self.match.extra_tracks),
             ("Unmatched", self.match.extra_items),
-        ]:
+        ]
+
+        for name, tracks in t_pairs:
             if tracks:
                 tracks_table.add_row(end_section=True)
                 tracks_table.add_row(f"[b]{name}[/]")
@@ -230,7 +233,9 @@ class AlbumChange(Change[AlbumMatch]):
                         )
 
                     tracks_table.add_dict_row(
-                        extra_track, style="b yellow", ignore_extra_fields=True
+                        dict(extra_track),
+                        style="b yellow",
+                        ignore_extra_fields=True,
                     )
 
         get_console().print(
@@ -340,18 +345,8 @@ class AlbumView(View[AlbumMatch]):
 
     def show(self) -> None:
         candidata = []
-        tracks_table = new_table(
-            highlight=False, overflow="ellipsis", max_width=20
-        )
         for idx, album_candidate in enumerate(self.candidates, 1):
-            i = str(idx)
-            candidata.append({"id": i, **album_candidate.disambig_data})
-            for old, new in album_candidate.item_info_pairs:
-                data = {"id": i, **TrackDiff(old, new).changes}
-                tracks_table.add_dict_row(data)
-            tracks_table.add_section()
-
-        get_console().print(border_panel(tracks_table, title="Album tracks"))
+            candidata.append({"id": str(idx), **album_candidate.disambig_data})
         get_console().print(
             border_panel(flexitable(candidata), title="Album candidates")
         )
