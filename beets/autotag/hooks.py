@@ -120,6 +120,7 @@ class Info(AttrDict[Any]):
     """Container for metadata about a musical entity."""
 
     type: ClassVar[str]
+    name_field: ClassVar[str]
 
     IGNORED_FIELDS: ClassVar[set[str]] = {"data_url"}
     MEDIA_FIELD_MAP: ClassVar[dict[str, str]] = {}
@@ -130,7 +131,7 @@ class Info(AttrDict[Any]):
 
     @cached_property
     def name(self) -> str:
-        raise NotImplementedError
+        return self[self.name_field] or ""
 
     @cached_property
     def raw_data(self) -> JSONDict:
@@ -220,6 +221,7 @@ class AlbumInfo(Info):
     """
 
     type = "Album"
+    name_field = "album"
 
     IGNORED_FIELDS = {*Info.IGNORED_FIELDS, "tracks"}
     MEDIA_FIELD_MAP = {
@@ -237,10 +239,6 @@ class AlbumInfo(Info):
         "releasegroup_id": "mb_releasegroupid",
         "va": "comp",
     }
-
-    @cached_property
-    def name(self) -> str:
-        return self.album or ""
 
     @cached_property
     def raw_data(self) -> JSONDict:
@@ -325,6 +323,7 @@ class TrackInfo(Info):
     """
 
     type = "Track"
+    name_field = "title"
 
     IGNORED_FIELDS = {*Info.IGNORED_FIELDS, "index", "medium_total"}
     MEDIA_FIELD_MAP = {
@@ -336,10 +335,6 @@ class TrackInfo(Info):
         "track_id": "mb_trackid",
         "medium_index": "track",
     }
-
-    @cached_property
-    def name(self) -> str:
-        return self.title or ""
 
     @cached_property
     def raw_data(self) -> JSONDict:
@@ -494,8 +489,7 @@ class Match:
         tracks.
         """
         return {
-            k: str(self.all_disambig_data[k])
-            for k in self.chosen_disambig_fields
+            k: self.all_disambig_data[k] for k in self.chosen_disambig_fields
         }
 
 
