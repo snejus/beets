@@ -545,7 +545,7 @@ class Model(ABC, Generic[D]):
         for key, value in values.items():
             self[key] = value
 
-    def items(self) -> Iterator[tuple[str, Any]]:
+    def items(self):
         """Iterate over (key, value) pairs that this object contains.
         Computed fields are not included.
         """
