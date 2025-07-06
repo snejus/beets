@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from beets import logging, ui
 from beets.util import (
@@ -17,6 +17,7 @@ from beets.util import (
 from .utils import do_query
 
 if TYPE_CHECKING:
+    from beets.library import LibModel
     from beets.util import PathLike
 
 # Global logger.
@@ -49,39 +50,29 @@ def show_path_changes(path_changes):
 
 
 def move_items(
-    lib,
+    objs: list[LibModel],
     dest_path: PathLike,
-    query,
     operation: MoveOperation,
-    album,
-    pretend,
+    pretend: bool,
     store: bool,
-    confirm=False,
+    entity: Literal["item", "album"],
+    confirm: bool,
 ):
     """Moves or copies items to a new base directory, given by dest. If
     dest is None, then the library's base directory is used, making the
     command "consolidate" files.
     """
     dest = os.fsencode(dest_path) if dest_path else dest_path
-    items, albums = do_query(lib, query, album, False)
-    objs = albums if album else items
     num_objs = len(objs)
 
     # Filter out files that don't need to be moved.
-    def isitemmoved(item):
-        return item.path != item.destination(basedir=dest)
-
-    def isalbummoved(album):
-        return any(isitemmoved(i) for i in album.items())
-
-    objs = [o for o in objs if (isalbummoved if album else isitemmoved)(o)]
+    objs = [o for o in objs if o._needs_moving(dest_path)]
     num_unmoved = num_objs - len(objs)
     # Report unmoved files that match the query.
     unmoved_msg = ""
     if num_unmoved > 0:
         unmoved_msg = f" ({num_unmoved} already in place)"
 
-    entity = "album" if album else "item"
     action = operation.name.lower()
     log.info(
         "{} {} {}{}{}.",
@@ -91,35 +82,14 @@ def move_items(
         "s" if len(objs) != 1 else "",
         unmoved_msg,
     )
-    if not objs:
-        return
+    if confirm:
+        objs = ui.input_select_objects(
+            f"Really {action}?", objs, lambda o: o.show_path_change(dest)
+        )
 
-    if pretend:
-        if album:
-            show_path_changes(
-                [
-                    (item.path, item.destination(basedir=dest))
-                    for obj in objs
-                    for item in obj.items()
-                ]
-            )
-        else:
-            show_path_changes(
-                [(obj.path, obj.destination(basedir=dest)) for obj in objs]
-            )
-    else:
-        if confirm:
-            objs = ui.input_select_objects(
-                f"Really {action}?",
-                objs,
-                lambda o: show_path_changes(
-                    [(o.path, o.destination(basedir=dest))]
-                ),
-            )
-
-        for obj in objs:
-            show_path_changes([(obj.path, obj.destination(basedir=dest))])
-
+    for obj in objs:
+        obj.show_path_change(dest)
+        if not pretend:
             obj.move(operation=operation, basedir=dest, store=store)
 
 
@@ -130,14 +100,14 @@ def move_func(lib, opts, args):
         if not os.path.isdir(syspath(dest)):
             raise ui.UserError(f"no such directory: {displayable_path(dest)}")
 
+    items, albums = do_query(lib, args, opts.album, False)
     move_items(
-        lib,
+        albums if opts.album else items,
         dest,
-        args,
         MoveOperation.COPY if opts.copy or opts.export else MoveOperation.MOVE,
-        opts.album,
         opts.pretend,
         not opts.export,
+        "album" if opts.album else "item",
         opts.timid,
     )
 
