@@ -419,27 +419,23 @@ def input_select_objects(
     )
     print()  # Blank line.
 
-    if choice == "y":  # Yes.
+    if choice == "y":
         return objs
 
-    if choice == "s":  # Select.
-        out = []
-        for obj in objs:
-            rep(obj)
-            answer = input_options(
-                ("y", "n", "q"),
-                True,
-                f"{prompt}? (yes/no/quit)",
-                "Enter Y or N:",
-            )
-            if answer == "y":
-                out.append(obj)
-            elif answer == "q":
-                return out
-        return out
+    if choice == "n":
+        return []
 
-    # No.
-    return []
+    out = []
+    for obj in objs:
+        rep(obj)
+        answer = input_options(
+            ("y", "n", "q"), True, f"{prompt}? (yes/no/quit)", "Enter Y or N:"
+        )
+        if answer == "y":
+            out.append(obj)
+        elif answer == "q":
+            return out
+    return out
 
 
 def show_model_changes(
