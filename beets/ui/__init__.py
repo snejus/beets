@@ -400,27 +400,23 @@ def input_select_objects(prompt, objs, rep, prompt_all=None):
     )
     print()  # Blank line.
 
-    if choice == "y":  # Yes.
+    if choice == "y":
         return objs
 
-    elif choice == "s":  # Select.
-        out = []
-        for obj in objs:
-            rep(obj)
-            answer = input_options(
-                ("y", "n", "q"),
-                True,
-                f"{prompt}? (yes/no/quit)",
-                "Enter Y or N:",
-            )
-            if answer == "y":
-                out.append(obj)
-            elif answer == "q":
-                return out
-        return out
-
-    else:  # No.
+    if choice == "n":
         return []
+
+    out = []
+    for obj in objs:
+        rep(obj)
+        answer = input_options(
+            ("y", "n", "q"), True, f"{prompt}? (yes/no/quit)", "Enter Y or N:"
+        )
+        if answer == "y":
+            out.append(obj)
+        elif answer == "q":
+            return out
+    return out
 
 
 def get_path_formats(subview=None):
