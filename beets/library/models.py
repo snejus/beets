@@ -17,6 +17,7 @@ from beets.util import (
     MoveOperation,
     bytestring_path,
     cached_classproperty,
+    get_console,
     normpath,
     samefile,
     syspath,
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
     from collections.abc import KeysView
 
     from ..dbcore import types
+    from ..dbcore.db import Results
     from ..dbcore.query import FieldQuery, FieldQueryType
     from .library import Library  # noqa: F401
 
@@ -65,6 +67,9 @@ class LibModel(dbcore.Model["Library"]):
     def filepath(self) -> Path:
         """The path to the entity as pathlib.Path."""
         return Path(os.fsdecode(self.path))
+
+    def _needs_moving(self, dest: bytes) -> bool:
+        raise NotImplementedError
 
     def _template_funcs(self):
         funcs = DefaultTemplateFunctions(self, self._db).functions()
@@ -370,7 +375,14 @@ class Album(LibModel):
         getters["albumtotal"] = Album._albumtotal
         return getters
 
-    def items(self):
+    def show_path_change(self, dest: bytes | None) -> None:
+        for item in self.items():
+            item.show_path_change(dest)
+
+    def _needs_moving(self, dest: bytes) -> bool:
+        return any(i._needs_moving(dest) for i in self.items())
+
+    def items(self) -> Results[Item]:
         """Return an iterable over the items associated with this
         album.
 
@@ -809,6 +821,9 @@ class Item(LibModel):
     def _cached_album(self, album):
         self.__album = album
 
+    def _needs_moving(self, dest: bytes) -> bool:
+        return self.path != self.destination(basedir=dest)
+
     @classmethod
     def _getters(cls):
         getters = plugins.item_field_getters()
@@ -864,6 +879,14 @@ class Item(LibModel):
         return (
             f"{type(self).__name__}"
             f"({', '.join(f'{k}={self[k]!r}' for k in self.keys(with_album=False))})"
+        )
+
+    def show_path_change(self, dest: bytes | None) -> None:
+        get_console().print(
+            util.colordiff(
+                str(self.filepath), os.fsdecode(self.destination(dest))
+            ),
+            highlight=False,
         )
 
     def keys(self, computed=False, with_album=True) -> KeysView[str]:
