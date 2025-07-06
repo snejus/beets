@@ -1710,11 +1710,11 @@ def move_items(
     lib,
     dest_path: util.PathLike,
     query,
-    copy,
+    operation: MoveOperation,
     album,
     pretend,
+    store: bool,
     confirm=False,
-    export=False,
 ):
     """Moves or copies items to a new base directory, given by dest. If
     dest is None, then the library's base directory is used, making the
@@ -1739,13 +1739,11 @@ def move_items(
     if num_unmoved > 0:
         unmoved_msg = f" ({num_unmoved} already in place)"
 
-    copy = copy or export  # Exporting always copies.
-    action = "Copying" if copy else "Moving"
-    act = "copy" if copy else "move"
     entity = "album" if album else "item"
+    action = operation.name.lower()
     log.info(
         "{} {} {}{}{}.",
-        action,
+        f"{action.rstrip('e')}ing",
         len(objs),
         entity,
         "s" if len(objs) != 1 else "",
@@ -1770,7 +1768,7 @@ def move_items(
     else:
         if confirm:
             objs = ui.input_select_objects(
-                f"Really {act}",
+                f"Really {action}?",
                 objs,
                 lambda o: show_path_changes(
                     [(o.path, o.destination(basedir=dest))]
@@ -1780,17 +1778,7 @@ def move_items(
         for obj in objs:
             show_path_changes([(obj.path, obj.destination(basedir=dest))])
 
-            if export:
-                # Copy without affecting the database.
-                obj.move(
-                    operation=MoveOperation.COPY, basedir=dest, store=False
-                )
-            else:
-                # Ordinary move/copy: store the new path.
-                if copy:
-                    obj.move(operation=MoveOperation.COPY, basedir=dest)
-                else:
-                    obj.move(operation=MoveOperation.MOVE, basedir=dest)
+            obj.move(operation=operation, basedir=dest, store=store)
 
 
 def move_func(lib, opts, args):
@@ -1804,11 +1792,11 @@ def move_func(lib, opts, args):
         lib,
         dest,
         args,
-        opts.copy,
+        MoveOperation.COPY if opts.copy or opts.export else MoveOperation.MOVE,
         opts.album,
         opts.pretend,
+        not opts.export,
         opts.timid,
-        opts.export,
     )
 
 
