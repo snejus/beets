@@ -551,6 +551,9 @@ def distance(
     for _ in range(len(items) - len(item_info_pairs)):
         dist.add("unmatched_tracks", 1.0)
 
+    if not album_info.catalognum:
+        dist.add("missing_catalognum", 1.0)
+
     fields = AlbumMatch.disambig_fields
     missing_field_count = sum(f not in album_info for f in fields)
     dist.add("missing_fields", missing_field_count / len(fields))
