@@ -196,6 +196,7 @@ match:
         track_id: 5.0
         medium: 1.0
         missing_catalognum: 1.0
+        missing_month: 1.0
     preferred:
         countries: []
         media: []
