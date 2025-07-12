@@ -433,9 +433,9 @@ class MusicBrainzPlugin(MusicBrainzAPIMixin, MetadataSourcePlugin):
         if recording.get("isrcs"):
             info.isrc = ";".join(recording["isrcs"])
 
-        lyricist = []
-        composer = []
-        composer_sort = []
+        lyricist = set()
+        composer = set()
+        composer_sort = set()
         for work_relation in recording.get("work-relations", ()):
             if work_relation["type"] != "performance":
                 continue
@@ -450,17 +450,17 @@ class MusicBrainzPlugin(MusicBrainzAPIMixin, MetadataSourcePlugin):
                 if "type" in artist_relation:
                     type = artist_relation["type"]
                     if type == "lyricist":
-                        lyricist.append(artist_relation["artist"]["name"])
+                        lyricist.add(artist_relation["artist"]["name"])
                     elif type == "composer":
-                        composer.append(artist_relation["artist"]["name"])
-                        composer_sort.append(
+                        composer.add(artist_relation["artist"]["name"])
+                        composer_sort.add(
                             artist_relation["artist"]["sort-name"]
                         )
         if lyricist:
-            info.lyricist = ", ".join(lyricist)
+            info.lyricist = ", ".join(sorted(lyricist))
         if composer:
-            info.composer = ", ".join(composer)
-            info.composer_sort = ", ".join(composer_sort)
+            info.composer = ", ".join(sorted(composer))
+            info.composer_sort = ", ".join(sorted(composer_sort))
 
         arranger = []
         for artist_relation in recording.get("artist-relations", ()):
