@@ -60,6 +60,7 @@ if TYPE_CHECKING:
     )
 
 INSTRUMENTAL_LYRICS = "[Instrumental]"
+SYNCED_LYRICS_PAT = re.compile(r"\[\d\d:\d\d.\d\d\]")
 
 
 class CaptchaError(requests.exceptions.HTTPError):
@@ -1094,6 +1095,10 @@ class LyricsPlugin(LyricsRequestHandler, plugins.BeetsPlugin):
 
         return "\n\n---\n\n".join(next(filter(None, matches), []))
 
+    @staticmethod
+    def are_lyrics_synced(lyrics: str) -> bool:
+        return "lrclib.net" in lyrics and bool(SYNCED_LYRICS_PAT.search(lyrics))
+
     def add_item_lyrics(self, item: Item, write: bool) -> None:
         """Fetch and store lyrics for a single item. If ``write``, then the
         lyrics will also be written to the file itself.
@@ -1113,7 +1118,10 @@ class LyricsPlugin(LyricsRequestHandler, plugins.BeetsPlugin):
             self.info("🔴 Lyrics not found: {}", item)
             lyrics = self.config["fallback"].get()
 
-        if lyrics not in {None, item.lyrics}:
+        if lyrics not in {None, item.lyrics} and not (
+            self.are_lyrics_synced(item.lyrics)
+            and not self.are_lyrics_synced(lyrics)
+        ):
             item.lyrics = lyrics
             if write:
                 item.try_write()
