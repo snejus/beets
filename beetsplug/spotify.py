@@ -337,6 +337,7 @@ class SpotifyPlugin(
             album_id=spotify_id,
             spotify_album_id=spotify_id,
             artist=artist,
+            artists=[artist],
             artist_id=artist_id,
             spotify_artist_id=artist_id,
             tracks=tracks,
