@@ -343,6 +343,8 @@ def get_plugin_names() -> list[str]:
     # *contain* a `beetsplug` package.
     sys.path += paths
     plugins = unique_list(beets.config["plugins"].as_str_seq())
+    beets.config.add({"enabled_plugins": []})
+    plugins += unique_list(beets.config["enabled_plugins"].as_str_seq())
     # TODO: Remove in v3.0.0
     if (
         "musicbrainz" not in plugins

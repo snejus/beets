@@ -1033,6 +1033,13 @@ def _raw_main(args: list[str], lib=None) -> None:
         help="a comma-separated list of plugins to disable",
     )
     parser.add_option(
+        "--enable-plugins",
+        dest="enabled_plugins",
+        action="callback",
+        callback=parse_csl_callback,
+        help="a comma-separated list of plugins to enable",
+    )
+    parser.add_option(
         "-h",
         "--help",
         dest="help",
