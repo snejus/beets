@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Generic, Literal, TypedDict, TypeVar
 
 import unidecode
 from confuse import NotFoundError
-from typing_extensions import NotRequired
 
 from beets.util import cached_classproperty
 from beets.util.id_extractors import extract_release_id
@@ -216,11 +215,6 @@ class MetadataSourcePlugin(BeetsPlugin, metaclass=abc.ABCMeta):
         single string by passing the join_key argument.
 
         :param artists: Iterable of artist dicts or lists returned by API.
-        :param id_key: Key or index corresponding to the value of ``id`` for
-            the main/first artist. Defaults to 'id'.
-        :param name_key: Key or index corresponding to values of names
-            to concatenate for the artist string (containing all artists).
-            Defaults to 'name'.
         :param join_key: Key or index corresponding to a field containing a
             keyword to use for combining artists into a single string, for
             example "Feat.", "Vs.", "And" or similar. The default is None
@@ -251,14 +245,11 @@ class MetadataSourcePlugin(BeetsPlugin, metaclass=abc.ABCMeta):
 class IDResponse(TypedDict):
     """Response from the API containing an ID."""
 
-    id: str
+    id: str | int
 
 
-class SearchFilter(TypedDict):
-    artist: NotRequired[str]
-    album: NotRequired[str]
-
-
+QueryType = Literal["album", "track"]
+SearchFilter = dict[Literal[QueryType, "artist"], str]
 R = TypeVar("R", bound=IDResponse)
 
 
@@ -285,7 +276,7 @@ class SearchApiMetadataSourcePlugin(
     @abc.abstractmethod
     def _search_api(
         self,
-        query_type: Literal["album", "track"],
+        query_type: Literal[QueryType, "album", "track"],
         filters: SearchFilter,
         query_string: str = "",
     ) -> Sequence[R]:
@@ -317,7 +308,7 @@ class SearchApiMetadataSourcePlugin(
             return []
 
         return filter(
-            None, self.albums_for_ids([result["id"] for result in results])
+            None, self.albums_for_ids([str(r["id"]) for r in results])
         )
 
     def item_candidates(
@@ -330,8 +321,7 @@ class SearchApiMetadataSourcePlugin(
             return []
 
         return filter(
-            None,
-            self.tracks_for_ids([result["id"] for result in results if result]),
+            None, self.tracks_for_ids([str(r["id"]) for r in results if r])
         )
 
     def _construct_search_query(

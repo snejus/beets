@@ -222,7 +222,7 @@ class BeatportObject:
 
     release_date: datetime | None = None
 
-    artists: list[tuple[str, str]] | None = None
+    artists: list[dict[Literal["id", "name"], str]] | None = None
     # tuple of artist id and artist name
 
     def __init__(self, data: JSONDict):
@@ -233,14 +233,17 @@ class BeatportObject:
                 data["releaseDate"], "%Y-%m-%d"
             )
         if "artists" in data:
-            self.artists = [(x["id"], str(x["name"])) for x in data["artists"]]
+            self.artists = [
+                {"id": str(x["id"]), "name": str(x["name"])}
+                for x in data["artists"]
+            ]
         if "genres" in data:
             self.genres = [str(x["name"]) for x in data["genres"]]
 
     def artists_str(self) -> str | None:
         if self.artists is not None:
             if len(self.artists) < 4:
-                artist_str = ", ".join(x[1] for x in self.artists)
+                artist_str = ", ".join(x["name"] for x in self.artists)
             else:
                 artist_str = "Various Artists"
         else:
