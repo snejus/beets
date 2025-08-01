@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, KeysView, TypeVar
 
 from mediafile import MediaFile, UnreadableFileError
+from typing_extensions import Self
 
 import beets
 from beets import dbcore, logging, plugins, util
@@ -141,6 +142,10 @@ class LibModel(dbcore.Model["Library"]):
     @cached_classproperty
     def writable_media_fields(cls) -> set[str]:
         return set(MediaFile.fields()) & cls._fields.keys()
+
+    @property
+    def copy_from_db(self) -> Self:
+        return self.db.from_id(self.__class__, self.id)
 
     @property
     def filepath(self) -> Path:

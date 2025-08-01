@@ -564,7 +564,7 @@ class Model(ABC, Generic[D]):
         if not self._dirty and self.db.revision == self._revision:
             # Exit early
             return
-        stored_obj = self.db._get(self.__class__, self.id)
+        stored_obj = self.db.from_id(self.__class__, self.id)
         assert stored_obj is not None, f"object {self.id} not in DB"
         self.update(dict(stored_obj))
         self.clear_dirty()
@@ -1218,7 +1218,7 @@ class Database:
             sort if sort.is_slow() else None,  # Slow sort component.
         )
 
-    def _get(
+    def from_id(
         self,
         model_cls: type[AnyModel],
         id,
