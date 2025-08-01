@@ -593,6 +593,11 @@ class Tekstowo(SearchBackend):
 
         return self.SEARCH_URL.format(quote_plus(unidecode(artistitle)))
 
+    def get(self, *args, **kwargs):
+        kwargs.setdefault("headers", {})
+        kwargs["headers"]["User-Agent"] = ""
+        return super().get(*args, **kwargs)
+
     def search(self, artist: str, title: str) -> Iterable[SearchResult]:
         if html := self.get_text(self.build_url(title, artist)):
             soup = self.get_soup(html)
