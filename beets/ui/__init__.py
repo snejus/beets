@@ -451,7 +451,7 @@ def show_model_changes(new, old=None, fields=None, always=False):
     restrict the detection to. `always` indicates whether the object is
     always identified, regardless of whether any changes are present.
     """
-    old = old or new._db._get(type(new), new.id)
+    old = old or new._db.from_id(type(new), new.id)
 
     # Keep the formatted views around instead of re-creating them in each
     # iteration step
