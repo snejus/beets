@@ -64,6 +64,11 @@ class Diff:
         }
 
     def get_value_pair(self, f: str) -> Tuple[Any, ...]:
+        if f == "lyrics" and "Source: " in (
+            old_lyrics := self.item.lyrics or ""
+        ):
+            return old_lyrics, old_lyrics
+
         pair = (
             self.item.get(self.info.ITEM_FIELD_MAP.get(f, f)),
             self.info_data.get(f),

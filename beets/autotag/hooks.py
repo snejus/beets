@@ -438,6 +438,8 @@ class AlbumMatch(Match):
     def apply_metadata(self) -> None:
         """Apply metadata to each of the items."""
         for item, data in self.data_pairs:
+            if "Source: " in (item.lyrics or ""):
+                data.pop("lyrics", None)
             item.update(data)
 
     def apply_album_metadata(self, album: Album) -> None:
@@ -460,7 +462,10 @@ class TrackMatch(Match):
 
     def apply_metadata(self) -> None:
         """Apply metadata to the item."""
-        self.item.update(self.info.item_data)
+        data = {**self.info.item_data}
+        if "Source: " in (self.item.lyrics or ""):
+            data.pop("lyrics", None)
+        self.item.update(data)
 
 
 AnyMatch = TypeVar("AnyMatch", bound=Match)
