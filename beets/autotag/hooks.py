@@ -536,6 +536,8 @@ class AlbumMatch(Match):
             if self.from_scratch:
                 item.clear()
 
+            if "Source: " in (item.lyrics or ""):
+                data.pop("lyrics", None)
             item.update(data)
 
     def apply_album_metadata(self, album: Album) -> None:
@@ -558,7 +560,10 @@ class TrackMatch(Match):
         if self.from_scratch:
             self.item.clear()
 
-        self.item.update(self.info.item_data)
+        data = self.info.item_data
+        if "Source: " in (self.item.lyrics or ""):
+            data.pop("lyrics", None)
+        self.item.update(data)
 
 
 AnyMatch = TypeVar("AnyMatch", bound=Match)
