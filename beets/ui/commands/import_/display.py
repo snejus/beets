@@ -71,6 +71,11 @@ class Diff:
         preserving lyric sources or formatting time-like and boolean values)
         so comparisons and pretty-printing behave consistently.
         """
+        if f == "lyrics" and "Source: " in (
+            old_lyrics := self.item.lyrics or ""
+        ):
+            return old_lyrics, old_lyrics
+
         pair = (
             self.item.get(self.info.MEDIA_FIELD_MAP.get(f, f)),
             self.info_data.get(f),
