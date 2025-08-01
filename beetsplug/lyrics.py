@@ -211,6 +211,9 @@ class RequestHandler:
 
         return f"{url}?{urlencode(params)}"
 
+    def get(self, *args, **kwargs):
+        return r_session.get(*args, **kwargs)
+
     def fetch_text(
         self, url: str, params: JSONDict | None = None, **kwargs
     ) -> str:
@@ -221,7 +224,7 @@ class RequestHandler:
         """
         url = self.format_url(url, params)
         self.debug("Fetching HTML from {}", url)
-        r = r_session.get(url, **kwargs)
+        r = self.get(url, **kwargs)
         r.encoding = None
         return r.text
 
@@ -229,7 +232,7 @@ class RequestHandler:
         """Return JSON data from the given URL."""
         url = self.format_url(url, params)
         self.debug("Fetching JSON from {}", url)
-        return r_session.get(url, **kwargs).json()
+        return self.get(url, **kwargs).json()
 
     def post_json(self, url: str, params: JSONDict | None = None, **kwargs):
         """Send POST request and return JSON response."""
@@ -608,6 +611,11 @@ class Tekstowo(SearchBackend):
         artistitle = f"{artist.title()} {title.title()}"
 
         return self.SEARCH_URL.format(quote_plus(unidecode(artistitle)))
+
+    def get(self, *args, **kwargs):
+        kwargs.setdefault("headers", {})
+        kwargs["headers"]["User-Agent"] = ""
+        return super().get(*args, **kwargs)
 
     def search(self, artist: str, title: str) -> Iterable[SearchResult]:
         if html := self.fetch_text(self.build_url(title, artist)):
