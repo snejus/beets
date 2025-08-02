@@ -73,7 +73,7 @@ class GeniusHTTPError(requests.exceptions.HTTPError):
 # Utilities.
 
 
-def search_pairs(item):
+def search_pairs(item: Item) -> Iterable[tuple[str, list[str]]]:
     """Yield a pairs of artists and titles to search for.
 
     The first item in the pair is the name of the artist, the second
@@ -88,7 +88,7 @@ def search_pairs(item):
     The method also tries to split multiple titles separated with `/`.
     """
 
-    def generate_alternatives(string, patterns):
+    def generate_alternatives(string: str, patterns: list[str]) -> list[str]:
         """Generate string alternatives by extracting first matching group for
         each given pattern.
         """
