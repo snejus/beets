@@ -244,14 +244,14 @@ class TestLyricsPlugin(LyricsPluginMixin):
     @pytest.mark.parametrize(
         "plugin_config, found, expected",
         [
-            ({}, "new", "old"),
-            ({"force": True}, "new", "new"),
-            ({"force": True, "local": True}, "new", "old"),
-            ({"force": True, "fallback": None}, "", "old"),
-            ({"force": True, "fallback": ""}, "", ""),
-            ({"force": True, "fallback": "default"}, "", "default"),
+            pytest.param({}, lyrics.Lyrics("new"), "old", id="no_force_keeps_old"),  # noqa: E501
+            pytest.param({"force": True}, lyrics.Lyrics("new"), "new", id="force_overwrites_with_new"),  # noqa: E501
+            pytest.param({"force": True, "local": True}, lyrics.Lyrics("new"), "old", id="force_local_keeps_old"),  # noqa: E501
+            pytest.param({"force": True, "fallback": None}, None, "old", id="force_fallback_none_keeps_old"),  # noqa: E501
+            pytest.param({"force": True, "fallback": ""}, None, "", id="force_fallback_empty_uses_empty"),  # noqa: E501
+            pytest.param({"force": True, "fallback": "default"}, None, "default", id="force_fallback_default_uses_default"),  # noqa: E501
         ],
-    )
+    )  # fmt: skip
     def test_overwrite_config(
         self, monkeypatch, helper, lyrics_plugin, found, expected
     ):
@@ -465,14 +465,16 @@ class TestLRCLibLyrics(LyricsBackendTest):
     @pytest.mark.parametrize("response_data", [[lyrics_match()]])
     @pytest.mark.parametrize(
         "plugin_config, expected_lyrics",
-        [({"synced": True}, SYNCED), ({"synced": False}, "plain")],
+        [
+            pytest.param({"synced": True}, SYNCED, id="pick-synced"),
+            pytest.param({"synced": False}, "plain", id="pick-plain"),
+        ],
     )
     def test_synced_config_option(self, fetch_lyrics, expected_lyrics):
-        lyrics_info = fetch_lyrics()
-        assert lyrics_info
+        lyrics = fetch_lyrics()
 
-        lyrics, _ = lyrics_info
-        assert lyrics == expected_lyrics
+        assert lyrics
+        assert lyrics.text == expected_lyrics
 
     @pytest.mark.parametrize(
         "response_data, expected_lyrics",
@@ -543,14 +545,12 @@ class TestLRCLibLyrics(LyricsBackendTest):
     )
     @pytest.mark.parametrize("plugin_config", [{"synced": True}])
     def test_fetch_lyrics(self, fetch_lyrics, expected_lyrics):
-        lyrics_info = fetch_lyrics()
+        lyrics = fetch_lyrics()
         if expected_lyrics is None:
-            assert not lyrics_info
+            assert not lyrics
         else:
-            assert lyrics_info
-            lyrics, _ = fetch_lyrics()
-
-            assert lyrics == expected_lyrics
+            assert lyrics
+            assert lyrics.text == expected_lyrics
 
 
 class TestTranslation:
@@ -604,7 +604,9 @@ class TestTranslation:
                 Hard for me to let you go (Let you go, let you go) / Difficile pour moi de te laisser partir (Te laisser partir, te laisser partir)
                 My body wouldn't let me hide it (Hide it) / Mon corps ne me laissait pas le cacher (Cachez-le)
                 No matter what, I wouldn't fold (Wouldn't fold, wouldn't fold) / Quoi qu’il arrive, je ne plierais pas (Ne plierait pas, ne plierais pas)
-                Ridin' through the thunder, lightnin' / Chevauchant à travers le tonnerre, la foudre""",  # noqa: E501
+                Ridin' through the thunder, lightnin' / Chevauchant à travers le tonnerre, la foudre
+
+                Lyrics language: EN / FR""",  # noqa: E501
                 id="plain",
             ),
             pytest.param(
@@ -612,15 +614,14 @@ class TestTranslation:
                 [00:00.00] Some synced lyrics
                 [00:00:50]
                 [00:01.00] Some more synced lyrics
-
-                Source: https://lrclib.net/api/123""",
+                """,
                 "",
                 """
                 [00:00.00] Some synced lyrics / Quelques paroles synchronisées
                 [00:00:50]
                 [00:01.00] Some more synced lyrics / Quelques paroles plus synchronisées
 
-                Source: https://lrclib.net/api/123""",  # noqa: E501
+                Lyrics language: EN / FR""",  # noqa: E501
                 id="synced",
             ),
             pytest.param(
@@ -631,8 +632,14 @@ class TestTranslation:
             ),
             pytest.param(
                 "Some lyrics",
-                "Some lyrics / Some translation",
-                "Some lyrics / Some translation",
+                """
+                Some lyrics / Some translation
+
+                Lyrics language: EN / FR""",
+                """
+                Some lyrics / Some translation
+
+                Lyrics language: EN / FR""",
                 id="already translated",
             ),
         ],
@@ -641,9 +648,15 @@ class TestTranslation:
         plugin = lyrics.LyricsPlugin()
         bing = lyrics.Translator(plugin._log, "123", "FR", ["EN"])
 
-        assert bing.translate(
-            textwrap.dedent(new_lyrics), old_lyrics
-        ) == textwrap.dedent(expected)
+        def make_lyrics(text: str):
+            return lyrics.Lyrics.from_text(textwrap.dedent(text))
+
+        assert (
+            bing.translate(
+                make_lyrics(new_lyrics), make_lyrics(old_lyrics)
+            ).full_text
+            == make_lyrics(expected).full_text
+        )
 
 
 class TestRestFiles:
