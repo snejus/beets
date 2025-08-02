@@ -72,7 +72,7 @@ class CaptchaError(requests.exceptions.HTTPError):
 # Utilities.
 
 
-def search_pairs(item):
+def search_pairs(item: Item) -> Iterable[tuple[str, list[str]]]:
     """Yield a pairs of artists and titles to search for.
 
     The first item in the pair is the name of the artist, the second
@@ -87,7 +87,7 @@ def search_pairs(item):
     The method also tries to split multiple titles separated with `/`.
     """
 
-    def generate_alternatives(string, patterns):
+    def generate_alternatives(string: str, patterns: list[str]) -> list[str]:
         """Generate string alternatives by extracting first matching group for
         each given pattern.
         """
@@ -1083,18 +1083,14 @@ class LyricsPlugin(LyricsRequestHandler, plugins.BeetsPlugin):
         for item in filterfalse(query.match, task.imported_items()):
             self.add_item_lyrics(item, False)
 
-    def find_lyrics(self, item: Item) -> str:
+    def find_lyrics(self, item: Item) -> str | None:
         album, length = item.album, round(item.length)
-        matches = (
-            [
-                lyrics
-                for t in titles
-                if (lyrics := self.get_lyrics(a, t, album, length))
-            ]
-            for a, titles in search_pairs(item)
-        )
+        for artist, titles in search_pairs(item):
+            for title in titles:
+                if lyrics := self.get_lyrics(artist, title, album, length):
+                    return lyrics
 
-        return "\n\n---\n\n".join(next(filter(None, matches), []))
+        return None
 
     @staticmethod
     def are_lyrics_synced(lyrics: str) -> bool:
