@@ -27,7 +27,7 @@ from urllib.parse import urljoin
 from confuse.exceptions import NotFoundError
 
 from beets import config, plugins, util
-from beets.autotag.hooks import AlbumInfo, TrackInfo
+from beets.autotag.hooks import AlbumInfo, Info, TrackInfo
 from beets.metadata_plugins import MetadataSourcePlugin
 from beets.util.deprecation import deprecate_for_user
 from beets.util.id_extractors import extract_release_id
@@ -88,6 +88,9 @@ TRACK_INCLUDES = [
     "work-level-rels",
     "artist-rels",
     "annotation",
+    "label-rels",
+    "releases",
+    "media",
 ]
 
 BROWSE_INCLUDES = [
@@ -237,9 +240,7 @@ def album_url(albumid: str) -> str:
     return urljoin(BASE_URL, f"release/{albumid}")
 
 
-def _preferred_release_event(
-    release: dict[str, Any],
-) -> tuple[str | None, str | None]:
+def _preferred_release_event(release: dict[str, Any]) -> tuple[str, str | None]:
     """Given a release, select and return the user's preferred release
     event as a tuple of (country, release_date). Fall back to the
     default release event if a preferred event is not found.
@@ -257,10 +258,10 @@ def _preferred_release_event(
             except KeyError:
                 pass
 
-    return release.get("country"), release.get("date")
+    return release["country"], release.get("date")
 
 
-def _set_date_str(info: AlbumInfo, date_str: str, original: bool = False):
+def _set_date_str(info: Info, date_str: str, original: bool = False):
     """Given a (possibly partial) YYYY-MM-DD string and an AlbumInfo
     object, set the object's release date fields appropriately. If
     `original`, then set the original_year, etc., fields.
@@ -470,6 +471,25 @@ class MusicBrainzPlugin(MusicBrainzAPIMixin, MetadataSourcePlugin):
         if arranger:
             info.arranger = ", ".join(arranger)
 
+        if releases := recording.get("releases"):
+            release = releases[0]
+            info.country = release.get("country")
+            info.albumstatus = release.get("status")
+            if date := release.get("date"):
+                _set_date_str(info, date, False)
+
+            if media := release.get("media"):
+                if fmt := media[0].get("format"):
+                    info.media = fmt
+
+        if label_info := recording.get("label-relations"):
+            label_info = label_info[0]
+            if label_info.get("label"):
+                label = label_info["label"]["name"]
+                if label != "[no label]":
+                    info.label = label
+            info.catalognum = label_info.get("catalog-number")
+
         # Supplementary fields provided by plugins
         extra_trackdatas = plugins.send("mb_track_extract", data=recording)
         for extra_trackdata in extra_trackdatas:
@@ -647,16 +667,17 @@ class MusicBrainzPlugin(MusicBrainzAPIMixin, MetadataSourcePlugin):
 
         # Release events.
         info.country, release_date = _preferred_release_event(release)
-        if (
-            info.country == "XW"
-            and len(
-                countries := {
-                    c["artist"].get("country") for c in release["artist-credit"]
-                }
+        if info.country == "XW":
+            info.country = next(
+                filter(
+                    None,
+                    (
+                        c["artist"].get("country")
+                        for c in release["artist-credit"]
+                    ),
+                ),
+                "XW",
             )
-            == 1
-        ):
-            info.country = countries.pop()
 
         release_group_date = release["release-group"].get("first-release-date")
         if not release_date:
