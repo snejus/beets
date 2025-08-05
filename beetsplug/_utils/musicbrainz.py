@@ -63,6 +63,9 @@ RECORDING_INCLUDES = [
     "work-level-rels",
     "artist-rels",
     "annotation",
+    "label-rels",
+    "releases",
+    "media",
 ]
 
 
