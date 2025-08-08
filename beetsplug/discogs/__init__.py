@@ -25,6 +25,7 @@ import re
 import socket
 import time
 import traceback
+from collections import Counter
 from contextlib import suppress
 from functools import cache, partial
 from string import ascii_lowercase
@@ -429,7 +430,6 @@ class DiscogsPlugin(MetadataSourcePlugin):
         # Extract information for the optional AlbumInfo fields, if possible.
         va = albumartist.artist == config["va_name"].as_str()
         year = result.data.get("year")
-        mediums = [t["medium"] for t in track_infos]
         data_url = result.data.get("uri")
         styles: list[str] = result.data.get("styles") or []
         genres: list[str] = result.data.get("genres") or []
@@ -452,9 +452,10 @@ class DiscogsPlugin(MetadataSourcePlugin):
         # Additional cleanups
         # Explicitly set the `media` for the tracks, since it is expected by
         # `autotag.apply_metadata`, and set `medium_total`.
+        medium_count = Counter(t.medium for t in track_infos)
         for track_info in track_infos:
             track_info.media = media
-            track_info.medium_total = mediums.count(track_info.medium)
+            track_info.medium_total = medium_count[track_info.medium]
             # Discogs does not have track IDs. Invent our own IDs as proposed
             # in #2336.
             track_info.track_id = (
@@ -485,7 +486,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
             day=int(released[2]) if len(released) > 2 else None,
             comments=result.data.get("notes"),
             label=self.strip_disambiguation(label["name"]) if label else None,
-            mediums=len(set(mediums)),
+            mediums=len(medium_count),
             releasegroup_id=str(master_id) if master_id else None,
             catalognum=(
                 label
@@ -622,27 +623,28 @@ class DiscogsPlugin(MetadataSourcePlugin):
         for track in raw_tracklist:
             # Regular subtrack (track with subindex).
             if track["position"]:
-                _, _, subindex = self.get_track_index(track["position"])
-                if subindex:
-                    if subindex.rjust(len(raw_tracklist)) > prev_subindex:
-                        # Subtrack still part of the current main track.
-                        subtracks.append(track)
-                    else:
-                        # Subtrack part of a new group (..., 1.3, *2.1*, ...).
-                        self._add_merged_subtracks(tracklist, subtracks)
-                        subtracks = [track]
-                    prev_subindex = subindex.rjust(len(raw_tracklist))
-                    continue
+                if not track["position"].isdigit():
+                    _, _, subindex = self.get_track_index(track["position"])
+                    if subindex:
+                        if subindex.rjust(len(raw_tracklist)) > prev_subindex:
+                            # Subtrack still part of the current main track.
+                            subtracks.append(track)
+                        else:
+                            # Subtrack part of a new group (..., 1.3, *2.1*, ...).
+                            self._add_merged_subtracks(tracklist, subtracks)
+                            subtracks = [track]
+                        prev_subindex = subindex.rjust(len(raw_tracklist))
+                        continue
 
             # Index track with nested sub_tracks.
-            if not track["position"] and "sub_tracks" in track:
+            elif "sub_tracks" in track:
                 # Append the index track, assuming it contains the track title.
                 tracklist.append(track)
                 self._add_merged_subtracks(tracklist, track["sub_tracks"])
                 continue
 
             # Regular track or index track without nested sub_tracks.
-            if subtracks:
+            elif subtracks:
                 self._add_merged_subtracks(tracklist, subtracks)
                 subtracks = []
                 prev_subindex = ""
@@ -662,18 +664,16 @@ class DiscogsPlugin(MetadataSourcePlugin):
         """Modify `tracklist` in place, merging a list of `subtracks` into
         a single track into `tracklist`."""
         # Calculate position based on first subtrack, without subindex.
-        idx, medium_idx, sub_idx = self.get_track_index(
-            subtracks[0]["position"]
-        )
-        position = f"{idx or ''}{medium_idx or ''}"
-
         if tracklist and not tracklist[-1]["position"]:
             # Assume the previous index track contains the track title.
+            idx, medium_idx, sub_idx = self.get_track_index(
+                subtracks[0]["position"]
+            )
             if sub_idx:
                 # "Convert" the track title to a real track, discarding the
                 # subtracks assuming they are logical divisions of a
                 # physical track (12.2.9 Subtracks).
-                tracklist[-1]["position"] = position
+                tracklist[-1]["position"] = f"{idx or ''}{medium_idx or ''}"
             else:
                 # Promote the subtracks to real tracks, discarding the
                 # index track, assuming the subtracks are physical tracks.
