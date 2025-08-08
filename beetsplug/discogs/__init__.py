@@ -11,6 +11,7 @@ import re
 import socket
 import time
 import traceback
+from collections import Counter
 from contextlib import suppress
 from functools import cache, cached_property, partial
 from itertools import groupby
@@ -494,7 +495,6 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
         # Extract information for the optional AlbumInfo fields, if possible.
         va = albumartist.artist == config["va_name"].as_str()
         year = result.data.get("year")
-        mediums = [t["medium"] for t in track_infos]
         data_url = result.data.get("uri")
         # we swap genre and style since discogs genres are more general and
         # styles more specific
@@ -517,9 +517,10 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
         # Additional cleanups
         # Explicitly set the `media` for the tracks, since it is expected by
         # `autotag.apply_metadata`, and set `medium_total`.
+        medium_count = Counter(t.medium for t in track_infos)
         for track_info in track_infos:
             track_info.media = media
-            track_info.medium_total = mediums.count(track_info.medium)
+            track_info.medium_total = medium_count[track_info.medium]
             # Discogs does not have track IDs. Invent our own IDs as proposed
             # in #2336.
             track_info.track_id = (
@@ -550,7 +551,7 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             day=int(released[2]) if len(released) > 2 else None,
             comments=result.data.get("notes"),
             label=self.strip_disambiguation(label["name"]) if label else None,
-            mediums=len(set(mediums)),
+            mediums=len(medium_count),
             releasegroup_id=str(master_id) if master_id else None,
             catalognum=(
                 catnum
