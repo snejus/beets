@@ -41,7 +41,7 @@ from beets.util import as_string, colordiff, colorize, get_console, get_text
 from beets.util.deprecation import deprecate_for_maintainers
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Sequence
+    from collections.abc import Callable, Sequence
 
     from beets.library.models import AnyModel
 
@@ -403,11 +403,14 @@ def input_select_objects(
 FLOAT_EPSILON = 0.01
 
 
-def _field_diff(oldval: Any, newval: Any) -> tuple[str, str] | str | None:
+def _field_diff(field, old, old_fmt, new, new_fmt):
     """Given two Model objects and their formatted views, format their values
     for `field` and highlight changes among them. Return a human-readable
     string. If the value has not changed, return None instead.
     """
+    oldval = old.get(field)
+    newval = new.get(field)
+
     # If no change, abort.
     if (
         isinstance(oldval, float)
@@ -415,17 +418,19 @@ def _field_diff(oldval: Any, newval: Any) -> tuple[str, str] | str | None:
         and abs(oldval - newval) < FLOAT_EPSILON
     ):
         return None
+    elif oldval == newval:
+        return None
 
-    return colordiff(str(oldval or ""), str(newval or ""))
+    # Get formatted values for output.
+    oldval = old_fmt.get(field, "")
+    newval = new_fmt.get(field, "")
+
+    return colordiff(str(oldval), str(newval))
 
 
 def show_model_changes(
-    new: library.Item,
-    old: library.Item | None = None,
-    fields: Iterable[str] | None = None,
-    always: bool = False,
-    print_obj: bool = True,
-) -> bool:
+    new, old=None, fields=None, always=False, print_obj: bool = True
+):
     """Given a Model object, print a list of changes from its pristine
     version stored in the database. Return a boolean indicating whether
     any changes were found.
@@ -435,25 +440,33 @@ def show_model_changes(
     restrict the detection to. `always` indicates whether the object is
     always identified, regardless of whether any changes are present.
     """
+    old = old or new._db.from_id(type(new), new.id)
+
     # Keep the formatted views around instead of re-creating them in each
     # iteration step
-    old = old or new.copy_from_db
-
     old_fmt = old.formatted()
     new_fmt = new.formatted()
 
-    old_values_set = {(str(k), str(v)) for k, v in old_fmt.items()}
-    new_values_set = {(str(k), str(v)) for k, v in new_fmt.items()}
+    # Build up lines showing changed fields.
+    changes = []
+    for field in old:
+        # Subset of the fields. Never show mtime.
+        if field == "mtime" or (fields and field not in fields):
+            continue
 
-    changed_fields = dict(old_values_set ^ new_values_set).keys()
-    valid_fields = changed_fields - {"mtime"}
-    if fields:
-        valid_fields &= set(fields)
-    changes = [
-        f"  {f}: {diff}"
-        for f in sorted(valid_fields)
-        if (diff := _field_diff(old_fmt.get(f, ""), new_fmt.get(f, "")))
-    ]
+        # Detect and show difference for this field.
+        line = _field_diff(field, old, old_fmt, new, new_fmt)
+        if line:
+            changes.append(f"  {field}: {line}")
+
+    # New fields.
+    for field in set(new) - set(old):
+        if fields and field not in fields:
+            continue
+
+        changes.append(
+            f"  {field}: {colorize('text_highlight', new_fmt[field])}"
+        )
 
     # Print changes.
     if print_obj and (changes or always):
