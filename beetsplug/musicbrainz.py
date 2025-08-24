@@ -693,7 +693,7 @@ class MusicBrainzPlugin(
             script=release["text_representation"]["script"],
             language=release["text_representation"]["language"],
             asin=release["asin"],
-            albumstatus=release["status"],
+            albumstatus=release["status"] or "Official",
             albumdisambig=release["disambiguation"] or None,
             **self._parse_release_group(release["release_group"]),
             **self._parse_label_infos(release["label_info"]),
