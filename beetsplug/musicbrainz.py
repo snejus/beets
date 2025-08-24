@@ -756,7 +756,7 @@ class MusicBrainzPlugin(MetadataSourcePlugin):
             info.artist = config["va_name"].as_str()
         info.asin = release.get("asin")
         info.releasegroup_id = release["release-group"]["id"]
-        info.albumstatus = release.get("status")
+        info.albumstatus = release.get("status", "Official")
 
         if release["release-group"].get("title"):
             info.release_group_title = release["release-group"].get("title")
