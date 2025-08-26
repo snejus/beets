@@ -304,6 +304,7 @@ class AlbumMatch(Match):
 class TrackMatch(Match):
     disambig_fields_key = "singleton_disambig_fields"
     info: TrackInfo
+    item: Item
 
     @property
     def name(self) -> str:
