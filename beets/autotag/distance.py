@@ -11,6 +11,8 @@ from unidecode import unidecode
 from beets import config, metadata_plugins, ui
 from beets.util import as_string, cached_classproperty, get_most_common_tags
 
+from .hooks import AlbumMatch
+
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
 
@@ -548,6 +550,10 @@ def distance(
     # Unmatched tracks.
     for _ in range(len(items) - len(item_info_pairs)):
         dist.add("unmatched_tracks", 1.0)
+
+    fields = AlbumMatch.disambig_fields
+    missing_field_count = sum(f not in album_info for f in fields)
+    dist.add("missing_fields", missing_field_count / len(fields))
 
     dist.add_data_source(likelies["data_source"], album_info.data_source)
 
