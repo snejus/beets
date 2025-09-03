@@ -140,7 +140,10 @@ def check_reflink_support(path: str) -> bool:
     except ImportError:
         return False
 
-    return reflink.supported_at(path)
+    try:
+        return reflink.supported_at(path)
+    except FileNotFoundError:
+        return False
 
 
 class ConfigMixin:
