@@ -681,9 +681,12 @@ class MusicBrainzPlugin(
             album_id=release["id"],
             tracks=track_infos,
             media=(
-                medias.pop()
-                if len(medias := {t.media for t in track_infos}) == 1
-                else "Media"
+                (
+                    medias.pop()
+                    if len(medias := {t.media for t in track_infos}) == 1
+                    else "Media"
+                )
+                or "Digital Media"
             ),
             mediums=len(release["media"]),
             data_source=self.data_source,
