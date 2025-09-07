@@ -89,6 +89,13 @@ C14N_TREE = os.path.join(os.path.dirname(__file__), "genres-tree.yaml")
 
 
 class LastGenrePlugin(plugins.BeetsPlugin):
+    FETCH_METHODS = {
+        "track": (LASTFM.get_track, lambda obj: (obj.artist, obj.title)),
+        "album": (LASTFM.get_album, lambda obj: (obj.albumartist, obj.album)),
+        "artist": (LASTFM.get_artist, lambda obj: (obj.artist,)),
+        "album_artist": (LASTFM.get_artist, lambda obj: (obj.albumartist,)),
+    }
+
     def __init__(self):
         super().__init__()
 
@@ -300,25 +307,10 @@ class LastGenrePlugin(plugins.BeetsPlugin):
         self._tunelog("last.fm (unfiltered) {} tags: {}", entity, genre)
         return genre
 
-    def fetch_album_genre(self, obj):
-        """Return raw album genres from Last.fm for this Item or Album."""
-        return self._last_lookup(
-            "album", LASTFM.get_album, obj.albumartist, obj.album
-        )
-
-    def fetch_album_artist_genre(self, obj):
-        """Return raw album artist genres from Last.fm for this Item or Album."""
-        return self._last_lookup("artist", LASTFM.get_artist, obj.albumartist)
-
-    def fetch_artist_genre(self, item):
-        """Returns raw track artist genres from Last.fm for this Item."""
-        return self._last_lookup("artist", LASTFM.get_artist, item.artist)
-
-    def fetch_track_genre(self, obj):
-        """Returns raw track genres from Last.fm for this Item."""
-        return self._last_lookup(
-            "track", LASTFM.get_track, obj.artist, obj.title
-        )
+    def fetch(self, kind: str, obj) -> list[str]:
+        """Generic fetcher for Last.fm genres."""
+        method, arg_fn = self.FETCH_METHODS[kind]
+        return self._last_lookup(kind, method, *arg_fn(obj))
 
     # Main processing: _get_genre() and helpers.
 
@@ -401,18 +393,15 @@ class LastGenrePlugin(plugins.BeetsPlugin):
             # Whitelist validation is handled in _resolve_genres.
             if self.config["keep_existing"]:
                 keep_genres = [g.lower() for g in genres]
-
-        # Run through stages: track, album, artist,
-        # album artist, or most popular track genre.
         if isinstance(obj, library.Item) and "track" in self.sources:
-            if new_genres := self.fetch_track_genre(obj):
+            if new_genres := self.fetch("track", obj):
                 if result := _try_resolve_stage(
                     "track", keep_genres, new_genres
                 ):
                     return result
 
         if "album" in self.sources:
-            if new_genres := self.fetch_album_genre(obj):
+            if new_genres := self.fetch("album", obj):
                 if result := _try_resolve_stage(
                     "album", keep_genres, new_genres
                 ):
@@ -421,10 +410,10 @@ class LastGenrePlugin(plugins.BeetsPlugin):
         if "artist" in self.sources:
             new_genres = []
             if isinstance(obj, library.Item):
-                new_genres = self.fetch_artist_genre(obj)
+                new_genres = self.fetch("artist", obj)
                 stage_label = "artist"
             elif obj.albumartist != config["va_name"].as_str():
-                new_genres = self.fetch_album_artist_genre(obj)
+                new_genres = self.fetch("album_artist", obj)
                 stage_label = "album artist"
             else:
                 # For "Various Artists", pick the most popular track genre.
@@ -432,9 +421,9 @@ class LastGenrePlugin(plugins.BeetsPlugin):
                 for item in obj.items():
                     item_genre = None
                     if "track" in self.sources:
-                        item_genre = self.fetch_track_genre(item)
+                        item_genre = self.fetch("track", item)
                     if not item_genre:
-                        item_genre = self.fetch_artist_genre(item)
+                        item_genre = self.fetch("artist", item)
                     if item_genre:
                         item_genres += item_genre
                 if item_genres:
