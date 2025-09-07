@@ -867,6 +867,8 @@ class MusicBrainzPlugin(MetadataSourcePlugin):
         for extra_albumdata in extra_albumdatas:
             info.update(extra_albumdata)
 
+        info.media = info.media or "Digital Media"
+
         return info
 
     @cached_property
