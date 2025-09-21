@@ -337,6 +337,7 @@ class DGAlbumInfoTest(BeetsTestCase):
             "tracklist": [self._make_track("A", "1", "01:01")],
             "artists": [_artist("ARTIST NAME", id=321)],
             "title": "TITLE",
+            "country": "Germany",
         }
         release = Bag(
             data=data,
@@ -346,6 +347,7 @@ class DGAlbumInfoTest(BeetsTestCase):
         d = DiscogsPlugin().get_album_info(release)
         assert d.artist == "ARTIST NAME"
         assert d.album == "TITLE"
+        assert d.country == "DE"
         assert len(d.tracks) == 1
 
     def test_parse_release_without_required_fields(self):

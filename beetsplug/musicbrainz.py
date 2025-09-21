@@ -27,7 +27,7 @@ from urllib.parse import urljoin
 from confuse.exceptions import NotFoundError
 
 from beets import config, plugins, util
-from beets.autotag.hooks import AlbumInfo, Info, TrackInfo
+from beets.autotag.hooks import AlbumInfo, TrackInfo
 from beets.metadata_plugins import MetadataSourcePlugin
 from beets.util.deprecation import deprecate_for_user
 from beets.util.id_extractors import extract_release_id
@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
     from typing import Literal
 
+    from beets.autotag.hooks import Info
     from beets.library import Item
 
     from ._typing import JSONDict

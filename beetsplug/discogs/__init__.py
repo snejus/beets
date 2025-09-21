@@ -25,13 +25,16 @@ import re
 import socket
 import time
 import traceback
+from contextlib import suppress
 from functools import cache
 from string import ascii_lowercase
 from typing import TYPE_CHECKING
+from unicodedata import normalize
 
 import confuse
 from discogs_client import Client, Master, Release
 from discogs_client.exceptions import DiscogsAPIError
+from pycountry import countries, subdivisions
 from requests.exceptions import ConnectionError
 
 import beets
@@ -64,7 +67,15 @@ CONNECTION_ERRORS = (
     ValueError,  # JSON decoding raises a ValueError.
     DiscogsAPIError,
 )
-
+COUNTRY_OVERRIDES = {
+    "Russia": "RU",  # pycountry: Russian Federation
+    "The Netherlands": "NL",  # pycountry: Netherlands
+    "UK": "GB",  # pycountry: Great Britain
+    "D.C.": "US",
+    "South Korea": "KR",  # pycountry: Korea, Republic of
+    "Europe": "EU",
+    "Worldwide": "XW",
+}
 TRACK_INDEX_RE = re.compile(
     r"""
     (.*?)   # medium: everything before medium_index.
@@ -79,6 +90,9 @@ TRACK_INDEX_RE = re.compile(
     """,
     re.VERBOSE,
 )
+DISAMBIGUATION_RE = re.compile(r" \(\d+\)")
+
+split_country = re.compile(r"\b(?:, |,? & )\b").split
 
 
 class DiscogsPlugin(MetadataSourcePlugin):
@@ -302,6 +316,25 @@ class DiscogsPlugin(MetadataSourcePlugin):
 
         return media, albumtype
 
+    @staticmethod
+    def get_country_abbr(country: str) -> str:
+        if re.fullmatch(r"[A-Z][A-Z]", country):
+            return country.replace("UK", "GB")
+
+        with suppress(ValueError, LookupError):
+            name = normalize("NFKD", country).encode("ascii", "ignore").decode()
+            return (
+                COUNTRY_OVERRIDES.get(name)
+                or getattr(
+                    countries.get(name=name, default=object),
+                    "alpha_2",
+                    None,
+                )
+                or subdivisions.lookup(name).country_code
+            )
+
+        return country
+
     def get_album_info(self, result: Release) -> AlbumInfo | None:
         """Returns an AlbumInfo object for a discogs Release object."""
         # Explicitly reload the `Release` fields, as they might not be yet
@@ -351,7 +384,6 @@ class DiscogsPlugin(MetadataSourcePlugin):
         va = albumartist.artist == config["va_name"].as_str()
         year = result.data.get("year")
         mediums = [t["medium"] for t in tracks]
-        country = result.data.get("country")
         data_url = result.data.get("uri")
         styles: list[str] = result.data.get("styles") or []
         genres: list[str] = result.data.get("genres") or []
@@ -410,9 +442,13 @@ class DiscogsPlugin(MetadataSourcePlugin):
             mediums=len(set(mediums)),
             releasegroup_id=master_id,
             catalognum=catalogno,
-            country=country,
+            country=(
+                ", ".join(map(self.get_country_abbr, split_country(country)))
+                if (country := result.data.get("country"))
+                else None
+            ),
             style=self.config["separator"].as_str().join(styles) or None,
-            genres=genres,
+            genre=genres,
             media=media,
             original_year=original_year,
             data_source=self.data_source,

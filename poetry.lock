@@ -2685,6 +2685,17 @@ files = [
 ]
 
 [[package]]
+name = "pycountry"
+version = "24.6.1"
+description = "ISO country, subdivision, language, currency and script definitions and their translations"
+optional = true
+python-versions = ">=3.8"
+files = [
+    {file = "pycountry-24.6.1-py3-none-any.whl", hash = "sha256:f1a4fb391cd7214f8eefd39556d740adcc233c778a27f8942c8dca351d6ce06f"},
+    {file = "pycountry-24.6.1.tar.gz", hash = "sha256:b61b3faccea67f87d10c1f2b0fc0be714409e8fcdcc1315613174f6466c10221"},
+]
+
+[[package]]
 name = "pycparser"
 version = "2.23"
 description = "C parser in Python"
@@ -4669,7 +4680,7 @@ autobpm = ["librosa", "resampy"]
 beatport = ["requests-oauthlib"]
 bpd = ["PyGObject"]
 chroma = ["pyacoustid"]
-discogs = ["python3-discogs-client"]
+discogs = ["pycountry", "python3-discogs-client"]
 docs = ["docutils", "pydata-sphinx-theme", "sphinx", "sphinx-copybutton", "sphinx-design", "sphinx-toolbox"]
 embedart = ["Pillow"]
 embyupdate = ["requests"]
@@ -4693,4 +4704,4 @@ web = ["flask", "flask-cors"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<4"
-content-hash = "e8e81cd02bc425e30a2e06832d97ed770358708f4253ad203634d045e1864dad"
+content-hash = "2b5c1d3e17e0fdeabc300aa6d1e46efa00c1355803ca40ef15c203b25255e9b2"
