@@ -80,6 +80,7 @@ mutagen = { version = ">=1.33", optional = true }
 Pillow = { version = "*", optional = true }
 py7zr = { version = "*", optional = true }
 pyacoustid = { version = "*", optional = true }
+pycountry = { version = ">=24.6.1", optional = true }
 PyGObject = { version = "*", optional = true }
 pylast = { version = "*", optional = true }
 python-mpd2 = { version = ">=0.4.2", optional = true }
@@ -149,6 +150,7 @@ beatport = ["requests-oauthlib"]
 bpd = ["PyGObject"] # gobject-introspection, gstreamer1.0-plugins-base, python3-gst-1.0
 chroma = ["pyacoustid"] # chromaprint or fpcalc
 # convert # ffmpeg
+discogs = ["pycountry", "python3-discogs-client"]
 docs = [
     "docutils",
     "pydata-sphinx-theme",
@@ -157,7 +159,6 @@ docs = [
     "sphinx-design",
     "sphinx-copybutton",
 ]
-discogs = ["python3-discogs-client"]
 embedart = ["Pillow"] # ImageMagick
 embyupdate = ["requests"]
 fetchart = ["beautifulsoup4", "langdetect", "Pillow", "requests"]
