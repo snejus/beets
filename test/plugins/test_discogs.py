@@ -61,6 +61,7 @@ class DGAlbumInfoTest(BeetsTestCase):
             "styles": ["GENRE1", "GENRE2"],
             "labels": [
                 {
+                    "id": 1000,
                     "name": "LABEL NAME",
                     "catno": "CATALOG NUMBER",
                 }
@@ -409,6 +410,7 @@ class DGAlbumInfoTest(BeetsTestCase):
             "title": "title",
             "labels": [
                 {
+                    "id": 1000,
                     "name": "LABEL NAME (5)",
                     "catno": "catalog number",
                 }
@@ -451,6 +453,7 @@ class DGAlbumInfoTest(BeetsTestCase):
             "title": "title",
             "labels": [
                 {
+                    "id": 1000,
                     "name": "LABEL NAME (5)",
                     "catno": "catalog number",
                 }
