@@ -766,6 +766,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
     ) -> TrackInfo:
         """Returns a TrackInfo object for a discogs track."""
         if artist_data := self.get_artist_data(track.artists):
+            composers = []
             for credit in track.credits:
                 role = credit.role.lower()
 
@@ -782,6 +783,11 @@ class DiscogsPlugin(MetadataSourcePlugin):
 
                 if "remix" in role:
                     artist_data["remixer"] = name
+
+                if role == "written-by":
+                    composers.append(name)
+            if composers:
+                artist_data["composer"] = ", ".join(composers)
 
         medium, medium_index, _ = self.get_track_index(track.position)
         return TrackInfo(
