@@ -26,7 +26,7 @@ import socket
 import time
 import traceback
 from contextlib import suppress
-from functools import cache, cached_property
+from functools import cache, cached_property, partial
 from string import ascii_lowercase
 from typing import TYPE_CHECKING
 from unicodedata import normalize
@@ -48,7 +48,7 @@ from beets.metadata_plugins import IDResponse, SearchApiMetadataSourcePlugin
 from .states import DISAMBIGUATION_RE, ArtistState, TracklistState
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Sequence
+    from collections.abc import Callable, Iterable, Iterator, Sequence
 
     from beets.library import Item
     from beets.metadata_plugins import QueryType, SearchParams
@@ -101,6 +101,12 @@ FIELDS_TO_DISCOGS_KEYS = {
     "year": "year",
 }
 split_country = re.compile(r"\b(?:, |,? & )\b").split
+remove_va_ft = partial(re.compile(r"va\b|\bf(ea)?t.*", re.I).sub, "")
+remove_disc = partial(re.compile(r"(?i)\b(CD|disc|vinyl)\s*\d+", re.I).sub, "")
+
+
+def clean_query(query: str) -> str:
+    return remove_disc(query).replace("'", "")
 
 
 def get_title_without_remix(name: str) -> str:
@@ -218,6 +224,34 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
 
         return token, secret
 
+    def candidates(
+        self, items: Sequence[Item], artist: str, album: str, va_likely: bool
+    ) -> Iterable[AlbumInfo]:
+        item = items[0]
+
+        results: list[AlbumInfo] = []
+        if barcode := item.barcode:
+            with suppress(DiscogsAPIError):
+                results.extend(self.get_albums(barcode=barcode))
+
+        if getattr(item, "data_source", "").lower() == "discogs" and (
+            album_info := self.album_for_id(
+                str(item.discogs_albumid or item.mb_albumid).replace("-1", "")
+            )
+        ):
+            results.append(album_info)
+
+        name = album or item.album or item.title
+        if "various" in artist.lower():
+            artist = item.artist
+        query = f"{remove_va_ft(artist).strip()} - {name}"
+        results.extend(self.get_albums(clean_query(query)))
+        if not results and items and item.label and item.album:
+            query = f"{item.label} {item.album}"
+            results.extend(self.get_albums(clean_query(query)))
+
+        return results
+
     def get_track_from_album(
         self, album_info: AlbumInfo, compare: Callable[[TrackInfo], float]
     ) -> TrackInfo | None:
@@ -328,6 +362,24 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
         results = self.discogs_client.search(params.query, **params.filters)
         results.per_page = params.limit
         return [r.data for r in results.page(1)]
+
+    def get_albums(self, *args, **kwargs) -> Iterator[AlbumInfo]:
+        """Returns a list of AlbumInfo objects for a discogs search query."""
+        kwargs["type"] = "release"
+        query = " ".join(args)
+        self._log.debug("Searching for '{}', {}", query, kwargs)
+        try:
+            results = self.discogs_client.search(*args, **kwargs)
+            results.per_page = self.config["search_limit"].get()
+            releases = results.page(1)
+        except CONNECTION_ERRORS:
+            self._log.debug(
+                "Communication error while searching for {0!r}",
+                query,
+                exc_info=True,
+            )
+        else:
+            yield from filter(None, map(self.get_album_info, releases))
 
     @cache
     def get_master_year(self, master_id: str) -> int | None:
