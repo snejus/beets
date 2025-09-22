@@ -457,6 +457,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
         # a master release, otherwise fetch the master release.
         original_year = self.get_master_year(master_id) if master_id else year
 
+        released = (result.data.get("released") or "").split("-")
         label = labels[0] if (labels := result.data.get("labels")) else None
         return AlbumInfo(
             album=album,
@@ -467,7 +468,10 @@ class DiscogsPlugin(MetadataSourcePlugin):
             albumtype=albumtype,
             albumtypes=sorted(albumtypes),
             va=va,
-            year=year,
+            year=int(released[0]) if released[0] else None,
+            month=int(released[1]) if len(released) > 1 else None,
+            day=int(released[2]) if len(released) > 2 else None,
+            comments=result.data.get("notes"),
             label=self.strip_disambiguation(label["name"]) if label else None,
             mediums=len(set(mediums)),
             releasegroup_id=master_id,
