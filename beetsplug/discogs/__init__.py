@@ -490,8 +490,8 @@ class DiscogsPlugin(MetadataSourcePlugin):
                 if (asort := result.data.get("artists_sort"))
                 else None
             ),
-            style=self.config["separator"].as_str().join(styles) or None,
-            genres=genres,
+            style=self.config["separator"].as_str().join(genres) or None,
+            genres=styles,
             media=media,
             original_year=original_year,
             data_source=self.data_source,
