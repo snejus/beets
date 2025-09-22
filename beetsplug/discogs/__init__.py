@@ -95,6 +95,11 @@ DISAMBIGUATION_RE = re.compile(r" \(\d+\)")
 split_country = re.compile(r"\b(?:, |,? & )\b").split
 
 
+def get_title_without_remix(name: str) -> str:
+    """Split the track name, deduce the title and return it."""
+    return re.sub(r"[([]+.*", "", name).strip()
+
+
 class DiscogsPlugin(MetadataSourcePlugin):
     def __init__(self):
         super().__init__()
@@ -305,16 +310,47 @@ class DiscogsPlugin(MetadataSourcePlugin):
             return None
 
     @staticmethod
-    def get_media_and_albumtype(
-        formats: list[ReleaseFormat] | None,
-    ) -> tuple[str | None, str | None]:
-        media = albumtype = None
-        if formats and (first_format := formats[0]):
-            if descriptions := first_format["descriptions"]:
-                albumtype = ", ".join(descriptions)
-            media = first_format["name"]
+    def parse_formats(
+        formats: list[ReleaseFormat],
+        album: str,
+        track_titles: list[str],
+        va: bool,
+    ) -> tuple[str, str, set[str], str]:
+        albumtype, albumtypes = "album", set()
+        albumstatus, media = "Official", "Digital Media"
 
-        return media, albumtype
+        if len(set(map(get_title_without_remix, track_titles))) == 1:
+            albumtype = "album"
+            albumtypes.update(("album", "single"))
+
+        if formats:
+            _format = formats[0]
+            media = _format.get("name", "").replace("File", "Digital Media")
+            descs = set(map(str.lower, _format.get("descriptions") or []))
+            for desc in descs:
+                if desc == "promo":
+                    albumstatus = "Promotional"
+                elif desc in {"album", "ep"}:
+                    albumtype = desc
+                elif desc == "compilation":
+                    albumtype = desc
+                    albumtypes.add("album")
+                elif desc == "single":
+                    albumtype = "single"
+                    albumtypes = {"single"}
+
+        if any("remix" in t.lower() for t in track_titles):
+            albumtypes.add("remix")
+
+        if len(track_titles) == 1:
+            albumtype = "single"
+
+        if va:
+            albumtype = "compilation"
+            albumtypes.add("album")
+
+        albumtypes.add(albumtype)
+        return albumstatus, albumtype, albumtypes, media
 
     @staticmethod
     def get_country_abbr(country: str) -> str:
@@ -395,8 +431,11 @@ class DiscogsPlugin(MetadataSourcePlugin):
 
         # Extract information for the optional AlbumInfo fields that are
         # contained on nested discogs fields.
-        media, albumtype = self.get_media_and_albumtype(
-            result.data.get("formats")
+        albumstatus, albumtype, albumtypes, media = self.parse_formats(
+            result.data.get("formats") or [],
+            album,
+            [t["title"] for t in tracks],
+            va,
         )
 
         label = catalogno = labelid = None
@@ -435,7 +474,9 @@ class DiscogsPlugin(MetadataSourcePlugin):
             album_id=album_id,
             **albumartist.info,  # Unpacks values to satisfy the keyword arguments
             tracks=tracks,
+            albumstatus=albumstatus,
             albumtype=albumtype,
+            albumtypes=sorted(albumtypes),
             va=va,
             year=year,
             label=label,
