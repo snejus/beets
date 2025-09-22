@@ -38,6 +38,7 @@ class DGAlbumInfoTest(BeetsTestCase):
             "artists": [
                 {"name": "ARTIST NAME", "id": "ARTIST ID", "join": ","}
             ],
+            "artists_sort": "ARTIST NAME",
             "formats": [
                 {
                     "descriptions": ["FORMAT DESC 1", "FORMAT DESC 2"],
@@ -327,6 +328,7 @@ class DGAlbumInfoTest(BeetsTestCase):
             "uri": "https://www.discogs.com/release/123456-something",
             "tracklist": [self._make_track("A", "1", "01:01")],
             "artists": [{"name": "ARTIST NAME", "id": 321, "join": ""}],
+            "artists_sort": "ARTIST NAME",
             "title": "TITLE",
             "country": "Germany",
         }

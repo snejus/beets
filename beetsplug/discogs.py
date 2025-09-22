@@ -559,6 +559,9 @@ class DiscogsPlugin(MetadataSourcePlugin):
                 if (country := result.data.get("country"))
                 else None
             ),
+            artist_sort=self.strip_disambiguation(
+                result.data.get("artists_sort")
+            ),
             style=style,
             genre=genre,
             media=media,
