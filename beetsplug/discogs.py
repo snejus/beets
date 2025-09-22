@@ -429,15 +429,6 @@ class DiscogsPlugin(MetadataSourcePlugin):
             [t["title"] for t in tracks],
             va,
         )
-
-        label = catalogno = labelid = None
-        if result.data.get("labels"):
-            label = self.strip_disambiguation(
-                result.data["labels"][0].get("name")
-            )
-            catalogno = result.data["labels"][0].get("catno")
-            labelid = result.data["labels"][0].get("id")
-
         cover_art_url = self.select_cover_art(result)
 
         # Additional cleanups
@@ -446,8 +437,6 @@ class DiscogsPlugin(MetadataSourcePlugin):
             artist = config["va_name"].as_str()
         else:
             artist = self.strip_disambiguation(artist)
-        if catalogno == "none":
-            catalogno = None
         # Explicitly set the `media` for the tracks, since it is expected by
         # `autotag.apply_metadata`, and set `medium_total`.
         for track in tracks:
@@ -469,6 +458,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
         # a master release, otherwise fetch the master release.
         original_year = self.get_master_year(master_id) if master_id else year
 
+        label = labels[0] if (labels := result.data.get("labels")) else None
         return AlbumInfo(
             album=album,
             album_id=album_id,
@@ -480,10 +470,14 @@ class DiscogsPlugin(MetadataSourcePlugin):
             albumtypes=sorted(albumtypes),
             va=va,
             year=year,
-            label=label,
+            label=self.strip_disambiguation(label["name"]) if label else None,
             mediums=len(set(mediums)),
             releasegroup_id=master_id,
-            catalognum=catalogno,
+            catalognum=(
+                label["catno"].replace("none", "").upper() or None
+                if label
+                else None
+            ),
             country=self.get_country_abbr(result.data.get("country")),
             style=style,
             genre=genre,
@@ -492,7 +486,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
             data_source=self.data_source,
             data_url=data_url,
             discogs_albumid=discogs_albumid,
-            discogs_labelid=labelid,
+            discogs_labelid=label["id"] if label else None,
             discogs_artistid=artist_id,
             cover_art_url=cover_art_url,
         )
