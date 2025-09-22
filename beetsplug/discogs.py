@@ -504,15 +504,6 @@ class DiscogsPlugin(MetadataSourcePlugin):
             [t["title"] for t in tracks],
             va,
         )
-
-        label = catalogno = labelid = None
-        if result.data.get("labels"):
-            label = self.strip_disambiguation(
-                result.data["labels"][0].get("name")
-            )
-            catalogno = result.data["labels"][0].get("catno")
-            labelid = result.data["labels"][0].get("id")
-
         cover_art_url = self.select_cover_art(result)
 
         # Additional cleanups
@@ -521,8 +512,6 @@ class DiscogsPlugin(MetadataSourcePlugin):
             va_name = config["va_name"].as_str()
             album_artist = va_name
             artist_credit = va_name
-        if catalogno == "none":
-            catalogno = None
         # Explicitly set the `media` for the tracks, since it is expected by
         # `autotag.apply_metadata`, and set `medium_total`.
         for track in tracks:
@@ -540,6 +529,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
         # a master release, otherwise fetch the master release.
         original_year = self.get_master_year(master_id) if master_id else year
 
+        label = labels[0] if (labels := result.data.get("labels")) else None
         return AlbumInfo(
             album=album,
             album_id=album_id,
@@ -552,10 +542,14 @@ class DiscogsPlugin(MetadataSourcePlugin):
             albumtypes=sorted(albumtypes),
             va=va,
             year=year,
-            label=label,
+            label=self.strip_disambiguation(label["name"]) if label else None,
             mediums=len(set(mediums)),
             releasegroup_id=master_id,
-            catalognum=catalogno,
+            catalognum=(
+                label
+                and label["catno"].replace("none", "").replace(" ", "").upper()
+                or None
+            ),
             country=(
                 ", ".join(map(self.get_country_abbr, split_country(country)))
                 if (country := result.data.get("country"))
@@ -568,8 +562,13 @@ class DiscogsPlugin(MetadataSourcePlugin):
             data_source=self.data_source,
             data_url=data_url,
             discogs_albumid=discogs_albumid,
+<<<<<<< HEAD
             discogs_labelid=labelid,
             discogs_artistid=album_artist_id,
+=======
+            discogs_labelid=label["id"] if label else None,
+            discogs_artistid=artist_id,
+>>>>>>> 0a981147d (discogs: tidy up catalognum and label)
             cover_art_url=cover_art_url,
         )
 
