@@ -73,6 +73,7 @@ class TestDGAlbumInfo(PytestTestHelper):
             "styles": ["GENRE1", "GENRE2"],
             "labels": [
                 {
+                    "id": 1000,
                     "name": "LABEL NAME",
                     "catno": "CATALOG NUMBER",
                 }
@@ -423,6 +424,7 @@ class TestDGAlbumInfo(PytestTestHelper):
             "title": "title",
             "labels": [
                 {
+                    "id": 1000,
                     "name": "LABEL NAME (5)",
                     "catno": "catalog number",
                 }
@@ -465,6 +467,7 @@ class TestDGAlbumInfo(PytestTestHelper):
             "title": "title",
             "labels": [
                 {
+                    "id": 1000,
                     "name": "LABEL NAME (5)",
                     "catno": "catalog number",
                 }
