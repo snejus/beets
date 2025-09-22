@@ -562,8 +562,8 @@ class DiscogsPlugin(MetadataSourcePlugin):
             artist_sort=self.strip_disambiguation(
                 result.data.get("artists_sort")
             ),
-            style=style,
-            genre=genre,
+            style=genre,
+            genre=style,
             media=media,
             original_year=original_year,
             data_source=self.data_source,
