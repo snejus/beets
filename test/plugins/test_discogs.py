@@ -765,10 +765,12 @@ def test_parse_extraartist_roles():
 
 
 @pytest.mark.parametrize(
-    "formats, expected_media, expected_albumtype",
+    "formats, expected_media, expected_albumtype, expected_albumtypes",
     [
-        (None, None, None),
-        (
+        pytest.param(
+            None, "Digital Media", "album", ("album",), id="simple album"
+        ),
+        pytest.param(
             [
                 {
                     "descriptions": ['7"', "Single", "45 RPM"],
@@ -777,14 +779,23 @@ def test_parse_extraartist_roles():
                 }
             ],
             "Vinyl",
-            '7", Single, 45 RPM',
+            "single",
+            ("single",),
+            id="single",
         ),
     ],
 )
-def test_get_media_and_albumtype(formats, expected_media, expected_albumtype):
-    result = DiscogsPlugin.get_media_and_albumtype(formats)
+def test_get_media_and_albumtype(
+    formats, expected_media, expected_albumtype, expected_albumtypes
+):
+    result = DiscogsPlugin.parse_formats(formats, "", [], False)
 
-    assert result == (expected_media, expected_albumtype)
+    assert result == (
+        "Official",
+        expected_albumtype,
+        set(expected_albumtypes),
+        expected_media,
+    )
 
 
 @pytest.mark.parametrize(
