@@ -99,7 +99,9 @@ class DiscogsTestMixin:
             # genres and styles are reversed in Discogs
             "genres": ["STYLE1", "STYLE2"],
             "styles": ["GENRE1", "GENRE2"],
-            "labels": [{"name": "LABEL NAME", "catno": "CATALOG NUMBER"}],
+            "labels": [
+                {"id": 1000, "name": "LABEL NAME", "catno": "CATALOG NUMBER"}
+            ],
             "tracklist": tracks or [],
         }
 
@@ -318,7 +320,13 @@ class TestStripDisambiguation(DiscogsTestMixin):
                 _artist("OTHER ARTIST (5)", id=322),
             ],
             "title": "title",
-            "labels": [{"name": "LABEL NAME (5)", "catno": "catalog number"}],
+            "labels": [
+                {
+                    "id": 1000,
+                    "name": "LABEL NAME (5)",
+                    "catno": "catalog number",
+                }
+            ],
         }
         return plugin.get_album_info(get_release(data))
 

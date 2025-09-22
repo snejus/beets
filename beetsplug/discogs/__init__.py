@@ -499,21 +499,9 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             [t["title"] for t in tracks],
             va,
         )
-
-        label = catalogno = labelid = None
-        if result.data.get("labels"):
-            label = self.strip_disambiguation(
-                result.data["labels"][0].get("name")
-            )
-            catalogno = result.data["labels"][0].get("catno")
-            labelid = result.data["labels"][0].get("id")
-
         cover_art_url = self.select_cover_art(result)
 
         # Additional cleanups
-        # (catalog number, media, disambiguation).
-        if catalogno == "none":
-            catalogno = None
         # Explicitly set the `media` for the tracks, since it is expected by
         # `autotag.apply_metadata`, and set `medium_total`.
         for track in tracks:
@@ -536,6 +524,7 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
         else:
             original_year, original_month, original_day = year, month, day
 
+        label = labels[0] if (labels := result.data.get("labels")) else None
         return AlbumInfo(
             album=album,
             album_id=album_id,
@@ -548,10 +537,14 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             year=year,
             month=month,
             day=day,
-            label=label,
+            label=self.strip_disambiguation(label["name"]) if label else None,
             mediums=len(set(mediums)),
             releasegroup_id=master_id,
-            catalognum=catalogno,
+            catalognum=(
+                catnum
+                if (label and (catnum := label["catno"]) and catnum != "none")
+                else None
+            ),
             country=(
                 ", ".join(map(self.get_country_abbr, split_country(country)))
                 if (country := result.data.get("country"))
@@ -568,7 +561,7 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             data_source=self.data_source,
             data_url=data_url,
             discogs_albumid=discogs_albumid,
-            discogs_labelid=labelid,
+            discogs_labelid=label["id"] if label else None,
             discogs_artistid=albumartist.artist_id,
             cover_art_url=cover_art_url,
         )
