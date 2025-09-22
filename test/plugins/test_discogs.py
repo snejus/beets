@@ -455,9 +455,9 @@ class DGAlbumInfoTest(BeetsTestCase):
 
 
 @pytest.mark.parametrize(
-    "formats, expected_media, expected_albumtype",
+    "formats, expected_media, expected_albumtype, expected_albumtypes",
     [
-        (None, None, None),
+        (None, "Digital Media", "album", ("album",)),
         (
             [
                 {
@@ -467,14 +467,22 @@ class DGAlbumInfoTest(BeetsTestCase):
                 }
             ],
             "Vinyl",
-            '7", Single, 45 RPM',
+            "album",
+            ("album", "single"),
         ),
     ],
 )
-def test_get_media_and_albumtype(formats, expected_media, expected_albumtype):
-    result = DiscogsPlugin.get_media_and_albumtype(formats)
+def test_get_media_and_albumtype(
+    formats, expected_media, expected_albumtype, expected_albumtypes
+):
+    result = DiscogsPlugin.parse_formats(formats, "", [], False)
 
-    assert result == (expected_media, expected_albumtype)
+    assert result == (
+        "Official",
+        expected_albumtype,
+        set(expected_albumtypes),
+        expected_media,
+    )
 
 
 @pytest.mark.parametrize(
