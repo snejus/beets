@@ -18,7 +18,7 @@ python3-discogs-client library.
 
 from __future__ import annotations
 
-import http.client
+import http
 import json
 import os
 import re
@@ -355,6 +355,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
         track_titles: list[str],
         va: bool,
     ) -> tuple[str, str, set[str], str]:
+        albumtypes: set[str]
         albumtype, albumtypes = "album", set()
         albumstatus, media = "Official", "Digital Media"
 
@@ -488,7 +489,6 @@ class DiscogsPlugin(MetadataSourcePlugin):
         data_url = result.data.get("uri")
         style = self.format(result.data.get("styles"))
         base_genre = self.format(result.data.get("genres"))
-
         if self.config["append_style_genre"] and style:
             genre = self.config["separator"].as_str().join([base_genre, style])
         else:
@@ -519,9 +519,8 @@ class DiscogsPlugin(MetadataSourcePlugin):
             track.medium_total = mediums.count(track.medium)
             # Discogs does not have track IDs. Invent our own IDs as proposed
             # in #2336.
-            track.track_id = f"{album_id}-{track.track_alt}"
+            track.track_id = f"{album_id}-{track.track_alt or track.index}"
             track.data_url = data_url
-            track.data_source = "Discogs"
 
         # Retrieve master release id (returns None if there isn't one).
         master_id = result.data.get("master_id")
@@ -531,24 +530,17 @@ class DiscogsPlugin(MetadataSourcePlugin):
 
         released = (result.data.get("released") or "").split("-")
         label = labels[0] if (labels := result.data.get("labels")) else None
-        return AlbumInfo(
+        data = dict(
             album=album,
             album_id=album_id,
-            artist=album_artist,
-            artist_credit=artist_credit,
-            artist_id=album_artist_id,
-            tracks=tracks,
             albumstatus=albumstatus,
             albumtype=albumtype,
             albumtypes=sorted(albumtypes),
-            va=va,
             year=int(released[0]) if released[0] else None,
             month=int(released[1]) if len(released) > 1 else None,
             day=int(released[2]) if len(released) > 2 else None,
             comments=result.data.get("notes"),
             label=self.strip_disambiguation(label["name"]) if label else None,
-            mediums=len(set(mediums)),
-            releasegroup_id=master_id,
             catalognum=(
                 label
                 and label["catno"].replace("none", "").replace(" ", "").upper()
@@ -569,14 +561,29 @@ class DiscogsPlugin(MetadataSourcePlugin):
             data_source=self.data_source,
             data_url=data_url,
             discogs_albumid=discogs_albumid,
-<<<<<<< HEAD
-            discogs_labelid=labelid,
-            discogs_artistid=album_artist_id,
-=======
             discogs_labelid=label["id"] if label else None,
-            discogs_artistid=artist_id,
->>>>>>> 0a981147d (discogs: tidy up catalognum and label)
+            discogs_artistid=album_artist_id,
             cover_art_url=cover_art_url,
+        )
+        if len(tracks) == 1:
+            data.update(albumtype="single", albumtypes=["single"])
+            for track in tracks:
+                track.index = None
+                track.medium_index = None
+                track.medium = None
+                track.medium_total = None
+                track.track_alt = None
+                track.update(data)
+
+        return AlbumInfo(
+            artist=album_artist,
+            artist_credit=artist_credit,
+            artist_id=album_artist_id,
+            tracks=tracks,
+            va=va,
+            mediums=len(set(mediums)),
+            releasegroup_id=str(master_id) if master_id else None,
+            **data,
         )
 
     def select_cover_art(self, result: Release) -> str | None:
@@ -875,6 +882,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
             index=index,
             medium_str=medium,
             medium_index=medium_index,
+            data_source=self.data_source,
         )
 
     @staticmethod
