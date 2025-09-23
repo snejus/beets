@@ -18,7 +18,7 @@ python3-discogs-client library.
 
 from __future__ import annotations
 
-import http.client
+import http
 import json
 import os
 import re
@@ -28,7 +28,7 @@ import traceback
 from contextlib import suppress
 from functools import cache
 from string import ascii_lowercase
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 from unicodedata import normalize
 
 import confuse
@@ -46,7 +46,7 @@ from beets.autotag.hooks import AlbumInfo, TrackInfo
 from beets.metadata_plugins import MetadataSourcePlugin
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable, Iterable, Sequence
 
     from beets.library import Item
 
@@ -367,7 +367,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
 
         return country
 
-    def get_album_info(self, result):
+    def get_album_info(self, result) -> AlbumInfo | None:
         """Returns an AlbumInfo object for a discogs Release object."""
         # Explicitly reload the `Release` fields, as they might not be yet
         # present if the result is from a `discogs_client.search()`.
@@ -413,7 +413,6 @@ class DiscogsPlugin(MetadataSourcePlugin):
         data_url = result.data.get("uri")
         style = self.format(result.data.get("styles"))
         base_genre = self.format(result.data.get("genres"))
-
         if self.config["append_style_genre"] and style:
             genre = self.config["separator"].as_str().join([base_genre, style])
         else:
@@ -448,9 +447,8 @@ class DiscogsPlugin(MetadataSourcePlugin):
                 track.artist_id = artist_id
             # Discogs does not have track IDs. Invent our own IDs as proposed
             # in #2336.
-            track.track_id = f"{album_id}-{track.track_alt}"
+            track.track_id = f"{album_id}-{track.track_alt or track.index}"
             track.data_url = data_url
-            track.data_source = "Discogs"
 
         # Retrieve master release id (returns None if there isn't one).
         master_id = result.data.get("master_id")
@@ -460,23 +458,17 @@ class DiscogsPlugin(MetadataSourcePlugin):
 
         released = (result.data.get("released") or "").split("-")
         label = labels[0] if (labels := result.data.get("labels")) else None
-        return AlbumInfo(
+        data = dict(
             album=album,
             album_id=album_id,
-            artist=artist,
-            artist_id=artist_id,
-            tracks=tracks,
             albumstatus=albumstatus,
             albumtype=albumtype,
             albumtypes=sorted(albumtypes),
-            va=va,
             year=int(released[0]) if released[0] else None,
             month=int(released[1]) if len(released) > 1 else None,
             day=int(released[2]) if len(released) > 2 else None,
             comments=result.data.get("notes"),
             label=self.strip_disambiguation(label["name"]) if label else None,
-            mediums=len(set(mediums)),
-            releasegroup_id=master_id,
             catalognum=(
                 label["catno"].replace("none", "").upper() or None
                 if label
@@ -496,6 +488,25 @@ class DiscogsPlugin(MetadataSourcePlugin):
             discogs_labelid=label["id"] if label else None,
             discogs_artistid=artist_id,
             cover_art_url=cover_art_url,
+        )
+        if len(tracks) == 1:
+            data.update(albumtype="single", albumtypes=["single"])
+            for track in tracks:
+                track.index = None
+                track.medium_index = None
+                track.medium = None
+                track.medium_total = None
+                track.track_alt = None
+                track.update(data)
+
+        return AlbumInfo(
+            artist=artist,
+            artist_id=artist_id,
+            tracks=tracks,
+            va=va,
+            mediums=len(set(mediums)),
+            releasegroup_id=str(master_id) if master_id else None,
+            **data,
         )
 
     def select_cover_art(self, result):
@@ -731,6 +742,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
             index=index,
             medium=medium,
             medium_index=medium_index,
+            data_source=self.data_source,
         )
 
     @staticmethod
