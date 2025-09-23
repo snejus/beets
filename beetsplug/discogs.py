@@ -28,7 +28,7 @@ import traceback
 from contextlib import suppress
 from functools import cache, partial
 from string import ascii_lowercase
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from unicodedata import normalize
 
 import confuse
@@ -392,6 +392,18 @@ class DiscogsPlugin(MetadataSourcePlugin):
 
         return country
 
+    def get_artist_data(self, artists: list[dict[str, Any]]) -> dict[str, Any]:
+        if not artists:
+            return {}
+
+        artist, artist_id = self.get_artist(artists, join_key="join")
+        return {
+            "artist_id": artist_id,
+            "artist": self.strip_disambiguation(artist),
+            "artists": [self.strip_disambiguation(a["name"]) for a in artists],
+            "artists_ids": [str(a["id"]) for a in artists],
+        }
+
     def get_album_info(self, result) -> AlbumInfo | None:
         """Returns an AlbumInfo object for a discogs Release object."""
         # Explicitly reload the `Release` fields, as they might not be yet
@@ -420,9 +432,13 @@ class DiscogsPlugin(MetadataSourcePlugin):
             self._log.warning("Release does not contain the required fields")
             return None
 
-        artist, artist_id = self.get_artist(
-            [a.data for a in result.artists], join_key="join"
-        )
+        artist_data = self.get_artist_data(result.data["artists"])
+        if artist_data["artist"] == "Various":
+            artist_data["artist"] = config["va_name"].as_str()
+            va = True
+        else:
+            va = False
+
         album = re.sub(r" +", " ", result.title)
         album_id = result.data["id"]
         # Use `.data` to access the tracklist directly instead of the
@@ -432,7 +448,6 @@ class DiscogsPlugin(MetadataSourcePlugin):
         tracks = self.get_tracks(result.data["tracklist"])
 
         # Extract information for the optional AlbumInfo fields, if possible.
-        va = result.data["artists"][0].get("name", "").lower() == "various"
         year = result.data.get("year")
         mediums = [t.medium for t in tracks]
         data_url = result.data.get("uri")
@@ -455,25 +470,17 @@ class DiscogsPlugin(MetadataSourcePlugin):
         )
         cover_art_url = self.select_cover_art(result)
 
-        # Additional cleanups
-        # (various artists name, catalog number, media, disambiguation).
-        if va:
-            artist = config["va_name"].as_str()
-        else:
-            artist = self.strip_disambiguation(artist)
         # Explicitly set the `media` for the tracks, since it is expected by
         # `autotag.apply_metadata`, and set `medium_total`.
         for track in tracks:
             track.media = media
             track.medium_total = mediums.count(track.medium)
-            if not track.artist:  # get_track_info often fails to find artist
-                track.artist = artist
-            if not track.artist_id:
-                track.artist_id = artist_id
             # Discogs does not have track IDs. Invent our own IDs as proposed
             # in #2336.
             track.track_id = f"{album_id}-{track.track_alt or track.index}"
             track.data_url = data_url
+            if not track.artist:
+                track.update(artist_data)
 
         # Retrieve master release id (returns None if there isn't one).
         master_id = result.data.get("master_id")
@@ -511,7 +518,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
             data_url=data_url,
             discogs_albumid=discogs_albumid,
             discogs_labelid=label["id"] if label else None,
-            discogs_artistid=artist_id,
+            discogs_artistid=artist_data["artist_id"],
             cover_art_url=cover_art_url,
         )
         if len(tracks) == 1:
@@ -525,8 +532,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
                 track.update(data)
 
         return AlbumInfo(
-            artist=artist,
-            artist_id=artist_id,
+            **artist_data,
             tracks=tracks,
             va=va,
             mediums=len(set(mediums)),
@@ -753,16 +759,11 @@ class DiscogsPlugin(MetadataSourcePlugin):
                 title = f"{prefix}: {title}"
         track_id = None
         medium, medium_index, _ = self.get_track_index(track["position"])
-        artist, artist_id = self.get_artist(
-            track.get("artists", []), join_key="join"
-        )
-        artist = self.strip_disambiguation(artist)
         length = self.get_track_length(track["duration"])
         return TrackInfo(
+            **self.get_artist_data(track["artists"]),
             title=title,
             track_id=track_id,
-            artist=artist,
-            artist_id=artist_id,
             length=length,
             index=index,
             medium=medium,
