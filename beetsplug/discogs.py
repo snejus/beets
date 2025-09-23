@@ -88,6 +88,7 @@ COUNTRY_OVERRIDES = {
 
 remove_va_ft = partial(re.compile(r"va\b|\bf(ea)?t.*", re.I).sub, "")
 remove_disc = partial(re.compile(r"(?i)\b(CD|disc|vinyl)\s*\d+", re.I).sub, "")
+remove_year = partial(re.compile(r" +\((19|20)\d\d\)").sub, "")
 
 
 def clean_query(query: str) -> str:
@@ -584,7 +585,12 @@ class DiscogsPlugin(MetadataSourcePlugin):
                     # divisions.
                     divisions += next_divisions
                     del next_divisions[:]
-                track_info = self.get_track_info(raw_track, index, divisions)
+                prefix = (
+                    ", ".join(divisions)
+                    if self.config["index_tracks"]
+                    else None
+                )
+                track_info = self.get_track_info(raw_track, index, prefix)
                 track_info.track_alt = raw_track.position
                 track_infos.append(track_info)
             else:
@@ -756,22 +762,32 @@ class DiscogsPlugin(MetadataSourcePlugin):
         return DISAMBIGUATION_RE.sub("", text)
 
     def get_track_info(
-        self, track: Track, index: int, divisions: list[str]
+        self, track: Track, index: int, prefix: str | None
     ) -> TrackInfo:
         """Returns a TrackInfo object for a discogs track."""
-        title = track.title
-        if self.config["index_tracks"]:
-            prefix = ", ".join(divisions)
-            if prefix:
-                title = f"{prefix}: {title}"
-        track_id = None
+        if artist_data := self.get_artist_data(track.artists):
+            for credit in track.credits:
+                role = credit.role.lower()
+
+                name = self.strip_disambiguation(credit.name)
+                if "featuring" in role and "uncredited" not in role:
+                    artist_data["artists"].append(name)
+                    artist_data["artist_ids"].append(str(credit.id))
+
+                if "lyrics" in role:
+                    artist_data["lyricist"] = name
+
+                if "producer" in role and "additional" not in role:
+                    artist_data["arranger"] = name
+
+                if "remix" in role:
+                    artist_data["remixer"] = name
+
         medium, medium_index, _ = self.get_track_index(track.position)
-        length = self.get_track_length(track.duration)
         return TrackInfo(
-            **self.get_artist_data(track.artists),
-            title=title,
-            track_id=track_id,
-            length=length,
+            **artist_data,
+            title=(f"{prefix}: " if prefix else "") + remove_year(track.title),
+            length=self.get_track_length(track.duration),
             index=index,
             medium=medium,
             medium_index=medium_index,
