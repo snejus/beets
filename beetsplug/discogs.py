@@ -93,6 +93,7 @@ DISAMBIGUATION_RE = re.compile(r" \(\d+\)")
 split_country = re.compile(r"\b(?:, |,? & )\b").split
 remove_va_ft = partial(re.compile(r"va\b|\bf(ea)?t.*", re.I).sub, "")
 remove_disc = partial(re.compile(r"(?i)\b(CD|disc|vinyl)\s*\d+", re.I).sub, "")
+remove_year = partial(re.compile(r" +\((19|20)\d\d\)").sub, "")
 
 
 def clean_query(query: str) -> str:
@@ -121,6 +122,10 @@ class Artists(TypedDict):
     artist_id: str
     artists: list[str]
     artists_ids: list[str]
+    remixer: NotRequired[str]
+    arranger: NotRequired[str]
+    composer: NotRequired[str]
+    lyricist: NotRequired[str]
 
 
 class Track(TypedDict):
@@ -873,6 +878,35 @@ class DiscogsPlugin(MetadataSourcePlugin):
             artist_data["artists_ids"] = unique_list(
                 artist_data["artists_ids"] + ft["artists_ids"]
             )
+
+        composers = []
+        lyricists = []
+        remixers = []
+        for credit in track.get("extraartists", []):
+            role = credit["role"].lower()
+            artist = self.get_artist_with_anv(
+                credit, self.config["anv"]["artist"]
+            )
+
+            name = artist["name"]
+            if "lyrics" in role:
+                lyricists.append(name)
+
+            if "producer" in role and "additional" not in role:
+                artist_data["arranger"] = name
+
+            if "remix" in role:
+                remixers.append(name)
+
+            if role == "written-by":
+                composers.append(name)
+        if composers:
+            artist_data["composer"] = ", ".join(composers)
+        if lyricists:
+            artist_data["lyricist"] = ", ".join(lyricists)
+        if remixers:
+            artist_data["remixer"] = ", ".join(remixers)
+            artist_data["artists"].extend(remixers)
 
         return IntermediateTrackInfo(
             title=title,
