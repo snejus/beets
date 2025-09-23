@@ -55,6 +55,10 @@ class ArtistInfo(TypedDict):
     artists_credit: list[str]
     artist_id: str
     artists_ids: list[str]
+    arranger: str | None
+    composers: str | None
+    remixers: str | None
+    lyricists: str | None
 
 
 class TracklistInfo(TypedDict):
