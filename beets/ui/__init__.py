@@ -44,7 +44,10 @@ from beets.util.diff import get_model_changes
 from beets.util.functemplate import template
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable, Iterable, Sequence
+
+    from beets.library.models import AnyModel
+    from beets.util.color import ColorName
 
 
 # On Windows platforms, use colorama to support "ANSI" terminal colors.
@@ -190,14 +193,14 @@ def input_(prompt=None):
 
 
 def input_options(
-    options,
-    require=False,
+    options: Sequence[str],
+    require: bool = False,
     prompt=None,
     fallback_prompt=None,
-    numrange=None,
-    default=None,
-    max_width=72,
-):
+    numrange: tuple[int, int] | None = None,
+    default: str | None = None,
+    max_width: int = get_console().width,
+) -> str:
     """Prompts a user for input. The sequence of `options` defines the
     choices the user has. A single-letter shortcut is inferred for each
     option; the user's choice is returned as that single, lower-case
@@ -263,7 +266,9 @@ def input_options(
         )
 
         # Insert the highlighted letter back into the word.
-        descr_color = "action_default" if is_default else "action_description"
+        descr_color: ColorName = (
+            "action_default" if is_default else "action_description"
+        )
         capitalized.append(
             colorize(descr_color, option[:index])
             + show_letter
@@ -377,7 +382,12 @@ def input_yn(prompt, require=False):
     return sel == "y"
 
 
-def input_select_objects(prompt, objs, rep, prompt_all=None):
+def input_select_objects(
+    prompt: str,
+    objs: list[AnyModel],
+    rep: Callable[[AnyModel], None],
+    prompt_all: str | None = None,
+) -> list[AnyModel]:
     """Prompt to user to choose all, none, or some of the given objects.
     Return the list of selected objects.
 
