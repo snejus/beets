@@ -27,15 +27,7 @@ import threading
 import time
 from abc import ABC
 from collections import UserDict, defaultdict
-from collections.abc import (
-    Callable,
-    Generator,
-    Iterable,
-    Iterator,
-    KeysView,
-    Mapping,
-    Sequence,
-)
+from collections.abc import Mapping
 from copy import deepcopy
 from sqlite3 import Connection, sqlite_version_info
 from typing import TYPE_CHECKING, Any, AnyStr, Generic
@@ -63,6 +55,14 @@ from .query import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import (
+        Callable,
+        Generator,
+        Iterable,
+        Iterator,
+        KeysView,
+        Sequence,
+    )
     from types import TracebackType
 
     from .query import SQLiteType
@@ -358,7 +358,7 @@ class Model(ABC, Generic[D]):
         """
 
     @classmethod
-    def _getters(cls: type[Model]):
+    def _getters(cls) -> Mapping[str, Callable[[Model], Any]]:
         """Return a mapping from field names to getter functions."""
         # We could cache this if it becomes a performance problem to
         # gather the getter mapping every time.
