@@ -41,7 +41,7 @@ from beets.util import as_string, colordiff, colorize, get_console, get_text
 from beets.util.deprecation import deprecate_for_maintainers
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Iterable, Sequence
 
     from beets.library.models import AnyModel
 
@@ -429,8 +429,12 @@ def _field_diff(field, old, old_fmt, new, new_fmt):
 
 
 def show_model_changes(
-    new, old=None, fields=None, always=False, print_obj: bool = True
-):
+    new: library.LibModel,
+    old: library.LibModel | None = None,
+    fields: Iterable[str] | None = None,
+    always: bool = False,
+    print_obj: bool = True,
+) -> bool:
     """Given a Model object, print a list of changes from its pristine
     version stored in the database. Return a boolean indicating whether
     any changes were found.
@@ -448,24 +452,26 @@ def show_model_changes(
     new_fmt = new.formatted()
 
     # Build up lines showing changed fields.
-    changes = []
-    for field in old:
-        # Subset of the fields. Never show mtime.
-        if field == "mtime" or (fields and field not in fields):
-            continue
+    old_fields, new_fields = set(old) - {"mtime"}, set(new) - {"mtime"}
+    if allowed_fields := set(fields or {}):
+        old_fields &= allowed_fields
+        new_fields &= allowed_fields
 
+    changes = []
+    for field in old_fields & new_fields:
         # Detect and show difference for this field.
         line = _field_diff(field, old, old_fmt, new, new_fmt)
         if line:
             changes.append(f"  {field}: {line}")
 
     # New fields.
-    for field in set(new) - set(old):
-        if fields and field not in fields:
-            continue
-
+    for field in new_fields - old_fields:
         changes.append(
-            f"  {field}: {colorize('text_highlight', new_fmt[field])}"
+            f"  {': '.join(colorize('text_diff_added', v) for v in (field, new_fmt[field]))}"
+        )
+    for field in old_fields - new_fields:
+        changes.append(
+            f"  {colorize('text_diff_removed', field)}: {colorize('text_diff_removed', old_fmt[field])}"
         )
 
     # Print changes.
