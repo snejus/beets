@@ -84,8 +84,11 @@ COUNTRY_OVERRIDES = {
     "UK": "GB",  # pycountry: Great Britain
     "D.C.": "US",
     "South Korea": "KR",  # pycountry: Korea, Republic of
+    "Europe": "EU",
+    "Worldwide": "XW",
 }
 
+split_country = re.compile(r"\b(?:, |,? & )\b").split
 remove_va_ft = partial(re.compile(r"va\b|\bf(ea)?t.*", re.I).sub, "")
 remove_disc = partial(re.compile(r"(?i)\b(CD|disc|vinyl)\s*\d+", re.I).sub, "")
 remove_year = partial(re.compile(r" +\((19|20)\d\d\)").sub, "")
@@ -391,26 +394,21 @@ class DiscogsPlugin(MetadataSourcePlugin):
         return albumstatus, albumtype, albumtypes, media
 
     @staticmethod
-    def get_country_abbr(country: str | None) -> str | None:
-        if country:
-            if re.fullmatch(r"[A-Z][A-Z]", country):
-                return country.replace("UK", "GB")
+    def get_country_abbr(country: str) -> str:
+        if re.fullmatch(r"[A-Z][A-Z]", country):
+            return country.replace("UK", "GB")
 
-            with suppress(ValueError, LookupError):
-                name = (
-                    normalize("NFKD", country)
-                    .encode("ascii", "ignore")
-                    .decode()
+        with suppress(ValueError, LookupError):
+            name = normalize("NFKD", country).encode("ascii", "ignore").decode()
+            return (
+                COUNTRY_OVERRIDES.get(name)
+                or getattr(
+                    countries.get(name=name, default=object),
+                    "alpha_2",
+                    None,
                 )
-                country = (
-                    COUNTRY_OVERRIDES.get(name)
-                    or getattr(
-                        countries.get(name=name, default=object),
-                        "alpha_2",
-                        None,
-                    )
-                    or subdivisions.lookup(name).country_code
-                )
+                or subdivisions.lookup(name).country_code
+            )
 
         return country
 
