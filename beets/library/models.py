@@ -7,7 +7,7 @@ import time
 import unicodedata
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, TypeVar
 
 from mediafile import MediaFile, UnreadableFileError
 
@@ -34,7 +34,9 @@ if TYPE_CHECKING:
     from ..dbcore import types
     from ..dbcore.db import Results
     from ..dbcore.query import FieldQuery, FieldQueryType
-    from .library import Library  # noqa: F401
+    from .library import Library
+
+    AnyModel = TypeVar("AnyModel", bound="LibModel")
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +44,7 @@ log = logging.getLogger(__name__)
 class LibModel(dbcore.Model["Library"]):
     """Shared concrete functionality for Items and Albums."""
 
+    _db: Library
     # Config key that specifies how an instance should be formatted.
     _format_config_key: str
     path: bytes
@@ -76,7 +79,7 @@ class LibModel(dbcore.Model["Library"]):
         funcs.update(plugins.template_funcs())
         return funcs
 
-    def store(self, fields=None):
+    def store(self, fields=None) -> None:
         super().store(fields)
         plugins.send("database_change", lib=self._db, model=self)
 
@@ -148,7 +151,7 @@ class FormattedItemMapping(dbcore.db.FormattedMapping):
 
     ALL_KEYS = "*"
 
-    def __init__(self, item, included_keys=ALL_KEYS, for_path=False):
+    def __init__(self, item: Item, included_keys=ALL_KEYS, for_path=False):
         # We treat album and item keys specially here,
         # so exclude transitive album keys from the model's keys.
         super().__init__(item, included_keys=[], for_path=for_path)
@@ -181,7 +184,7 @@ class FormattedItemMapping(dbcore.db.FormattedMapping):
         return album_keys
 
     @property
-    def album(self):
+    def album(self) -> Album:
         return self.item._cached_album
 
     def _get(self, key):
@@ -299,7 +302,7 @@ class Album(LibModel):
     }
 
     # List of keys that are set on an album's items.
-    item_keys: ClassVar[list[str]] = [
+    item_keys: ClassVar[list[str]] = {
         "added",
         "albumartist",
         "albumartists",
@@ -341,7 +344,7 @@ class Album(LibModel):
         "original_year",
         "original_month",
         "original_day",
-    ]
+    }
 
     _format_config_key = "format_album"
 
