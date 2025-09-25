@@ -304,7 +304,9 @@ class MetadataSourcePlugin(BeetsPlugin, metaclass=abc.ABCMeta):
             if join := artist.get("join", ", "):
                 artist_parts.append(f" {join} ")
 
-        return "".join(artist_parts).replace(" ,", ","), str(artists[0]["id"])
+        return "".join(artist_parts).rstrip(", ").replace(" ,", ","), str(
+            artists[0]["id"] or ""
+        )
 
 
 class IDResponse(TypedDict):
