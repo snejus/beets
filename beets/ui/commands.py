@@ -79,7 +79,9 @@ default_commands = []
 # Utilities.
 
 
-def _do_query(lib, query, album, also_items=True):
+def _do_query(
+    lib: library.Library, query: str, album: bool, also_items: bool = True
+) -> tuple[list[library.Item], list[library.Album]]:
     """For commands that operate on matched items, performs a query
     and returns a list of matching items and a list of matching
     albums. (The latter is only nonempty when album is True.) Raises
@@ -88,7 +90,7 @@ def _do_query(lib, query, album, also_items=True):
     """
     if album:
         albums = list(lib.albums(query))
-        items = []
+        items: list[library.Item] = []
         if also_items:
             for al in albums:
                 items += al.items()

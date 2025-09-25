@@ -50,7 +50,7 @@ class Library(dbcore.Database):
         self._memotable = {}
         return obj.id
 
-    def add_album(self, items):
+    def add_album(self, items) -> Album:
         """Create a new album consisting of a list of items.
 
         The items are added to the database if they don't yet have an
