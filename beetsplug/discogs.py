@@ -364,6 +364,11 @@ class DiscogsPlugin(MetadataSourcePlugin):
     ) -> tuple[str, str, set[str], str]:
         albumtype, albumtypes = "album", set()
         albumstatus, media = "Official", "Digital Media"
+
+        if len(set(map(get_title_without_remix, track_titles))) == 1:
+            albumtype = "album"
+            albumtypes.update(("album", "single"))
+
         if formats:
             _format = formats[0]
             media = _format.get("name", "").replace("File", "Digital Media")
@@ -377,13 +382,13 @@ class DiscogsPlugin(MetadataSourcePlugin):
                     albumtype = desc
                     albumtypes.add("album")
                 elif desc == "single":
-                    albumtype = "album"
-                    albumtypes.add(desc)
+                    albumtype = "single"
+                    albumtypes = {"single"}
 
-        if "remix" in album.lower():
+        if any("remix" in t.lower() for t in track_titles):
             albumtypes.add("remix")
 
-        if len(set(map(get_title_without_remix, track_titles))) == 1:
+        if len(track_titles) == 1:
             albumtype = "single"
 
         if va:
