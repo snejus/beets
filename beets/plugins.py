@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from beets.dbcore.db import FieldQueryType
     from beets.dbcore.types import Type
     from beets.importer import ImportSession, ImportTask
-    from beets.library import Album, Item, Library
+    from beets.library import Album, AnyModel, Item, Library
     from beets.ui import Subcommand
 
     # TYPE_CHECKING guard is needed for any derived type
@@ -52,8 +52,6 @@ if TYPE_CHECKING:
     T = TypeVar("T", Album, Item, str)
     TFunc = Callable[[T], str]
     TFuncMap = dict[str, TFunc[T]]
-
-    AnyModel = TypeVar("AnyModel", Album, Item)
 
     P = ParamSpec("P")
     Ret = TypeVar("Ret", bound=Any)

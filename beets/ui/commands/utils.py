@@ -1,9 +1,18 @@
 """Utility functions for beets UI commands."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from beets import ui
 
+if TYPE_CHECKING:
+    from beets.library import Album, Item, Library
 
-def do_query(lib, query, album, also_items=True):
+
+def do_query(
+    lib: Library, query: str, album: bool, also_items: bool = True
+) -> tuple[list[Item], list[Album]]:
     """For commands that operate on matched items, performs a query
     and returns a list of matching items and a list of matching
     albums. (The latter is only nonempty when album is True.) Raises
@@ -12,7 +21,7 @@ def do_query(lib, query, album, also_items=True):
     """
     if album:
         albums = list(lib.albums(query))
-        items = []
+        items: list[Item] = []
         if also_items:
             for al in albums:
                 items += al.items()

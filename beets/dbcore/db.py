@@ -380,7 +380,7 @@ class Model(ABC, Generic[D]):
         raise NotFoundError(f"No matching {model_cls.__name__} found") from None
 
     @classmethod
-    def _getters(cls: type[Model]):
+    def _getters(cls) -> Mapping[str, Callable[[Model], Any]]:
         """Return a mapping from field names to getter functions."""
         # We could cache this if it becomes a performance problem to
         # gather the getter mapping every time.

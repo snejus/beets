@@ -170,6 +170,10 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
     rec: Recommendation | None
     album: Album
 
+    @property
+    def item(self):
+        return self.items[0]
+
     def __init__(
         self,
         toppath: util.PathBytes | None,
@@ -241,7 +245,7 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
             return self.match.info.copy()
         assert False
 
-    def imported_items(self):
+    def imported_items(self) -> list[library.Item]:
         """Return a list of Items that should be added to the library.
 
         If the tasks applies an album match the method only returns the
@@ -277,7 +281,7 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
                 util.remove(item.path)
                 util.prune_dirs(os.path.dirname(item.path), lib.directory)
 
-    def set_fields(self, lib: library.Library):
+    def set_fields(self, lib: library.Library) -> None:
         """Sets the fields given at CLI or configuration to the specified
         values, for both the album and all its items.
         """
@@ -418,7 +422,7 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
         elif self.choice_flag in (Action.APPLY, Action.RETAG):
             # Applying autotagged metadata. Just get AA from the first
             # item.
-            first = self.items[0]
+            first = self.item
             if not first.albumartist:
                 changes["albumartist"] = first.artist
             if not first.albumartists:
@@ -482,7 +486,7 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
 
         plugins.send("import_task_files", session=session, task=self)
 
-    def add(self, lib: library.Library):
+    def add(self, lib: library.Library) -> None:
         """Add the items as an album to the library and remove replaced items."""
         self.align_album_level_fields()
         with lib.transaction():
@@ -502,7 +506,7 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
 
             self.reimport_metadata(lib)
 
-    def record_replaced(self, lib: library.Library):
+    def record_replaced(self, lib: library.Library) -> None:
         """Records the replaced items and albums in the `replaced_items`
         and `replaced_albums` dictionaries.
         """
@@ -522,7 +526,7 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
                 replaced_album_ids.add(dup_item.album_id)
                 self.replaced_albums[replaced_album.path] = replaced_album
 
-    def reimport_metadata(self, lib: library.Library):
+    def reimport_metadata(self, lib: library.Library) -> None:
         """For reimports, preserves metadata for reimported items and
         albums.
         """
@@ -615,7 +619,7 @@ class ImportTask(BaseImportTask, Generic[AnyMatch]):
             len(self.imported_items()),
         )
 
-    def choose_match(self, session):
+    def choose_match(self, session: ImportSession) -> None:
         """Ask the session which match should apply and apply it."""
         choice = session.choose_match(self)
         self.set_choice(choice)
@@ -651,8 +655,6 @@ class SingletonImportTask(ImportTask[TrackMatch]):
 
     def __init__(self, toppath: util.PathBytes | None, item: library.Item):
         super().__init__(toppath, [item.path], [item])
-        self.item = item
-        self.paths = [item.path]
 
     def chosen_info(self):
         """Return a dictionary of metadata about the current choice.
@@ -666,7 +668,7 @@ class SingletonImportTask(ImportTask[TrackMatch]):
         elif self.choice_flag is Action.APPLY:
             return self.match.info.copy()
 
-    def imported_items(self):
+    def imported_items(self) -> list[library.Item]:
         return [self.item]
 
     def _emit_imported(self, lib):
@@ -699,7 +701,7 @@ class SingletonImportTask(ImportTask[TrackMatch]):
 
     duplicate_items = find_duplicates
 
-    def add(self, lib):
+    def add(self, lib: library.Library) -> None:
         with lib.transaction():
             self.record_replaced(lib)
             self.remove_replaced(lib)
@@ -709,7 +711,7 @@ class SingletonImportTask(ImportTask[TrackMatch]):
     def infer_album_fields(self):
         raise NotImplementedError
 
-    def choose_match(self, session: ImportSession):
+    def choose_match(self, session: ImportSession) -> None:
         """Ask the session which match should apply and apply it."""
         choice = session.choose_item(self)
         self.set_choice(choice)
@@ -718,7 +720,7 @@ class SingletonImportTask(ImportTask[TrackMatch]):
     def reload(self):
         self.item.load()
 
-    def set_fields(self, lib):
+    def set_fields(self, lib: library.Library) -> None:
         """Sets the fields given at CLI or configuration to the specified
         values, for the singleton item.
         """
