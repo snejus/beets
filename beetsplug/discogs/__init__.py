@@ -380,6 +380,9 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
                 exc_info=True,
             )
         else:
+            releases = [
+                r for r in releases if "Box Set" not in str(r.data["formats"])
+            ]
             yield from filter(None, map(self.get_album_info, releases))
 
     @cache
