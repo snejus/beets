@@ -638,7 +638,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
         self, clean_tracklist: list[Track]
     ) -> tuple[list[TrackInfo], dict[int, str], int, list[str], list[str]]:
         # Distinct works and intra-work divisions, as defined by index tracks.
-        tracks: list[TrackInfo] = []
+        track_infos: list[TrackInfo] = []
         index_tracks = {}
         index = 0
         divisions: list[str] = []
@@ -654,7 +654,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
                     del next_divisions[:]
                 track_info = self.get_track_info(track, index, divisions)
                 track_info.track_alt = track["position"]
-                tracks.append(track_info)
+                track_infos.append(track_info)
             else:
                 next_divisions.append(track["title"])
                 # We expect new levels of division at the beginning of the
@@ -664,12 +664,12 @@ class DiscogsPlugin(MetadataSourcePlugin):
                 except IndexError:
                     pass
                 index_tracks[index + 1] = track["title"]
-        return tracks, index_tracks, index, divisions, next_divisions
+        return track_infos, index_tracks, index, divisions, next_divisions
 
     def get_tracks(self, tracklist: list[Track]) -> list[TrackInfo]:
         """Returns a list of TrackInfo objects for a discogs tracklist."""
         try:
-            clean_tracklist: list[Track] = self.coalesce_tracks(
+            clean_tracklist = self.coalesce_tracks(
                 cast(list[TrackWithSubtracks], tracklist)
             )
         except Exception as exc:
@@ -680,7 +680,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
             self._log.error("uncaught exception in coalesce_tracks: {}", exc)
             clean_tracklist = tracklist
         processed = self._process_clean_tracklist(clean_tracklist)
-        tracks, index_tracks, index, divisions, next_divisions = processed
+        track_infos, index_tracks, index, divisions, next_divisions = processed
         # Fix up medium and medium_index for each track. Discogs position is
         # unreliable, but tracks are in order.
         medium = None
@@ -689,14 +689,14 @@ class DiscogsPlugin(MetadataSourcePlugin):
 
         # If a medium has two sides (ie. vinyl or cassette), each pair of
         # consecutive sides should belong to the same medium.
-        if all([track.medium_str is not None for track in tracks]):
-            m = sorted({track.medium_str.lower() for track in tracks})
+        if all(track.medium_str is not None for track in track_infos):
+            m = sorted({track.medium_str.lower() for track in track_infos})
             # If all track.medium are single consecutive letters, assume it is
             # a 2-sided medium.
             if "".join(m) in ascii_lowercase:
                 sides_per_medium = 2
 
-        for track in tracks:
+        for track_info in track_infos:
             # Handle special case where a different medium does not indicate a
             # new disc, when there is no medium_index and the ordinal of medium
             # is not sequential. For example, I, II, III, IV, V. Assume these
@@ -704,17 +704,17 @@ class DiscogsPlugin(MetadataSourcePlugin):
             # side_count is the number of mediums or medium sides (in the case
             # of two-sided mediums) that were seen before.
             medium_is_index = (
-                track.medium_str
-                and not track.medium_index
+                track_info.medium_str
+                and not track_info.medium_index
                 and (
-                    len(track.medium_str) != 1
+                    len(track_info.medium_str) != 1
                     or
                     # Not within standard incremental medium values (A, B, C, ...).
-                    ord(track.medium_str) - 64 != side_count + 1
+                    ord(track_info.medium_str) - 64 != side_count + 1
                 )
             )
 
-            if not medium_is_index and medium != track.medium_str:
+            if not medium_is_index and medium != track_info.medium_str:
                 side_count += 1
                 if sides_per_medium == 2:
                     if side_count % sides_per_medium:
@@ -725,23 +725,26 @@ class DiscogsPlugin(MetadataSourcePlugin):
                     # Medium changed. Reset index_count.
                     medium_count += 1
                     index_count = 0
-                medium = track.medium_str
+                medium = track_info.medium_str
 
             index_count += 1
             medium_count = 1 if medium_count == 0 else medium_count
-            track.medium, track.medium_index = medium_count, index_count
+            track_info.medium, track_info.medium_index = (
+                medium_count,
+                index_count,
+            )
 
         # Get `disctitle` from Discogs index tracks. Assume that an index track
         # before the first track of each medium is a disc title.
-        for track in tracks:
-            if track.medium_index == 1:
-                if track.index in index_tracks:
-                    disctitle = index_tracks[track.index]
+        for track_info in track_infos:
+            if track_info.medium_index == 1:
+                if track_info.index in index_tracks:
+                    disctitle = index_tracks[track_info.index]
                 else:
                     disctitle = None
-            track.disctitle = disctitle
+            track_info.disctitle = disctitle
 
-        return cast(list[TrackInfo], tracks)
+        return track_infos
 
     def coalesce_tracks(
         self, raw_tracklist: list[TrackWithSubtracks]
