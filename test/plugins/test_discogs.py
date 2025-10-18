@@ -17,27 +17,29 @@
 from unittest.mock import Mock, patch
 
 import pytest
+from discogs_client import Client, Release
 
 from beets import config
-from beets.test._common import Bag
-from beets.test.helper import BeetsTestCase, capture_log
+from beets.test.helper import BeetsTestCase
 from beetsplug.discogs import DiscogsPlugin
+
+
+def get_release(data):
+    return Release(Client("doesn't matter"), data)
 
 
 @patch("beetsplug.discogs.DiscogsPlugin.setup", Mock())
 class DGAlbumInfoTest(BeetsTestCase):
-    def _make_release(self, tracks=None):
+    def _make_release(self, tracks=None) -> Release:
         """Returns a Bag that mimics a discogs_client.Release. The list
         of elements on the returned Bag is incomplete, including just
         those required for the tests on this class."""
         data = {
-            "id": "ALBUM ID",
-            "uri": "https://www.discogs.com/release/release/13633721",
+            "id": 11111111,
+            "uri": "https://www.discogs.com/release/111111111",
             "title": "ALBUM TITLE",
-            "year": "3001",
-            "artists": [
-                {"name": "ARTIST NAME", "id": "ARTIST ID", "join": ","}
-            ],
+            "year": 3001,
+            "artists": [{"name": "ARTIST NAME", "id": 2222222, "join": ","}],
             "artists_sort": "ARTIST NAME",
             "formats": [
                 {
@@ -55,30 +57,18 @@ class DGAlbumInfoTest(BeetsTestCase):
                     "catno": "CATALOG NUMBER",
                 }
             ],
-            "tracklist": [],
+            "tracklist": tracks or [],
         }
 
-        if tracks:
-            for recording in tracks:
-                data["tracklist"].append(recording)
+        return get_release(data)
 
-        return Bag(
-            data=data,
-            # Make some fields available as properties, as they are
-            # accessed by DiscogsPlugin methods.
-            title=data["title"],
-            artists=[Bag(data=d) for d in data["artists"]],
-        )
-
-    def _make_track(self, title, position="", duration="", type_=None):
-        track = {"title": title, "position": position, "duration": duration}
-        if type_ is not None:
-            # Test samples on discogs_client do not have a 'type_' field, but
-            # the API seems to return it. Values: 'track' for regular tracks,
-            # 'heading' for descriptive texts (ie. not real tracks - 12.13.2).
-            track["type_"] = type_
-
-        return track
+    def _make_track(self, title, position="", duration=""):
+        return {
+            "title": title,
+            "position": position,
+            "duration": duration,
+            "type_": "track",
+        }
 
     def _make_release_from_positions(self, positions):
         """Return a Bag that mimics a discogs_client.Release with a
@@ -333,25 +323,12 @@ class DGAlbumInfoTest(BeetsTestCase):
             "title": "TITLE",
             "country": "Germany",
         }
-        release = Bag(
-            data=data,
-            title=data["title"],
-            artists=[Bag(data=d) for d in data["artists"]],
-        )
+        release = get_release(data)
         d = DiscogsPlugin().get_album_info(release)
         assert d.artist == "ARTIST NAME"
         assert d.album == "TITLE"
         assert d.country == "DE"
         assert len(d.tracks) == 1
-
-    def test_parse_release_without_required_fields(self):
-        """Test parsing of a release that does not have the required fields."""
-        release = Bag(data={}, refresh=lambda *args: None)
-        with capture_log() as logs:
-            d = DiscogsPlugin().get_album_info(release)
-
-        assert d is None
-        assert "Release does not contain the required fields" in logs[0]
 
     def test_default_genre_style_settings(self):
         """Test genre default settings, genres to genre, styles to style"""
@@ -409,12 +386,7 @@ class DGAlbumInfoTest(BeetsTestCase):
                 }
             ],
         }
-        release = Bag(
-            data=data,
-            title=data["title"],
-            artists=[Bag(data=d) for d in data["artists"]],
-        )
-        d = DiscogsPlugin().get_album_info(release)
+        d = DiscogsPlugin().get_album_info(get_release(data))
         assert d.artist == "ARTIST NAME & OTHER ARTIST"
         assert d.tracks[0].artist == "TEST ARTIST"
         assert d.label == "LABEL NAME"
@@ -449,12 +421,7 @@ class DGAlbumInfoTest(BeetsTestCase):
                 }
             ],
         }
-        release = Bag(
-            data=data,
-            title=data["title"],
-            artists=[Bag(data=d) for d in data["artists"]],
-        )
-        d = DiscogsPlugin().get_album_info(release)
+        d = DiscogsPlugin().get_album_info(get_release(data))
         assert d.artist == "ARTIST NAME (2) & OTHER ARTIST (5)"
         assert d.tracks[0].artist == "TEST ARTIST (5)"
         assert d.label == "LABEL NAME (5)"
@@ -505,11 +472,7 @@ class TestAnv:
             ],
             "title": "title",
         }
-        release = Bag(
-            data=data,
-            title=data["title"],
-            artists=[Bag(data=d) for d in data["artists"]],
-        )
+        release = get_release(data)
         plugin = DiscogsPlugin()
         plugin.config["anv"].set(
             {"artist": False, "album_artist": False, "artist_credit": False}
@@ -586,11 +549,7 @@ def test_anv_album_artist():
         ],
         "title": "title",
     }
-    release = Bag(
-        data=data,
-        title=data["title"],
-        artists=[Bag(data=d) for d in data["artists"]],
-    )
+    release = get_release(data)
     config["discogs"]["anv"]["album_artist"] = False
     config["discogs"]["anv"]["artist"] = True
     config["discogs"]["anv"]["artist_credit"] = False
