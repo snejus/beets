@@ -549,3 +549,6 @@ class TrackMatch(Match):
             self.item.clear()
 
         self.item.update(self.info.item_data)
+
+
+AnyMatch = TypeVar("AnyMatch", bound=Match)
