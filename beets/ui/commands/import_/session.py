@@ -5,13 +5,7 @@ from itertools import chain
 from typing import TYPE_CHECKING, Literal
 
 from beets import config, importer, logging, plugins, ui
-from beets.autotag import (
-    AlbumMatch,
-    Recommendation,
-    TrackMatch,
-    tag_album,
-    tag_item,
-)
+from beets.autotag import AlbumMatch, Recommendation, TrackMatch
 from beets.importer import DuplicateAction, SingletonImportTask
 from beets.library import Album
 from beets.util import PromptChoice, displayable_path
@@ -28,8 +22,8 @@ from .display import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from beets.autotag import Proposal, Source
-    from beets.importer import ImportSession, ImportTask
+    from beets.autotag import AnyMatch, Source
+    from beets.importer import AlbumImportTask, ImportSession, ImportTask
     from beets.library import AlbumOrItem, Item
     from beets.util import PathBytes
 
@@ -40,7 +34,9 @@ log = logging.getLogger(__name__)
 class TerminalImportSession(importer.ImportSession):
     """An import session that runs in a terminal."""
 
-    def choose_match(self, task: ImportTask) -> AlbumMatch | importer.Action:
+    def choose_match(
+        self, task: AlbumImportTask
+    ) -> AlbumMatch | importer.Action:
         """Given an initial autotagging of items, go through an interactive
         dance with the user to ask for a choice of metadata. Returns an
         AlbumMatch object, ASIS, or SKIP.
@@ -485,31 +481,33 @@ def choose_candidate(
             return choice_actions[sel]
 
 
-def manual_search(session: ImportSession, task: ImportTask) -> Proposal:
-    """Get a new `Proposal` using manual search criteria.
+def manual_search(
+    session: importer.ImportSession, task: ImportTask[AnyMatch]
+) -> None:
+    """Update task with candidates using manual search criteria.
 
     Input either an artist and album (for full albums) or artist and
     track name (for singletons) for manual search.
     """
-    artist = ui.input_("Artist:").strip()
-    name = ui.input_(f"{task.source.type.capitalize()}:").strip()
+    task.lookup_candidates(
+        search_artist=ui.input_("Artist:").strip(),
+        search_name=ui.input_("Album:" if task.is_album else "Track:").strip(),
+    )
 
-    method = tag_item if isinstance(task, SingletonImportTask) else tag_album
-    return method(task.source, artist, name)
 
-
-def manual_id(session: ImportSession, task: ImportTask) -> Proposal:
-    """Get a new `Proposal` using a manually-entered ID.
+def manual_id(
+    session: importer.ImportSession, task: ImportTask[AnyMatch]
+) -> None:
+    """Update task with candidates using a manually-entered ID.
 
     Input an ID, either for an album ("release") or a track ("recording").
     """
-    prompt = f"Enter {task.source.type} ID:"
-    search_id = ui.input_(prompt).strip()
+    _type = "release" if task.is_album else "recording"
+    task.lookup_candidates(
+        search_ids=ui.input_(f"Enter {_type} ID:").strip().split()
+    )
 
-    method = tag_item if isinstance(task, SingletonImportTask) else tag_album
-    return method(task.source, search_ids=search_id.split())
 
-
-def abort_action(session: ImportSession, task: ImportTask) -> None:
+def abort_action(session: ImportSession, task: ImportTask[AnyMatch]) -> None:
     """A prompt choice callback that aborts the importer."""
     raise importer.ImportAbortError()

@@ -9,7 +9,7 @@ from beets.util import MoveOperation, displayable_path, pipeline
 
 from .actions import Action, DuplicateAction
 from .tasks import (
-    ImportTask,
+    AlbumImportTask,
     ImportTaskFactory,
     SentinelImportTask,
     SingletonImportTask,
@@ -20,9 +20,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable, Iterator
 
     from beets import library
+    from beets.autotag import AnyMatch
 
     from .session import ImportSession
-    from .tasks import BaseImportTask
+    from .tasks import BaseImportTask, ImportTask
 
     StageMessage: TypeAlias = BaseImportTask | pipeline.MultiMessage | None
     StageCoro: TypeAlias = Generator[StageMessage, ImportTask, None]
@@ -81,7 +82,7 @@ def query_tasks(session: ImportSession) -> Iterator[BaseImportTask]:
             items = list(album.items())
             _freshen_items(items)
 
-            task = ImportTask(None, [album.item_dir()], items)
+            task = AlbumImportTask(None, [album.item_dir()], items)
             for task in task.handle_created(session):
                 yield task
 
@@ -112,7 +113,9 @@ def group_albums(session: ImportSession) -> StageCoro:
         sorted_items: list[library.Item] = sorted(task.items, key=group)
         for _, items in itertools.groupby(sorted_items, group):
             l_items = list(items)
-            task = ImportTask(task.toppath, [i.path for i in l_items], l_items)
+            task = AlbumImportTask(
+                task.toppath, [i.path for i in l_items], l_items
+            )
             tasks += task.handle_created(session)
         tasks.append(SentinelImportTask(task.toppath, task.paths))
 
@@ -123,7 +126,7 @@ def group_albums(session: ImportSession) -> StageCoro:
 def lookup_candidates(session: ImportSession, task: ImportTask) -> None:
     """A coroutine for performing the initial MusicBrainz lookup for an
     album. It accepts lists of Items and yields
-    (items, cur_artist, cur_album, candidates, rec) tuples. If no match
+    (items, candidates, rec) tuples. If no match
     is found, all of the yielded parameters (except items) are None.
     """
     if task.skip:
@@ -199,7 +202,7 @@ def user_query(session: ImportSession, task: ImportTask) -> StageReturn:
         # Record merged paths in the session so they are not reimported
         session.mark_merged(duplicate_paths)
 
-        merged_task = ImportTask(
+        merged_task = AlbumImportTask(
             None, task.paths + duplicate_paths, task.items + duplicate_items
         )
 
@@ -307,7 +310,7 @@ def manipulate_files(session: ImportSession, task: ImportTask) -> None:
 # Private functions only used in the stages above
 
 
-def _apply_choice(session: ImportSession, task: ImportTask) -> None:
+def _apply_choice(session: ImportSession, task: ImportTask[AnyMatch]):
     """Apply the task's choice to the Album or Item it contains and add
     it to the library.
     """

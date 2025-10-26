@@ -8,14 +8,22 @@ from collections import defaultdict
 from collections.abc import Callable
 from functools import cached_property
 from tempfile import mkdtemp
-from typing import TYPE_CHECKING, Any, AnyStr
+from typing import TYPE_CHECKING, Any, AnyStr, ClassVar, Generic
 
 import mediafile
 
 from beets import config, library, logging, plugins, util
-from beets.autotag import AlbumMatch, Source, tag_album, tag_item
+from beets.autotag import (
+    AlbumMatch,
+    AnyMatch,
+    Match,
+    Source,
+    TrackMatch,
+    tag_album,
+    tag_item,
+)
 from beets.dbcore.query import PathQuery
-from beets.util import extension
+from beets.util import extension, get_most_common_tags
 from beets.util.extension import remux_mpeglayer3_wav
 
 from .actions import Action, DuplicateAction
@@ -24,7 +32,7 @@ from .state import ImportState
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
-    from beets.autotag import Recommendation, TrackMatch
+    from beets.autotag import Recommendation
 
     from .session import ImportSession
 
@@ -200,7 +208,7 @@ class BaseImportTask:
         self.items = list(items) if items is not None else []
 
 
-class ImportTask(BaseImportTask):
+class ImportTask(BaseImportTask, Generic[AnyMatch]):
     """Represents a single set of items to be imported along with its
     intermediate state. May represent an album or a single item.
 
@@ -233,13 +241,14 @@ class ImportTask(BaseImportTask):
     """
 
     choice_flag: Action | None = None
-    match: AlbumMatch | TrackMatch | None = None
+    match: AnyMatch | None
+    is_album: ClassVar[bool]
 
     # Set by `add()`; only valid afterwards (see class docstring).
     album: library.Album
 
     # Keep track of the current task item
-    candidates: Sequence[AlbumMatch | TrackMatch] | None = None
+    candidates: Sequence[AnyMatch] | None = None
     rec: Recommendation | None = None
     duplicate_action: DuplicateAction | None = None
 
@@ -260,9 +269,10 @@ class ImportTask(BaseImportTask):
         items: Iterable[library.Item] | None,
     ) -> None:
         super().__init__(toppath, paths, items)
-        self.is_album = True
+        self.choice_flag = None
+        self.rec = None
 
-    def set_choice(self, choice: Action | AlbumMatch | TrackMatch) -> None:
+    def set_choice(self, choice: Action | AnyMatch):
         """Given an AlbumMatch or TrackMatch object or an action constant,
         indicates that an action has been selected for this task.
 
@@ -271,8 +281,10 @@ class ImportTask(BaseImportTask):
         """
         # Not part of the task structure:
         assert choice != Action.APPLY  # Only used internally.
-
-        if choice in (
+        if isinstance(choice, Match):
+            self.choice_flag = Action.APPLY  # Implicit choice.
+            self.match = choice
+        elif choice in (
             Action.SKIP,
             Action.ASIS,
             Action.TRACKS,
@@ -282,9 +294,6 @@ class ImportTask(BaseImportTask):
             # TODO: redesign to stricten the type
             self.choice_flag = choice  # type: ignore[assignment]
             self.match = None
-        else:
-            self.choice_flag = Action.APPLY  # Implicit choice.
-            self.match = choice  # type: ignore[assignment]
 
     def save_progress(self) -> None:
         """Updates the progress state to indicate that this album has
@@ -547,16 +556,6 @@ class ImportTask(BaseImportTask):
 
         # The plugins gave us a list of lists of tasks. Flatten it.
         return [t for inner in plugin_tasks for t in inner]
-
-    def lookup_candidates(self, search_ids: list[str]) -> None:
-        """Retrieve and store candidates for this album.
-
-        If User-specified ``search_ids`` list is not empty, the lookup is
-        restricted to only those IDs.
-        """
-        self.candidates, self.rec = tag_album(
-            self.source, search_ids=search_ids
-        )
 
     def find_duplicates(self, lib: library.Library) -> list[library.Album]:
         """Return a list of albums from `lib` with the same artist and
@@ -852,7 +851,7 @@ class ImportTask(BaseImportTask):
             )
 
 
-class SingletonImportTask(ImportTask):
+class SingletonImportTask(ImportTask[TrackMatch]):
     """ImportTask for a single track that is not associated to an album."""
 
     @cached_property
@@ -864,7 +863,6 @@ class SingletonImportTask(ImportTask):
     ) -> None:
         super().__init__(toppath, [item.path], [item])
         self.item = item
-        self.is_album = False
         self.paths = [item.path]
 
     def imported_items(self) -> list[library.Item]:
@@ -991,6 +989,32 @@ class SingletonImportTask(ImportTask):
         self.item.store()
 
 
+class AlbumImportTask(ImportTask[AlbumMatch]):
+    is_album = True
+
+    @cached_property
+    def likelies(self) -> dict[str, Any]:
+        likelies, _ = get_most_common_tags(self.items)
+        return likelies
+
+    @cached_property
+    def cur_album(self) -> str:
+        return self.likelies["album"]
+
+    @cached_property
+    def cur_artist(self) -> str:
+        return self.likelies["artist"]
+
+    def lookup_candidates(self, search_ids: list[str]) -> None:
+        """Retrieve and store candidates for this album. User-specified
+        candidate IDs are stored in self.search_ids: if present, the
+        initial lookup is restricted to only those IDs.
+        """
+        self.candidates, self.rec = tag_album(
+            self.source, search_ids=search_ids
+        )
+
+
 # FIXME The inheritance relationships are inverted. This is why there
 # are so many methods which pass. More responsibility should be delegated to
 # the BaseImportTask class.
@@ -1003,6 +1027,8 @@ class SentinelImportTask(ImportTask):
     indicates the progress in the `toppath` import.
     """
 
+    is_album = True
+
     def __init__(
         self,
         toppath: util.PathBytes | None,
@@ -1010,7 +1036,6 @@ class SentinelImportTask(ImportTask):
     ) -> None:
         super().__init__(toppath, paths, ())
         # TODO Remove the remaining attributes eventually
-        self.is_album = True
         self.choice_flag = None
 
     def save_history(self) -> None:
@@ -1294,7 +1319,7 @@ class ImportTaskFactory:
     def album(
         self, paths: Iterable[util.PathBytes], dirs: list[util.PathBytes]
     ) -> ImportTask | None:
-        """Return a `ImportTask` with all media files from paths.
+        """Return a `AlbumImportTask` with all media files from paths.
 
         `dirs` is a list of parent directories used to record already
         imported albums.
@@ -1312,7 +1337,7 @@ class ImportTaskFactory:
         ]
 
         if len(items) > 0:
-            return ImportTask(self.toppath, dirs, items)
+            return AlbumImportTask(self.toppath, dirs, items)
         return None
 
     def sentinel(
