@@ -19,7 +19,7 @@ releases and tracks.
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
+from typing import TYPE_CHECKING, Any, Generic
 
 import lap
 import numpy as np
@@ -28,7 +28,7 @@ from beets import config, logging, metadata_plugins, plugins
 from beets.util import get_most_common_tags
 
 from .distance import VA_ARTISTS, distance, track_distance
-from .hooks import AlbumInfo, AlbumMatch, TrackInfo, TrackMatch
+from .hooks import AlbumInfo, AlbumMatch, AnyMatch, TrackInfo, TrackMatch
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -59,9 +59,20 @@ class Recommendation(IntEnum):
 # objects) and a recommendation value.
 
 
-class Proposal(NamedTuple):
-    candidates: Sequence[AlbumMatch | TrackMatch]
+class Proposal(Generic[AnyMatch]):
+    __slots__ = ("candidates", "recommendation")
+
+    candidates: Sequence[AnyMatch]
     recommendation: Recommendation
+
+    def __init__(
+        self, candidates: Sequence[AnyMatch], recommendation: Recommendation
+    ) -> None:
+        self.candidates = candidates
+        self.recommendation = recommendation
+
+    def __iter__(self):
+        return iter([self.candidates, self.recommendation])
 
 
 # Primary matching functionality.
@@ -180,9 +191,6 @@ def _recommendation(
     return rec
 
 
-AnyMatch = TypeVar("AnyMatch", TrackMatch, AlbumMatch)
-
-
 def _sort_candidates(candidates: Iterable[AnyMatch]) -> Sequence[AnyMatch]:
     """Sort candidates by distance."""
     return sorted(candidates, key=lambda match: match.distance)
@@ -240,11 +248,11 @@ def _add_candidate(
 
 
 def tag_album(
-    items,
+    items: list[Item],
     search_artist: str | None = None,
     search_name: str | None = None,
-    search_ids: list[str] = [],
-) -> tuple[str, str, Proposal]:
+    search_ids: Sequence[str] = (),
+) -> Proposal[AlbumMatch]:
     """Return a tuple of the current artist name, the current album
     name, and a `Proposal` containing `AlbumMatch` candidates.
 
@@ -296,11 +304,7 @@ def tag_album(
                 # matches.
                 if rec == Recommendation.strong:
                     log.debug("ID match.")
-                    return (
-                        cur_artist,
-                        cur_album,
-                        Proposal(list(candidates.values()), rec),
-                    )
+                    return Proposal(list(candidates.values()), rec)
 
         # Search terms.
         if not (search_artist and search_name):
@@ -328,15 +332,15 @@ def tag_album(
     # Sort and get the recommendation.
     candidates_sorted = _sort_candidates(candidates.values())
     rec = _recommendation(candidates_sorted)
-    return cur_artist, cur_album, Proposal(candidates_sorted, rec)
+    return Proposal(candidates_sorted, rec)
 
 
 def tag_item(
-    item,
+    items: list[Item],
     search_artist: str | None = None,
     search_name: str | None = None,
-    search_ids: list[str] | None = None,
-) -> Proposal:
+    search_ids: Sequence[str] = (),
+) -> Proposal[TrackMatch]:
     """Find metadata for a single track. Return a `Proposal` consisting
     of `TrackMatch` objects.
 
@@ -350,6 +354,7 @@ def tag_item(
     rec: Recommendation | None = None
 
     # First, try matching by the external source ID.
+    item = items[0]
     trackids = search_ids or [t for t in [item.mb_trackid] if t]
     if trackids:
         for trackid in trackids:
