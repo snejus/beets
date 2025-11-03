@@ -20,6 +20,7 @@ import pytest
 
 from beets import autotag
 from beets.autotag import AlbumInfo, TrackInfo, correct_list_fields
+from beets.autotag.hooks import AlbumMatch, TrackMatch
 from beets.library import Item
 from beets.test.helper import BeetsTestCase
 
@@ -112,7 +113,7 @@ class ApplyTest(BeetsTestCase):
             {
                 **common_expected,
                 "artist": "trackArtist",
-                "artists": ["trackArtist", "albumArtist", "albumArtist2"],
+                "artists": ["trackArtist"],
                 "artist_credit": "trackArtistCredit",
                 "artist_sort": "trackArtistSort",
                 "artists_credit": ["trackArtistCredit"],
@@ -200,14 +201,7 @@ class ApplyTest(BeetsTestCase):
     "overwrite_fields,expected_item_artist",
     [
         pytest.param(["artist"], "", id="overwrite artist"),
-        pytest.param(
-            [],
-            "artist",
-            marks=pytest.mark.xfail(
-                reason="artist gets wrongly always overwritten", strict=True
-            ),
-            id="do not overwrite artist",
-        ),
+        pytest.param([], "artist", id="do not overwrite artist"),
     ],
 )
 class TestOverwriteNull:
@@ -225,43 +219,49 @@ class TestOverwriteNull:
         return TrackInfo(artist=None)
 
     def test_album(self, item, track_info, expected_item_artist):
-        autotag.apply_metadata(AlbumInfo([track_info]), [(item, track_info)])
+        match = AlbumMatch(0, AlbumInfo([track_info]), {item: track_info})
+
+        match.apply_metadata()
 
         assert item.artist == expected_item_artist
 
     def test_singleton(self, item, track_info, expected_item_artist):
-        autotag.apply_item_metadata(item, track_info)
+        match = TrackMatch(0, track_info, item)
+
+        match.apply_metadata()
 
         assert item.artist == expected_item_artist
+
 
 @pytest.mark.parametrize(
     "single_field,list_field",
     [
-        ("mb_artistid", "mb_artistids"),
-        ("mb_albumartistid", "mb_albumartistids"),
         ("albumtype", "albumtypes"),
+        ("artist", "artists"),
+        ("artist_credit", "artists_credit"),
+        ("artist_id", "artists_ids"),
+        ("artist_sort", "artists_sort"),
     ],
 )
 @pytest.mark.parametrize(
-    "single_value,list_value",
+    "single_value,list_value,expected_values",
     [
-        (None, []),
-        (None, ["1"]),
-        (None, ["1", "2"]),
-        ("1", []),
-        ("1", ["1"]),
-        ("1", ["1", "2"]),
-        ("1", ["2", "1"]),
+        (None, [], (None, [])),
+        (None, ["1"], ("1", ["1"])),
+        (None, ["1", "2"], ("1", ["1", "2"])),
+        ("1", [], ("1", ["1"])),
+        ("1", ["1"], ("1", ["1"])),
+        ("1", ["1", "2"], ("1", ["1", "2"])),
+        ("1", ["2", "1"], ("1", ["1", "2"])),
+        ("1", ["2"], ("1", ["1", "2"])),
     ],
 )
 def test_correct_list_fields(
-    single_field, list_field, single_value, list_value
+    single_field, list_field, single_value, list_value, expected_values
 ):
     """Ensure that the first value in a list field matches the single field."""
-    data = {single_field: single_value, list_field: list_value}
-    item = Item(**data)
+    input_data = {single_field: single_value, list_field: list_value}
 
-    correct_list_fields(item)
+    data = correct_list_fields(input_data)
 
-    single_val, list_val = item[single_field], item[list_field]
-    assert (not single_val and not list_val) or single_val == list_val[0]
+    assert (data[single_field], data[list_field]) == expected_values
