@@ -77,13 +77,15 @@ def move_objects(
     if num_unmoved > 0:
         unmoved_msg = f" ({num_unmoved} already in place)"
 
-    copy = opts.copy or opts.export  # Exporting always copies.
-    action = "Copying" if copy else "Moving"
-    act = "copy" if copy else "move"
+    operation = (
+        MoveOperation.COPY if opts.copy or opts.export else MoveOperation.MOVE
+    )
+    store = not opts.export
+    action = operation.name.lower()
     obj_count = len(objs)
     log.info(
         "{} {} {}{}{}.",
-        action,
+        f"{action.rstrip('e')}ing",
         obj_count,
         entity,
         "s" if obj_count != 1 else "",
@@ -98,7 +100,7 @@ def move_objects(
         selected_objs: Sequence[AlbumOrItem]
         if opts.timid:
             selected_objs = ui.input_select_objects(
-                f"Really {act}",
+                f"Really {action}?",
                 objs,
                 lambda o: show_path_changes(get_paths([o])),
             )
@@ -106,19 +108,9 @@ def move_objects(
             selected_objs = objs
 
         for obj in selected_objs:
-            log.debug("moving: {.filepath}", obj)
+            show_path_changes(get_paths([obj]))
 
-            if opts.export:
-                # Copy without affecting the database.
-                obj.move(
-                    operation=MoveOperation.COPY, basedir=dest, store=False
-                )
-            else:
-                # Ordinary move/copy: store the new path.
-                if copy:
-                    obj.move(operation=MoveOperation.COPY, basedir=dest)
-                else:
-                    obj.move(operation=MoveOperation.MOVE, basedir=dest)
+            obj.move(operation=operation, basedir=dest, store=store)
 
 
 def isitemmoved(dest: bytes | None, item: Item) -> bool:
