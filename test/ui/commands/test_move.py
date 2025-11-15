@@ -3,6 +3,7 @@ import shutil
 from beets import library
 from beets.test.helper import BeetsTestCase
 from beets.ui.commands.move import move_items
+from beets.util import MoveOperation
 
 
 class MoveTest(BeetsTestCase):
@@ -24,12 +25,12 @@ class MoveTest(BeetsTestCase):
         self,
         query=(),
         dest=None,
-        copy=False,
+        operation=MoveOperation.MOVE,
         album=False,
         pretend=False,
-        export=False,
+        store=True,
     ):
-        move_items(self.lib, dest, query, copy, album, pretend, export=export)
+        move_items(self.lib, dest, query, operation, album, pretend, store)
 
     def test_move_item(self):
         self._move()
@@ -39,7 +40,7 @@ class MoveTest(BeetsTestCase):
         assert not self.initial_item_path.exists()
 
     def test_copy_item(self):
-        self._move(copy=True)
+        self._move(operation=MoveOperation.COPY)
         self.i.load()
         assert b"libdir" in self.i.path
         assert self.i.filepath.exists()
@@ -53,7 +54,7 @@ class MoveTest(BeetsTestCase):
         assert not self.initial_item_path.exists()
 
     def test_copy_album(self):
-        self._move(copy=True, album=True)
+        self._move(copy=MoveOperation.COPY, album=True)
         self.i.load()
         assert b"libdir" in self.i.path
         assert self.i.filepath.exists()
@@ -84,19 +85,19 @@ class MoveTest(BeetsTestCase):
         assert self.i.filepath == self.initial_item_path
 
     def test_export_item_custom_dir(self):
-        self._move(dest=self.otherdir, export=True)
+        self._move(dest=self.otherdir, store=False)
         self.i.load()
         assert self.i.filepath == self.initial_item_path
         assert self.otherdir.exists()
 
     def test_export_album_custom_dir(self):
-        self._move(dest=self.otherdir, album=True, export=True)
+        self._move(dest=self.otherdir, album=True, store=False)
         self.i.load()
         assert self.i.filepath == self.initial_item_path
         assert self.otherdir.exists()
 
     def test_pretend_export_item(self):
-        self._move(dest=self.otherdir, pretend=True, export=True)
+        self._move(dest=self.otherdir, pretend=True, store=False)
         self.i.load()
         assert self.i.filepath == self.initial_item_path
         assert not self.otherdir.exists()
