@@ -24,6 +24,7 @@ from ruamel.yaml import YAML, YAMLError
 
 from beets import plugins, ui, util
 from beets.dbcore import types
+from beets.exceptions import UserError
 from beets.importer import Action
 from beets.ui.commands.utils import do_query
 from beets.util import PromptChoice
@@ -57,7 +58,7 @@ def edit(filename, log):
     try:
         subprocess.call(cmd)
     except OSError as exc:
-        raise ui.UserError(f"could not run editor command {cmd[0]!r}: {exc}")
+        raise UserError(f"could not run editor command {cmd[0]!r}: {exc}")
 
 
 def dump(arg, stream):

@@ -35,6 +35,7 @@ import requests
 from beets import ui
 from beets.autotag.hooks import AlbumInfo, TrackInfo
 from beets.dbcore import types
+from beets.exceptions import UserError
 from beets.library import Library
 from beets.metadata_plugins import (
     IDResponse,
@@ -194,7 +195,7 @@ class SpotifyPlugin(
         try:
             response.raise_for_status()
         except requests.exceptions.HTTPError as e:
-            raise ui.UserError(
+            raise UserError(
                 f"Spotify authorization failed: {e}\n{response.text}"
             )
         self.access_token = response.json()["access_token"]
@@ -355,7 +356,7 @@ class SpotifyPlugin(
             month = None
             day = None
         else:
-            raise ui.UserError(
+            raise UserError(
                 "Invalid `release_date_precision` returned "
                 f"by {self.data_source} API: '{release_date_precision}'"
             )

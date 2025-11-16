@@ -17,7 +17,8 @@ import re
 
 import musicbrainzngs
 
-from beets import config, ui
+from beets import config
+from beets.exceptions import UserError
 from beets.plugins import BeetsPlugin
 from beets.ui import Subcommand
 
@@ -31,11 +32,11 @@ def mb_call(func, *args, **kwargs):
     try:
         return func(*args, **kwargs)
     except musicbrainzngs.AuthenticationError:
-        raise ui.UserError("authentication with MusicBrainz failed")
+        raise UserError("authentication with MusicBrainz failed")
     except (musicbrainzngs.ResponseError, musicbrainzngs.NetworkError) as exc:
-        raise ui.UserError(f"MusicBrainz API error: {exc}")
+        raise UserError(f"MusicBrainz API error: {exc}")
     except musicbrainzngs.UsageError:
-        raise ui.UserError("MusicBrainz credentials missing")
+        raise UserError("MusicBrainz credentials missing")
 
 
 def submit_albums(collection_id, release_ids):
@@ -68,7 +69,7 @@ class MusicBrainzCollectionPlugin(BeetsPlugin):
     def _get_collection(self):
         collections = mb_call(musicbrainzngs.get_collections)
         if not collections["collection-list"]:
-            raise ui.UserError("no collections exist for user")
+            raise UserError("no collections exist for user")
 
         # Get all release collection IDs, avoiding event collections
         collection_ids = [
@@ -77,13 +78,13 @@ class MusicBrainzCollectionPlugin(BeetsPlugin):
             if x["entity-type"] == "release"
         ]
         if not collection_ids:
-            raise ui.UserError("No release collection found.")
+            raise UserError("No release collection found.")
 
         # Check that the collection exists so we can present a nice error
         collection = self.config["collection"].as_str()
         if collection:
             if collection not in collection_ids:
-                raise ui.UserError(f"invalid collection ID: {collection}")
+                raise UserError(f"invalid collection ID: {collection}")
             return collection
 
         # No specified collection. Just return the first collection ID

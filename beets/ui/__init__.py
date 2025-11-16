@@ -37,6 +37,7 @@ from rich.traceback import install
 from beets import config, library, logging, plugins, util
 from beets.dbcore import db
 from beets.dbcore import query as db_query
+from beets.exceptions import UserError
 from beets.util import as_string, colordiff, colorize, get_console, get_text
 from beets.util.deprecation import deprecate_for_maintainers
 from beets.util.functemplate import template
@@ -71,12 +72,6 @@ PF_KEY_QUERIES = {
     "comp": "comp:true",
     "singleton": "singleton:true",
 }
-
-
-class UserError(Exception):
-    """UI exception. Commands should throw this in order to display
-    nonrecoverable errors to the user.
-    """
 
 
 # Encoding utilities.
