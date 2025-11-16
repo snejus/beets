@@ -1,6 +1,7 @@
 """The `modify` command: change metadata fields."""
 
 from beets import library, ui
+from beets.exceptions import UserError
 from beets.util import functemplate
 
 from .utils import do_query
@@ -101,7 +102,7 @@ def modify_parse_args(args):
 def modify_func(lib, opts, args):
     query, mods, dels = modify_parse_args(args)
     if not mods and not dels:
-        raise ui.UserError("no modifications specified")
+        raise UserError("no modifications specified")
     modify_items(
         lib,
         mods,
