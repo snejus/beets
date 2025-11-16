@@ -28,6 +28,7 @@ import confuse
 
 from beets import config, ui, util
 from beets.autotag.distance import Distance
+from beets.exceptions import UserError
 from beets.metadata_plugins import MetadataSourcePlugin
 from beetsplug.musicbrainz import MusicBrainzPlugin
 
@@ -250,7 +251,7 @@ class AcoustidPlugin(MetadataSourcePlugin):
             try:
                 apikey = config["acoustid"]["apikey"].as_str()
             except confuse.NotFoundError:
-                raise ui.UserError("no Acoustid user API key provided")
+                raise UserError("no Acoustid user API key provided")
             submit_items(self._log, apikey, lib.items(args))
 
         submit_cmd.func = submit_cmd_func

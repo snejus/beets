@@ -26,6 +26,7 @@ import mediafile
 from confuse import ConfigTypeError, Optional
 
 from beets import config, plugins, ui, util
+from beets.exceptions import UserError
 from beets.library import Item, parse_query_string
 from beets.plugins import BeetsPlugin
 from beets.util import par_map
@@ -65,7 +66,7 @@ def get_format(fmt=None):
         command = format_info["command"]
         extension = format_info.get("extension", fmt)
     except KeyError:
-        raise ui.UserError(f'convert: format {fmt} needs the "command" field')
+        raise UserError(f'convert: format {fmt} needs the "command" field')
     except ConfigTypeError:
         command = config["convert"]["formats"][fmt].get(str)
         extension = fmt
@@ -351,7 +352,7 @@ class ConvertPlugin(BeetsPlugin):
             util.prune_dirs(os.path.dirname(dest))
             raise
         except OSError as exc:
-            raise ui.UserError(
+            raise UserError(
                 f"convert: couldn't invoke {' '.join(args)!r}: {exc}"
             )
 
@@ -733,7 +734,7 @@ class ConvertPlugin(BeetsPlugin):
         """
         dest = opts.dest or self.config["dest"].get()
         if not dest:
-            raise ui.UserError("no convert destination set")
+            raise UserError("no convert destination set")
         dest = util.bytestring_path(dest)
 
         threads = opts.threads or self.config["threads"].get(int)

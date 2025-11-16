@@ -23,6 +23,7 @@ from urllib.request import pathname2url
 
 from beets import ui
 from beets.dbcore.query import ParsingError, Query, Sort
+from beets.exceptions import UserError
 from beets.library import Album, Item, parse_query_string
 from beets.plugins import BeetsPlugin
 from beets.plugins import send as send_event
@@ -152,7 +153,7 @@ class SmartPlaylistPlugin(BeetsPlugin):
             }
             if not playlists:
                 unmatched = [name for name, _, _ in self._unmatched_playlists]
-                raise ui.UserError(
+                raise UserError(
                     f"No playlist matching any of {unmatched} found"
                 )
 

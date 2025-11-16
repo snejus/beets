@@ -3,6 +3,7 @@
 import os
 
 from beets import config, ui
+from beets.exceptions import UserError
 from beets.util import displayable_path, editor_command, interactive_open
 
 
@@ -60,7 +61,7 @@ def config_edit(cli_options):
             message += (
                 ". Please set the VISUAL (or EDITOR) environment variable"
             )
-        raise ui.UserError(message)
+        raise UserError(message)
 
 
 config_cmd = ui.Subcommand("config", help="show or edit the user configuration")

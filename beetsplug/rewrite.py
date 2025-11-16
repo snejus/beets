@@ -19,7 +19,8 @@ formats.
 import re
 from collections import defaultdict
 
-from beets import library, ui
+from beets import library
+from beets.exceptions import UserError
 from beets.plugins import BeetsPlugin
 
 
@@ -54,9 +55,9 @@ class RewritePlugin(BeetsPlugin):
             try:
                 fieldname, pattern = key.split(None, 1)
             except ValueError:
-                raise ui.UserError("invalid rewrite specification")
+                raise UserError("invalid rewrite specification")
             if fieldname not in library.Item._fields:
-                raise ui.UserError(
+                raise UserError(
                     f"invalid field name ({fieldname}) in rewriter"
                 )
             self._log.debug("adding template field {}", key)
