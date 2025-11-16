@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from beets import ui
+from beets.exceptions import UserError
 
 if TYPE_CHECKING:
     from beets.library import Album, Item, Library
@@ -31,8 +31,8 @@ def do_query(
         items = list(lib.items(query))
 
     if album and not albums:
-        raise ui.UserError("No matching albums found.")
+        raise UserError("No matching albums found.")
     elif not album and not items:
-        raise ui.UserError("No matching items found.")
+        raise UserError("No matching items found.")
 
     return items, albums

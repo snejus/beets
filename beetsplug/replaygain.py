@@ -33,6 +33,7 @@ from threading import Event, Thread
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeVar
 
 from beets import ui
+from beets.exceptions import UserError
 from beets.plugins import BeetsPlugin
 from beets.util import command_output, syspath
 
@@ -1219,7 +1220,7 @@ class ReplayGainPlugin(BeetsPlugin):
         self.backend_name = self.config["backend"].as_str()
 
         if self.backend_name not in BACKENDS:
-            raise ui.UserError(
+            raise UserError(
                 f"Selected ReplayGain backend {self.backend_name} is not"
                 f" supported. Please select one of: {', '.join(BACKENDS)}"
             )
@@ -1228,7 +1229,7 @@ class ReplayGainPlugin(BeetsPlugin):
         # and deprecating the old name 'peak'.
         peak_method = self.config["peak"].as_str()
         if peak_method not in PeakMethod.__members__:
-            raise ui.UserError(
+            raise UserError(
                 f"Selected ReplayGain peak method {peak_method} is not"
                 " supported. Please select one of:"
                 f" {', '.join(PeakMethod.__members__)}"
@@ -1251,7 +1252,7 @@ class ReplayGainPlugin(BeetsPlugin):
                 self.config, self._log
             )
         except (ReplayGainError, FatalReplayGainError) as e:
-            raise ui.UserError(f"replaygain initialization failed: {e}")
+            raise UserError(f"replaygain initialization failed: {e}")
 
     def should_use_r128(self, item: Item) -> bool:
         """Checks the plugin setting to decide whether the calculation
@@ -1374,7 +1375,7 @@ class ReplayGainPlugin(BeetsPlugin):
             except ReplayGainError as e:
                 self._log.info("ReplayGain error: {}", e)
             except FatalReplayGainError as e:
-                raise ui.UserError(f"Fatal replay gain error: {e}")
+                raise UserError(f"Fatal replay gain error: {e}")
 
     def handle_track(self, item: Item, write: bool, force: bool = False):
         """Compute track replay gain and store it in the item.
@@ -1403,7 +1404,7 @@ class ReplayGainPlugin(BeetsPlugin):
         except ReplayGainError as e:
             self._log.info("ReplayGain error: {}", e)
         except FatalReplayGainError as e:
-            raise ui.UserError(f"Fatal replay gain error: {e}")
+            raise UserError(f"Fatal replay gain error: {e}")
 
     def open_pool(self, threads: int):
         """Open a `ThreadPool` instance in `self.pool`"""
