@@ -23,10 +23,12 @@ from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 
 from typing_extensions import Self
 
-from beets import config
+from beets import config, logging, ui
 from beets.util import cached_classproperty, unique_list
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from beets.library import Album, Item
 
     from .distance import Distance
@@ -35,6 +37,7 @@ V = TypeVar("V")
 
 JSONDict = dict[str, Any]
 
+log = logging.getLogger("beets")
 
 SYNCHRONISED_LIST_FIELDS = {
     ("albumtype", "albumtypes"),
@@ -402,6 +405,8 @@ class TrackInfo(Info):
 # Structures that compose all the information for a candidate match.
 @dataclass
 class Match:
+    disambig_fields_key: ClassVar[str]
+
     distance: Distance
     info: Info
 
@@ -416,9 +421,37 @@ class Match:
     def from_scratch(self) -> bool:
         return bool(config["import"]["from_scratch"])
 
+    @property
+    def disambig_fields(self) -> Sequence[str]:
+        chosen_fields = config["match"][self.disambig_fields_key].as_str_seq()
+        valid_fields = [f for f in chosen_fields if f in self.info]
+        if missing_fields := set(chosen_fields) - set(valid_fields):
+            log.warning(
+                "Disambiguation string keys {} do not exist.", missing_fields
+            )
+
+        return valid_fields
+
+    @property
+    def base_disambig_data(self) -> JSONDict:
+        return {}
+
+    @property
+    def disambig_string(self) -> str:
+        """Return data for an AlbumInfo or TrackInfo object that
+        provides context that helps disambiguate similar-looking albums and
+        tracks.
+        """
+        data = {
+            k: str(self.info[k]) for k in self.disambig_fields
+        } | self.base_disambig_data
+        return ", ".join(data[k] for k in self.disambig_fields)
+
 
 @dataclass
 class AlbumMatch(Match):
+    disambig_fields_key = "album_disambig_fields"
+
     info: AlbumInfo
     mapping: dict[Item, TrackInfo]
     extra_items: list[Item] = field(default_factory=list)
@@ -431,6 +464,16 @@ class AlbumMatch(Match):
     @property
     def items(self) -> list[Item]:
         return [i for i, _ in self.item_info_pairs]
+
+    @property
+    def base_disambig_data(self) -> JSONDict:
+        return {
+            "media": (
+                f"{mediums}x{self.info.media}"
+                if (mediums := self.info.mediums) and mediums > 1
+                else self.info.media or ""
+            ),
+        }
 
     @property
     def merged_pairs(self) -> list[tuple[Item, JSONDict]]:
@@ -455,8 +498,25 @@ class AlbumMatch(Match):
 
 @dataclass
 class TrackMatch(Match):
+    disambig_fields_key = "singleton_disambig_fields"
+
     info: TrackInfo
     item: Item
+
+    @property
+    def base_disambig_data(self) -> JSONDict:
+        return {
+            "index": f"Index {self.info.index}",
+            "track_alt": f"Track {self.info.track_alt}",
+            "album": (
+                f"[{self.info.album}]"
+                if (
+                    config["import"]["singleton_album_disambig"]
+                    and self.info.album
+                )
+                else ""
+            ),
+        }
 
     def apply_metadata(self) -> None:
         """Apply metadata to the item."""

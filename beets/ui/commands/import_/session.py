@@ -1,18 +1,18 @@
+from __future__ import annotations
+
 from collections import Counter
 from itertools import chain
+from typing import TYPE_CHECKING
 
 from beets import autotag, config, importer, logging, plugins, ui
 from beets.autotag import Recommendation
 from beets.util import PromptChoice, displayable_path
 from beets.util.units import human_bytes, human_seconds_short
 
-from .display import (
-    disambig_string,
-    dist_colorize,
-    penalty_string,
-    show_change,
-    show_item_change,
-)
+from .display import show_change, show_item_change
+
+if TYPE_CHECKING:
+    from beets.autotag.hooks import Match
 
 # Global logger.
 log = logging.getLogger("beets")
@@ -368,7 +368,7 @@ def _summary_judgment(rec):
 
 
 def choose_candidate(
-    candidates,
+    candidates: list[Match],
     singleton,
     rec,
     cur_artist=None,
@@ -440,26 +440,25 @@ def choose_candidate(
             ui.print_("  Candidates:")
             for i, match in enumerate(candidates):
                 # Index, metadata, and distance.
-                index0 = f"{i + 1}."
-                index = dist_colorize(index0, match.distance)
-                dist = f"({(1 - match.distance) * 100:.1f}%)"
-                distance = dist_colorize(dist, match.distance)
-                metadata = f"{match.info.artist} - {match.info.name}"
-                if i == 0:
-                    metadata = dist_colorize(metadata, match.distance)
-                else:
-                    metadata = ui.colorize("text_highlight_minor", metadata)
-                line1 = [index, distance, metadata]
-                ui.print_(f"  {' '.join(line1)}")
+                dist_color = match.distance.color
+                line_parts = [
+                    ui.colorize(dist_color, f"{i + 1}."),
+                    match.distance.string,
+                    ui.colorize(
+                        dist_color if i == 0 else "text_highlight_minor",
+                        f"{match.info.artist} - {match.info.name}",
+                    ),
+                ]
+                ui.print_(f"  {' '.join(line_parts)}")
 
                 # Penalties.
-                penalties = penalty_string(match.distance, 3)
-                if penalties:
+                if penalties := match.distance.penalties:
+                    if len(penalties) > 3:
+                        penalties = [*penalties[:3], "..."]
                     ui.print_(f"{' ' * 13}{penalties}")
 
                 # Disambiguation
-                disambig = disambig_string(match.info)
-                if disambig:
+                if disambig := match.disambig_string:
                     ui.print_(f"{' ' * 13}{disambig}")
 
             # Ask the user for a choice.
