@@ -23,21 +23,18 @@ import errno
 import optparse
 import os.path
 import re
-import shutil
 import sqlite3
 import sys
 import textwrap
 import traceback
-from functools import cache
 from typing import TYPE_CHECKING, Any
 
 import confuse
-from rich_tables.utils import make_console
 
 from beets import config, library, logging, plugins, util
 from beets.dbcore import db
 from beets.dbcore import query as db_query
-from beets.util import as_string
+from beets.util import as_string, console
 from beets.util.color import colorize
 from beets.util.deprecation import deprecate_for_maintainers
 from beets.util.diff import get_model_changes
@@ -46,8 +43,6 @@ from beets.util.functemplate import template
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-
-console = make_console(highlight=False)
 
 # On Windows platforms, use colorama to support "ANSI" terminal colors.
 if sys.platform == "win32":
@@ -443,13 +438,6 @@ def get_replacements():
                 f"malformed regular expression in replace: {pattern}"
             )
     return replacements
-
-
-@cache
-def term_width() -> int:
-    """Get the width (columns) of the terminal."""
-    columns, _ = shutil.get_terminal_size(fallback=(0, 0))
-    return columns if columns else config["ui"]["terminal_width"].get(int)
 
 
 def show_model_changes(

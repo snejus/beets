@@ -48,6 +48,7 @@ from typing import (
     cast,
 )
 
+from rich_tables.utils import make_console
 from unidecode import unidecode
 
 import beets
@@ -1204,3 +1205,6 @@ def get_temp_filename(
 def unique_list(elements: Iterable[T]) -> list[T]:
     """Return a list with unique elements in the original order."""
     return list(dict.fromkeys(elements))
+
+
+console = make_console(highlight=False, stderr=True)

@@ -10,7 +10,7 @@ from beets.autotag.match import distance
 from beets.test import _common
 from beets.test.helper import BeetsTestCase, IOMixin
 from beets.ui.commands.import_ import import_files, paths_from_logfile
-from beets.ui.commands.import_.display import show_change
+from beets.ui.commands.import_.display import show_album_change
 from beets.ui.commands.import_.session import summarize_items
 
 
@@ -84,7 +84,7 @@ class ShowChangeTestCase(IOMixin, BeetsTestCase):
         self.config["import"]["detail"] = True
         change_dist = distance(items, info, item_info_pairs)
         change_dist._penalties = {"album": [0.1], "artist": [0.1]}
-        show_change(
+        show_album_change(
             f"another artist with {long_name}",
             "another album",
             AlbumMatch(change_dist, info, dict(item_info_pairs)),

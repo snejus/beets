@@ -25,6 +25,7 @@ from typing_extensions import Self
 
 from beets import config, logging, plugins
 from beets.util import cached_classproperty, unique_list
+from beets.util.color import colorize
 from beets.util.deprecation import (
     ALBUM_LEGACY_TO_LIST_FIELD,
     ITEM_LEGACY_TO_LIST_FIELD,
@@ -539,34 +540,57 @@ class Match:
     def from_scratch(self) -> bool:
         return bool(config["import"]["from_scratch"])
 
-    @property
-    def disambig_fields(self) -> Sequence[str]:
+    @cached_classproperty
+    def disambig_fields(cls) -> Sequence[str]:
         """Return configured disambiguation fields that exist on this match."""
-        chosen_fields = config["match"][self.disambig_fields_key].as_str_seq()
-        valid_fields = [f for f in chosen_fields if f in self.info]
-        if missing_fields := set(chosen_fields) - set(valid_fields):
+        return config["match"][cls.disambig_fields_key].as_str_seq()
+
+    @cached_property
+    def all_disambig_data(self) -> JSONDict:
+        return self.info | self.base_disambig_data
+
+    @cached_property
+    def chosen_disambig_fields(self) -> Sequence[str]:
+        valid_fields = [
+            f for f in self.disambig_fields if f in self.all_disambig_data
+        ]
+        if missing_fields := set(self.disambig_fields) - set(valid_fields):
             log.warning(
                 "Disambiguation string keys {} do not exist.", missing_fields
             )
 
         return valid_fields
 
-    @property
+    @cached_property
     def base_disambig_data(self) -> JSONDict:
         """Return supplemental values used when formatting disambiguation."""
-        return {}
+        return {
+            "name": self.info.name,
+            "distance": self.distance.string,
+            "penalty": self.penalty,
+            "dist_count": round(float(1 - self.distance), 2),
+            "dist": round(float(1 - self.distance), 2),
+        }
 
-    @property
-    def disambig_string(self) -> str:
-        """Build a display string from the candidate's disambiguation fields.
-
-        Merges base disambiguation data with instance-specific field values,
-        then formats them as a comma-separated string in field definition order.
+    @cached_property
+    def penalty(self) -> str | None:
+        """Returns a colorized string that indicates all the penalties
+        applied to a distance object.
         """
-        data = {
-            k: self.info[k] for k in self.disambig_fields
-        } | self.base_disambig_data
-        return ", ".join(str(data[k]) for k in self.disambig_fields)
+        if penalties := self.distance.generic_penalty_keys:
+            return colorize("changed", f"({', '.join(penalties)})")
+        return None
+
+    @cached_property
+    def disambig_data(self) -> JSONDict:
+        """Return data for an AlbumInfo or TrackInfo object that
+        provides context that helps disambiguate similar-looking albums and
+        tracks.
+        """
+        return {
+            k: str(self.all_disambig_data[k])
+            for k in self.chosen_disambig_fields
+        }
 
 
 @dataclass
@@ -595,23 +619,15 @@ class AlbumMatch(Match):
         return [i for i, _ in self.item_info_pairs]
 
     @property
-    def base_disambig_data(self) -> JSONDict:
-        """Return album-specific values used in disambiguation displays."""
-        return {
-            "media": (
-                f"{mediums}x{self.info.media}"
-                if (mediums := self.info.mediums) and mediums > 1
-                else self.info.media
-            ),
-        }
-
-    @property
     def merged_pairs(self) -> list[tuple[Item, JSONDict]]:
         """Generate item-data pairs with album-level fallback values."""
-        return [
-            (i, ti.merge_with_album(self.info))
-            for i, ti in self.item_info_pairs
-        ]
+        return sorted(
+            (
+                (i, ti.merge_with_album(self.info))
+                for i, ti in self.item_info_pairs
+            ),
+            key=lambda pair: pair[0].get("track", 0),
+        )
 
     def apply_metadata(self) -> None:
         """Apply metadata to each of the items."""
@@ -634,22 +650,6 @@ class TrackMatch(Match):
 
     info: TrackInfo
     item: Item
-
-    @property
-    def base_disambig_data(self) -> JSONDict:
-        """Return singleton-specific values used in disambiguation displays."""
-        return {
-            "index": f"Index {self.info.index}",
-            "track_alt": f"Track {self.info.track_alt}",
-            "album": (
-                f"[{self.info.album}]"
-                if (
-                    config["import"]["singleton_album_disambig"].get()
-                    and self.info.album
-                )
-                else ""
-            ),
-        }
 
     def apply_metadata(self) -> None:
         """Apply metadata to the item."""
