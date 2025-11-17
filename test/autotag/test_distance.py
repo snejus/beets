@@ -118,13 +118,13 @@ class TestDistance:
     def test_penalties_sort(self, dist):
         dist.add("album", 0.1875)
         dist.add("medium", 0.75)
-        assert dist.items() == [("medium", 0.25), ("album", 0.125)]
+        assert dist.items == [("medium", 0.25), ("album", 0.125)]
 
         # Sort by key if distance is equal.
         dist = Distance()
         dist.add("album", 0.375)
         dist.add("medium", 0.75)
-        assert dist.items() == [("album", 0.25), ("medium", 0.25)]
+        assert dist.items == [("album", 0.25), ("medium", 0.25)]
 
     def test_update(self, dist):
         dist1 = dist

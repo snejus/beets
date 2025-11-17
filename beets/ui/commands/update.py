@@ -72,14 +72,18 @@ def update_items(lib, query, album, move, pretend, fields, exclude_fields=None):
             # Special-case album artist when it matches track artist. (Hacky
             # but necessary for preserving album-level metadata for non-
             # autotagged imports.)
-            if not item.albumartist:
-                old_item = lib.get_item(item.id)
-                if old_item.albumartist == old_item.artist == item.artist:
-                    item.albumartist = old_item.albumartist
-                    item._dirty.discard("albumartist")
+            old_item = lib.get_item(item.id)
+            if (
+                not item.albumartist
+                and old_item.albumartist == old_item.artist == item.artist
+            ):
+                item.albumartist = old_item.albumartist
+                item._dirty.discard("albumartist")
 
             # Check for and display changes.
-            changed = ui.show_model_changes(item, fields=item_fields)
+            changed = ui.show_model_changes(
+                item, old=old_item, fields=fields or library.Item._media_fields
+            )
 
             # Save changes.
             if not pretend:

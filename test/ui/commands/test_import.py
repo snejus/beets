@@ -10,7 +10,7 @@ from beets.autotag.match import distance
 from beets.test import _common
 from beets.test.helper import BeetsTestCase, IOMixin
 from beets.ui.commands.import_ import import_files, paths_from_logfile
-from beets.ui.commands.import_.display import show_change
+from beets.ui.commands.import_.display import show_album_change
 from beets.ui.commands.import_.session import summarize_items
 
 
@@ -92,7 +92,7 @@ class ShowChangeTest(IOMixin, unittest.TestCase):
         config["import"]["detail"] = True
         change_dist = distance(items, info, item_info_pairs)
         change_dist._penalties = {"album": [dist], "artist": [dist]}
-        show_change(
+        show_album_change(
             cur_artist,
             cur_album,
             autotag.AlbumMatch(
@@ -160,31 +160,6 @@ class ShowChangeTest(IOMixin, unittest.TestCase):
         exp = ("\x1b[31mtes\x1b[39;49;00m", "\x1b[31mt\x1b[39;49;00m")
         res = ui.color_split("\x1b[31mtest\x1b[39;49;00m", 3)
         assert exp == res
-
-    def test_split_into_lines(self):
-        # Test uncolored text
-        txt = ui.split_into_lines("test test test", [5, 5, 5])
-        assert txt == ["test", "test", "test"]
-        # Test multiple colored texts
-        colored_text = "\x1b[31mtest \x1b[39;49;00m" * 3
-        split_txt = [
-            "\x1b[31mtest\x1b[39;49;00m",
-            "\x1b[31mtest\x1b[39;49;00m",
-            "\x1b[31mtest\x1b[39;49;00m",
-        ]
-        txt = ui.split_into_lines(colored_text, [5, 5, 5])
-        assert txt == split_txt
-        # Test single color, multi space text
-        colored_text = "\x1b[31m test test test \x1b[39;49;00m"
-        txt = ui.split_into_lines(colored_text, [5, 5, 5])
-        assert txt == split_txt
-        # Test single color, different spacing
-        colored_text = "\x1b[31mtest\x1b[39;49;00mtest test test"
-        # ToDo: fix color_len to handle mid-text color escapes, and thus
-        # split colored texts over newlines (potentially with dashes?)
-        split_txt = ["\x1b[31mtest\x1b[39;49;00mt", "est", "test", "test"]
-        txt = ui.split_into_lines(colored_text, [5, 5, 5])
-        assert txt == split_txt
 
     def test_album_data_change_wrap_newline(self):
         # Patch ui.term_width to force wrapping
