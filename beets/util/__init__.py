@@ -42,12 +42,14 @@ from typing import (
     AnyStr,
     ClassVar,
     Generic,
+    Literal,
     NamedTuple,
     TypeVar,
     cast,
 )
 
-from rich.text import Text
+from rich_tables.diff import pretty_diff as diff
+from rich_tables.utils import make_console
 from unidecode import unidecode
 
 import beets
@@ -1202,7 +1204,26 @@ def unique_list(elements: Iterable[T]) -> list[T]:
     return list(dict.fromkeys(elements))
 
 
-def colorize(color_name: str, text: str) -> str:
+ColorName = Literal[
+    "text_success",
+    "text_warning",
+    "text_error",
+    "text_highlight",
+    "text_highlight_minor",
+    "action_default",
+    "action",
+    # New Colors
+    "text_faint",
+    "import_path",
+    "import_path_items",
+    "action_description",
+    "changed",
+    "text_diff_added",
+    "text_diff_removed",
+]
+
+
+def colorize(color_name: ColorName, text: str) -> str:
     """Colorize text if colored output is enabled. (Like _colorize but
     conditional.)
     """
@@ -1213,15 +1234,14 @@ def colorize(color_name: str, text: str) -> str:
     return f"[{color}]{text}[/{color}]"
 
 
-def uncolorize(text: str) -> str:
-    return Text(text).plain
+console = make_console(highlight=False, stderr=True)
 
 
-def color_split(colored_text: str, index: int) -> tuple[str, str]:
-    pre, post = [ln.markup for ln in Text(colored_text).divide((index,))]
-    return pre, post
-
-
-def color_len(colored_text: str) -> int:
-    """Return the length of a string without color codes."""
-    return len(uncolorize(colored_text))
+def colordiff(a: str, b: str) -> str | tuple[str, str]:
+    """Colorize differences between two values if color is enabled.
+    (Like _colordiff but conditional.)
+    """
+    if beets.config["ui"]["color"]:
+        return str(diff(a, b))
+    else:
+        return str(a), str(b)
