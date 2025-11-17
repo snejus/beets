@@ -9,7 +9,12 @@ from beets.autotag import Recommendation
 from beets.util import PromptChoice, displayable_path
 from beets.util.units import human_bytes, human_seconds_short
 
-from .display import show_change, show_item_change
+from .display import (
+    print_album_candidates,
+    print_singleton_candidates,
+    show_album_change,
+    show_item_change,
+)
 
 if TYPE_CHECKING:
     from beets.autotag.hooks import Match
@@ -54,7 +59,7 @@ class TerminalImportSession(importer.ImportSession):
         action = _summary_judgment(task.rec)
         if action == importer.Action.APPLY:
             match = task.candidates[0]
-            show_change(task.cur_artist, task.cur_album, match)
+            show_album_change(task.cur_artist, task.cur_album, match)
             return match
         elif action is not None:
             return action
@@ -429,36 +434,13 @@ def choose_candidate(
 
         if not bypass_candidates:
             # Display list of candidates.
-            ui.print_("")
-            ui.print_(
-                f"Finding tags for {'track' if singleton else 'album'} "
-                f'"{item.artist if singleton else cur_artist} -'
-                f' {item.title if singleton else cur_album}".'
-            )
-
-            ui.print_("  Candidates:")
-            for i, match in enumerate(candidates):
-                # Index, metadata, and distance.
-                dist_color = match.distance.color
-                line_parts = [
-                    ui.colorize(dist_color, f"{i + 1}."),
-                    match.distance.string,
-                    ui.colorize(
-                        dist_color if i == 0 else "text_highlight_minor",
-                        f"{match.info.artist} - {match.info.name}",
-                    ),
-                ]
-                ui.print_(f"  {' '.join(line_parts)}")
-
-                # Penalties.
-                if penalties := match.distance.penalties:
-                    if len(penalties) > 3:
-                        penalties = [*penalties[:3], "..."]
-                    ui.print_(f"{' ' * 13}{penalties}")
-
-                # Disambiguation
-                if disambig := match.disambig_string:
-                    ui.print_(f"{' ' * 13}{disambig}")
+            template = 'Finding tags for {} "{} - {}".'
+            if singleton:
+                ui.print_(template.format("track", item.artist, item.title))
+                print_singleton_candidates(candidates)
+            else:
+                ui.print_(template.format("album", cur_artist, cur_album))
+                print_album_candidates(candidates)
 
             # Ask the user for a choice.
             sel = ui.input_options(choice_opts, numrange=(1, len(candidates)))
@@ -476,9 +458,9 @@ def choose_candidate(
 
         # Show what we're about to do.
         if singleton:
-            show_item_change(item, match)
+            show_item_change(item, match.info, {"data_url", "bpm"})
         else:
-            show_change(cur_artist, cur_album, match)
+            show_album_change(cur_artist, cur_album, match)
 
         # Exact match => tag automatically if we're not in timid mode.
         if rec == Recommendation.strong and not config["import"]["timid"]:

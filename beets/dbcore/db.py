@@ -526,7 +526,7 @@ class Model(ABC, Generic[D]):
 
         return self._db
 
-    def copy(self) -> Model:
+    def copy(self) -> Self:
         """Create a copy of the model object.
 
         The field values and other state is duplicated, but the new copy
