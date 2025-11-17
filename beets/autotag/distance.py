@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from jellyfish import levenshtein_distance
 from unidecode import unidecode
 
-from beets import config, metadata_plugins
+from beets import config, metadata_plugins, ui
 from beets.util import as_string, cached_classproperty, get_most_common_tags
 
 if TYPE_CHECKING:
@@ -139,6 +139,13 @@ class Distance:
             weights[key] = weights_view[key].as_number()
         return weights
 
+    @property
+    def penalties(self) -> list[str]:
+        return [
+            k.replace("album_", "").replace("track_", "").replace("_", " ")
+            for k in self._penalties
+        ]
+
     # Access the components and their aggregates.
 
     @property
@@ -166,6 +173,18 @@ class Distance:
         for key, penalty in self._penalties.items():
             dist_raw += sum(penalty) * self._weights[key]
         return dist_raw
+
+    @property
+    def color(self) -> ui.ColorName:
+        if self.distance <= config["match"]["strong_rec_thresh"].as_number():
+            return "text_success"
+        if self.distance <= config["match"]["medium_rec_thresh"].as_number():
+            return "text_warning"
+        return "text_error"
+
+    @property
+    def string(self) -> str:
+        return ui.colorize(self.color, f"{(1 - self.distance) * 100:.1f}%")
 
     def items(self) -> list[tuple[str, float]]:
         """Return a list of (key, dist) pairs, with `dist` being the
