@@ -46,7 +46,7 @@ from beets.autotag.distance import string_dist
 from beets.autotag.hooks import AlbumInfo, TrackInfo
 from beets.exceptions import UserError
 from beets.metadata_plugins import ArtistData, MetadataSourcePlugin
-from beets.util import cached_classproperty, unique_list
+from beets.util import unique_list
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Sequence
@@ -139,19 +139,6 @@ class Track(TypedDict):
 
 class TrackWithSubtracks(Track):
     sub_tracks: list[TrackWithSubtracks]
-
-
-class IntermediateTrackInfo(TrackInfo):
-    """Allows work with string mediums from
-    get_track_info"""
-
-    def __init__(
-        self,
-        medium_str: str | None,
-        **kwargs,
-    ) -> None:
-        self.medium_str = medium_str
-        super().__init__(**kwargs)
 
 
 def get_title_without_remix(name: str) -> str:
@@ -742,6 +729,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
                 medium_count,
                 index_count,
             )
+            track_info.pop("medium_str", None)
 
         # Get `disctitle` from Discogs index tracks. Assume that an index track
         # before the first track of each medium is a disc title.
@@ -853,7 +841,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
 
     def get_track_info(
         self, track: Track, index: int, divisions: list[str]
-    ) -> IntermediateTrackInfo:
+    ) -> TrackInfo:
         """Returns a TrackInfo object for a discogs track."""
         title = track["title"]
         if self.config["index_tracks"]:
@@ -913,14 +901,14 @@ class DiscogsPlugin(MetadataSourcePlugin):
             artist_data["remixer"] = ", ".join(remixers)
             artist_data["artists"].extend(remixers)
 
-        return IntermediateTrackInfo(
+        return TrackInfo(
             title=title,
             track_id=track_id,
             **artist_data,
             length=length,
             index=index,
             medium_str=medium,
-            medium_index=medium_index,
+            medium_index=int(medium_index) if medium_index else None,
             data_source=self.data_source,
         )
 
