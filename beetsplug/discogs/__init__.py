@@ -68,6 +68,7 @@ CONNECTION_ERRORS = (
     http.client.HTTPException,
     ValueError,  # JSON decoding raises a ValueError.
     DiscogsAPIError,
+    json.JSONDecodeError,
 )
 COUNTRY_OVERRIDES = {
     "Russia": "RU",  # pycountry: Russian Federation
