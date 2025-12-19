@@ -798,18 +798,13 @@ class MusicBrainzPlugin(MetadataSourcePlugin):
                 info.media = "Media"
 
         if self.config["genres"]:
-            sources = [
-                release["release-group"].get(self.genres_field, []),
-                release.get(self.genres_field, []),
-            ]
-            genres: Counter[str] = Counter()
-            for source in sources:
-                for genreitem in source:
-                    genres[genreitem["name"]] += int(genreitem["count"])
-            info.genre = "; ".join(
-                genre
-                for genre, _count in sorted(genres.items(), key=lambda g: -g[1])
-            )
+            genre_items = release["release-group"].get(
+                self.genres_field, []
+            ) + release.get(self.genres_field, [])
+
+            flat = [i["name"] for i in genre_items for _ in range(i["count"])]
+            if flat:
+                info.genre = "; ".join(dict(Counter(flat).most_common()))
 
         # We might find links to external sources (Discogs, Bandcamp, ...)
         external_ids = self.config["external_ids"].get()
