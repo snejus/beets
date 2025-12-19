@@ -678,19 +678,14 @@ class MusicBrainzPlugin(MusicBrainzAPIMixin, MetadataSourcePlugin):
 
         if self.config["genres"]:
             sources = [
-                release["release-group"].get(self.genres_field, []),
-                release.get(self.genres_field, []),
+                *release["release-group"].get(self.genres_field, []),
+                *release.get(self.genres_field, []),
             ]
-            genres: Counter[str] = Counter()
-            for source in sources:
-                for genreitem in source:
-                    genres[genreitem["name"]] += int(genreitem["count"])
-            if genres:
+
+            if sources:
                 info.genres = [
                     genre
-                    for genre, _count in sorted(
-                        genres.items(), key=lambda g: -g[1]
-                    )
+                    for genre, _count in sorted(sources, key=lambda g: -g[1])
                 ]
 
         # We might find links to external sources (Discogs, Bandcamp, ...)
