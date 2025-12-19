@@ -73,6 +73,7 @@ class LimiterTimeoutSession(LimiterMixin, TimeoutAndRetrySession):
 
 
 Entity = Literal[
+    "annotation",
     "area",
     "artist",
     "collection",
