@@ -687,6 +687,12 @@ class MusicBrainzPlugin(
 
         # Release events.
         info.country, release_date = _preferred_release_event(release)
+        if info.country == "XW":
+            artist_countries = (
+                c["artist"].get("country") for c in release["artist_credit"]
+            )
+            info.country = next(filter(None, artist_countries), "XW")
+
         info.year, info.month, info.day = (
             _get_date(release_date)
             if release_date
