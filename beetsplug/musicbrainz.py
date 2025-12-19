@@ -739,6 +739,17 @@ class MusicBrainzPlugin(MetadataSourcePlugin):
 
         # Release events.
         info.country, release_date = _preferred_release_event(release)
+        if (
+            info.country == "XW"
+            and len(
+                countries := {
+                    c["artist"].get("country") for c in release["artist-credit"]
+                }
+            )
+            == 1
+        ):
+            info.country = countries.pop()
+
         release_group_date = release["release-group"].get("first-release-date")
         if not release_date:
             # Fall back if release-specific date is not available.
