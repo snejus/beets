@@ -8,6 +8,8 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, Protocol, TypeVar
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from beets import __version__
 
@@ -60,7 +62,7 @@ class SingletonMeta(type, Generic[C]):
         return SingletonMeta._instances[cls]
 
 
-class TimeoutSession(requests.Session, metaclass=SingletonMeta):
+class TimeoutAndRetrySession(requests.Session, metaclass=SingletonMeta):
     """HTTP session with automatic timeout and status checking.
 
     Extends requests.Session to provide sensible defaults for beets HTTP
@@ -71,6 +73,11 @@ class TimeoutSession(requests.Session, metaclass=SingletonMeta):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.headers["User-Agent"] = f"beets/{__version__} https://beets.io/"
+
+        retry = Retry(connect=2, backoff_factor=1, allowed_methods=None)
+        adapter = HTTPAdapter(max_retries=retry)
+        self.mount("https://", adapter)
+        self.mount("http://", adapter)
 
     def request(self, *args, **kwargs):
         """Execute HTTP request with automatic timeout and status validation.
@@ -106,15 +113,21 @@ class RequestHandler:
         Feel free to define common methods that are used in multiple plugins.
     """
 
-    session_type: ClassVar[type[TimeoutSession]] = TimeoutSession
     explicit_http_errors: ClassVar[list[type[BeetsHTTPError]]] = [
         HTTPNotFoundError
     ]
 
+    def create_session(self) -> TimeoutAndRetrySession:
+        """Create a new HTTP session instance.
+
+        Can be overridden by subclasses to provide custom session types.
+        """
+        return TimeoutAndRetrySession()
+
     @cached_property
-    def session(self) -> Any:
+    def session(self) -> TimeoutAndRetrySession:
         """Lazily initialize and cache the HTTP session."""
-        return self.session_type()
+        return self.create_session()
 
     def status_to_error(
         self, code: int
