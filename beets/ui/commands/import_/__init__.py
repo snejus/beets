@@ -173,6 +173,13 @@ import_cmd.parser.add_option(
     help="move tracks into the library (overrides -c)",
 )
 import_cmd.parser.add_option(
+    "-M",
+    "--nomove",
+    action="store_false",
+    dest="move",
+    help="do not move tracks into the library (opposite of -m)",
+)
+import_cmd.parser.add_option(
     "-w",
     "--write",
     action="store_true",
