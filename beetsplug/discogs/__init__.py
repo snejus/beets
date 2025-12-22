@@ -28,6 +28,7 @@ import traceback
 from collections import Counter
 from contextlib import suppress
 from functools import cache, cached_property, partial
+from itertools import islice
 from string import ascii_lowercase
 from typing import TYPE_CHECKING
 from unicodedata import normalize
@@ -117,6 +118,10 @@ def get_title_without_remix(name: str) -> str:
 
 
 class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
+    @cached_property
+    def search_limit(self) -> int:
+        return self.config["search_limit"].get()
+
     def __init__(self):
         super().__init__()
         self.config.add(
@@ -372,8 +377,7 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
         self._log.debug("Searching for '{}', {}", query, kwargs)
         try:
             results = self.discogs_client.search(*args, **kwargs)
-            results.per_page = self.config["search_limit"].get()
-            releases = results.page(1)
+            results.per_page = self.search_limit
         except CONNECTION_ERRORS:
             self._log.debug(
                 "Communication error while searching for {0!r}",
@@ -381,10 +385,18 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
                 exc_info=True,
             )
         else:
-            releases = [
-                r for r in releases if "Box Set" not in str(r.data["formats"])
-            ]
-            yield from filter(None, map(self.get_album_info, releases))
+            releases = (
+                r
+                for r in results.page(1)
+                if not any(f["name"] == "Box Set" for f in r.formats)
+                and not (
+                    len(r.tracklist) == 1 and r.title == r.tracklist[0].title
+                )
+            )
+            yield from islice(
+                filter(None, map(self.get_album_info, releases)),
+                self.search_limit,
+            )
 
     @cache
     def get_master_year(self, master_id: str) -> int | None:
