@@ -318,7 +318,7 @@ def tag_album(
 
         # Get the results from the data sources.
         for matched_candidate in metadata_plugins.candidates(
-            items, search_artist, search_name, va_likely
+            items, search_artist, search_name or items[0].title, va_likely
         ):
             _add_candidate(items, candidates, matched_candidate)
             if opt_candidate := candidates.get(matched_candidate.album_id):
