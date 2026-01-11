@@ -368,7 +368,9 @@ class LastGenrePlugin(plugins.BeetsPlugin):
         and the whitelist feature was disabled.
         """
 
-        def _try_resolve_stage(stage_label: str, keep_genres, new_genres):
+        def _try_resolve_stage(
+            stage_label: str, keep_genres: list[str], new_genres: list[str]
+        ) -> tuple[list[str], str] | None:
             """Try to resolve genres for a given stage and log the result."""
             resolved_genres = self._combine_resolve_and_log(
                 keep_genres, new_genres
