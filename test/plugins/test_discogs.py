@@ -61,6 +61,7 @@ class TestDGAlbumInfo(PytestTestHelper):
             "title": "ALBUM TITLE",
             "year": "3001",
             "artists": [_artist("ARTIST NAME", join=",")],
+            "artists_sort": "ARTIST NAME",
             "formats": [
                 {
                     "descriptions": ["FORMAT DESC 1", "FORMAT DESC 2"],
@@ -351,6 +352,7 @@ class TestDGAlbumInfo(PytestTestHelper):
             "uri": "https://www.discogs.com/release/123456-something",
             "tracklist": [self._make_track("A", "1", "01:01")],
             "artists": [_artist("ARTIST NAME", id=321)],
+            "artists_sort": "ARTIST NAME",
             "title": "TITLE",
             "country": "Germany",
         }
