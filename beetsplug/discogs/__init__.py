@@ -534,6 +534,11 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
                 if (country := result.data.get("country"))
                 else None
             ),
+            artist_sort=(
+                self.strip_disambiguation(asort)
+                if (asort := result.data.get("artists_sort"))
+                else None
+            ),
             style=(
                 self.config["separator"].as_str().join(sorted(styles)) or None
             ),
