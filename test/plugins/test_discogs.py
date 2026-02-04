@@ -233,6 +233,7 @@ class DGAlbumInfoTest(BeetsTestCase):
         assert d.mediums == 1
         assert len(d.tracks) == 3
 
+    def test_parse_tracklist_letters_num(self):
         release = self._make_release_from_positions(
             ["A1", "A2.1", "A2.2", "A3"]
         )
