@@ -421,7 +421,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
         # convenient `.tracklist` property, which will strip out useful artist
         # information and leave us with skeleton `Artist` objects that will
         # each make an API call just to get the same data back.
-        tracks = self.get_tracks(
+        track_infos = self.get_tracks(
             result.data["tracklist"],
             ArtistState.from_config(self.config, artist_data),
         )
@@ -429,7 +429,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
         # Extract information for the optional AlbumInfo fields, if possible.
         va = albumartist.artist == config["va_name"].as_str()
         year = result.data.get("year")
-        mediums = [t["medium"] for t in tracks]
+        mediums = [t["medium"] for t in track_infos]
         data_url = result.data.get("uri")
         styles: list[str] = result.data.get("styles") or []
         genres: list[str] = result.data.get("genres") or []
@@ -444,7 +444,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
         albumstatus, albumtype, albumtypes, media = self.parse_formats(
             result.data.get("formats") or [],
             album,
-            [t["title"] for t in tracks],
+            [t["title"] for t in track_infos],
             va,
         )
         cover_art_url = self.select_cover_art(result)
@@ -452,14 +452,16 @@ class DiscogsPlugin(MetadataSourcePlugin):
         # Additional cleanups
         # Explicitly set the `media` for the tracks, since it is expected by
         # `autotag.apply_metadata`, and set `medium_total`.
-        for track in tracks:
-            track.media = media
-            track.medium_total = mediums.count(track.medium)
+        for track_info in track_infos:
+            track_info.media = media
+            track_info.medium_total = mediums.count(track_info.medium)
             # Discogs does not have track IDs. Invent our own IDs as proposed
             # in #2336.
-            track.track_id = f"{album_id}-{track.track_alt or track.index}"
-            track.data_url = data_url
-            track.data_source = "Discogs"
+            track_info.track_id = (
+                f"{album_id}-{track_info.track_alt or track_info.index}"
+            )
+            track_info.data_url = data_url
+            track_info.data_source = "Discogs"
 
         # Retrieve master release id (returns None if there isn't one).
         master_id = result.data.get("master_id")
@@ -473,7 +475,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
             album=album,
             album_id=album_id,
             **albumartist.info,  # Unpacks values to satisfy the keyword arguments
-            tracks=tracks,
+            tracks=track_infos,
             albumstatus=albumstatus,
             albumtype=albumtype,
             albumtypes=sorted(albumtypes),
@@ -524,20 +526,20 @@ class DiscogsPlugin(MetadataSourcePlugin):
 
     def get_tracks(
         self,
-        tracklist: list[Track],
+        track_infos: list[Track],
         albumartistinfo: ArtistState,
     ) -> list[TrackInfo]:
         """Returns a list of TrackInfo objects for a discogs tracklist."""
         try:
-            clean_tracklist: list[Track] = self._coalesce_tracks(tracklist)
+            clean_tracklist: list[Track] = self._coalesce_tracks(track_infos)
         except Exception as exc:
             # FIXME: this is an extra precaution for making sure there are no
             # side effects after #2222. It should be removed after further
             # testing.
             self._log.debug("{}", traceback.format_exc())
             self._log.error("uncaught exception in _coalesce_tracks: {}", exc)
-            clean_tracklist = tracklist
-        t = TracklistState.build(self, clean_tracklist, albumartistinfo)
+            clean_tracklist = track_infos
+        tracklist = TracklistState.build(self, clean_tracklist, albumartistinfo)
         # Fix up medium and medium_index for each track. Discogs position is
         # unreliable, but tracks are in order.
         medium = None
@@ -546,24 +548,24 @@ class DiscogsPlugin(MetadataSourcePlugin):
 
         # If a medium has two sides (ie. vinyl or cassette), each pair of
         # consecutive sides should belong to the same medium.
-        if all([medium is not None for medium in t.mediums]):
-            m = sorted(
-                {medium.lower() if medium else "" for medium in t.mediums}
-            )
+        if len(found_mediums := list(filter(None, tracklist.mediums))) == len(
+            tracklist.mediums
+        ):
+            m = sorted(map(str.lower, set(found_mediums)))
             # If all track.medium are single consecutive letters, assume it is
             # a 2-sided medium.
             if "".join(m) in ascii_lowercase:
                 sides_per_medium = 2
 
-        for i, track in enumerate(t.tracks):
+        for i, track_info in enumerate(tracklist.tracks):
             # Handle special case where a different medium does not indicate a
             # new disc, when there is no medium_index and the ordinal of medium
             # is not sequential. For example, I, II, III, IV, V. Assume these
             # are the track index, not the medium.
             # side_count is the number of mediums or medium sides (in the case
             # of two-sided mediums) that were seen before.
-            medium_str = t.mediums[i]
-            medium_index = t.medium_indices[i]
+            medium_str = tracklist.mediums[i]
+            medium_index = tracklist.medium_indices[i]
             medium_is_index = (
                 medium_str
                 and not medium_index
@@ -590,19 +592,22 @@ class DiscogsPlugin(MetadataSourcePlugin):
 
             index_count += 1
             medium_count = 1 if medium_count == 0 else medium_count
-            track.medium, track.medium_index = medium_count, index_count
+            track_info.medium, track_info.medium_index = (
+                medium_count,
+                index_count,
+            )
 
         # Get `disctitle` from Discogs index tracks. Assume that an index track
         # before the first track of each medium is a disc title.
-        for track in t.tracks:
-            if track.medium_index == 1:
-                if track.index in t.index_tracks:
-                    disctitle = t.index_tracks[track.index]
+        for track_info in tracklist.tracks:
+            if track_info.medium_index == 1:
+                if track_info.index in tracklist.index_tracks:
+                    disctitle = tracklist.index_tracks[track_info.index]
                 else:
                     disctitle = None
-            track.disctitle = disctitle
+            track_info.disctitle = disctitle
 
-        return t.tracks
+        return tracklist.tracks
 
     def _coalesce_tracks(self, raw_tracklist: list[Track]) -> list[Track]:
         """Pre-process a tracklist, merging subtracks into a single track. The
