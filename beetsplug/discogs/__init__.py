@@ -18,7 +18,7 @@ python3-discogs-client library.
 
 from __future__ import annotations
 
-import http.client
+import http
 import json
 import os
 import re
@@ -447,7 +447,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
             track.medium_total = mediums.count(track.medium)
             # Discogs does not have track IDs. Invent our own IDs as proposed
             # in #2336.
-            track.track_id = f"{album_id}-{track.track_alt}"
+            track.track_id = f"{album_id}-{track.track_alt or track.index}"
             track.data_url = data_url
             track.data_source = "Discogs"
 
@@ -474,7 +474,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
             comments=result.data.get("notes"),
             label=self.strip_disambiguation(label["name"]) if label else None,
             mediums=len(set(mediums)),
-            releasegroup_id=master_id,
+            releasegroup_id=str(master_id) if master_id else None,
             catalognum=(
                 label
                 and label["catno"].replace("none", "").replace(" ", "").upper()
@@ -498,6 +498,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
             data_url=data_url,
             discogs_albumid=discogs_albumid,
             discogs_labelid=label["id"] if label else None,
+            discogs_artistid=albumartist.artist_id,
             cover_art_url=cover_art_url,
         )
 
