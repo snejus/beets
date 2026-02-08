@@ -324,7 +324,7 @@ def _merge_pseudo_and_actual_album(
 
 
 def get_genre(genre_items: list[dict[str, Any]]) -> list[str]:
-    from beetsplug.bandcamp.helpers import Helpers
+    from beetcamp.helpers import Helpers
 
     flat = [i["name"] for i in genre_items for _ in range(i["count"])]
     genres = list(dict(Counter(flat).most_common()))
