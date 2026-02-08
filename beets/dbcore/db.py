@@ -1023,6 +1023,29 @@ class Transaction:
             self._mutated = True
             return cursor.lastrowid
 
+    def mutate_many(
+        self, statement: str, subvals: Sequence[tuple[SQLiteType, ...]] = ()
+    ) -> Any:
+        """Execute an SQL statement with substitution values and return
+        the row ID of the last affected row.
+        """
+        try:
+            cursor = self.db._connection().executemany(statement, subvals)
+        except sqlite3.OperationalError as e:
+            # In two specific cases, SQLite reports an error while accessing
+            # the underlying database file. We surface these exceptions as
+            # DBAccessError so the application can abort.
+            if e.args[0] in (
+                "attempt to write a readonly database",
+                "unable to open database file",
+            ):
+                raise DBAccessError(e.args[0])
+            else:
+                raise
+        else:
+            self._mutated = True
+            return cursor.lastrowid
+
     def script(self, statements: str):
         """Execute a string containing multiple SQL statements."""
         # We don't know whether this mutates, but quite likely it does.
