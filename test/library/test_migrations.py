@@ -1,5 +1,6 @@
 import pytest
 
+from beets.dbcore import types
 from beets.library.migrations import MultiGenreFieldMigration
 from beets.library.models import Album, Item
 from beets.test.helper import TestHelper
@@ -7,8 +8,20 @@ from beets.test.helper import TestHelper
 
 class TestMultiGenreFieldMigration:
     @pytest.fixture
-    def helper(self, monkeypatch):
+    def helper(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr("beets.library.library.Library._migrations", ())
+        monkeypatch.setattr(
+            "beets.library.models.Item._fields",
+            {**Item._fields, "genre": types.STRING},
+        )
+        monkeypatch.setattr(
+            "beets.library.models.Album._fields",
+            {**Album._fields, "genre": types.STRING},
+        )
+        monkeypatch.setattr(
+            "beets.library.models.Album.item_keys",
+            {*Album.item_keys, "genre"},
+        )
         helper = TestHelper()
         helper.setup_beets()
 

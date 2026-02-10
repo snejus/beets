@@ -1063,16 +1063,16 @@ class Migration(ABC):
         name = cls.__name__.removesuffix("Migration")  # type: ignore[attr-defined]
         return re.sub(r"(?<=[a-z])(?=[A-Z])", "_", name).lower()
 
-    def migrate_table(self, table: str) -> None:
+    def migrate_table(self, table: str, *args, **kwargs) -> None:
         """Migrate a specific table."""
         migration_flag = f"{self.flag_prefix}_{table}"
 
         if not self.db.get_migration_state(migration_flag):
-            self._migrate_data(table)
+            self._migrate_data(table, *args, **kwargs)
             self.db.set_migration_state(migration_flag, True)
 
     @abstractmethod
-    def _migrate_data(self, table: str) -> None:
+    def _migrate_data(self, table: str, current_fields: set[str]) -> None:
         """Migrate data for a specific table."""
 
 
@@ -1139,6 +1139,24 @@ class Database:
             self._create_indices(model_cls._table, model_cls._indices)
 
         self._migrate()
+
+    @cached_property
+    def current_tables(self) -> set[str]:
+        with self.transaction() as tx:
+            return {
+                r[0]
+                for r in tx.query(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+            }
+
+    @cached_property
+    def current_fields_by_table(self) -> dict[str, set[str]]:
+        with self.transaction() as tx:
+            return {
+                t: {r[1] for r in tx.query(f"PRAGMA table_info({t})")}
+                for t in [m._table for m in self._models]
+            }
 
     # Primitive access control: connections and transactions.
 
@@ -1280,17 +1298,7 @@ class Database:
         """Set up the schema of the database. `fields` is a mapping
         from field names to `Type`s. Columns are added if necessary.
         """
-        # Get current schema.
-        with self.transaction() as tx:
-            rows = tx.query(f"PRAGMA table_info({table})")
-        current_fields = {row[1] for row in rows}
-
-        field_names = set(fields.keys())
-        if current_fields.issuperset(field_names):
-            # Table exists and has all the required columns.
-            return
-
-        if not current_fields:
+        if table not in self.current_tables:
             # No table exists.
             columns = []
             for name, typ in fields.items():
@@ -1300,12 +1308,12 @@ class Database:
         else:
             # Table exists does not match the field set.
             setup_sql = ""
+            current_fields = self.current_fields_by_table[table]
             for name, typ in fields.items():
-                if name in current_fields:
-                    continue
-                setup_sql += (
-                    f"ALTER TABLE {table} ADD COLUMN {name} {typ.sql};\n"
-                )
+                if name not in current_fields:
+                    setup_sql += (
+                        f"ALTER TABLE {table} ADD COLUMN {name} {typ.sql};\n"
+                    )
 
         with self.transaction() as tx:
             tx.script(setup_sql)
@@ -1355,7 +1363,10 @@ class Database:
         for migration_cls, model_classes in self._migrations:
             migration = migration_cls(self)
             for model_cls in model_classes:
-                migration.migrate_table(model_cls._table)
+                table = model_cls._table
+                migration.migrate_table(
+                    table, self.current_fields_by_table[table]
+                )
 
     def get_migration_state(self, name: str) -> bool:
         """Return whether a named migration has been marked complete."""
