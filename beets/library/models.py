@@ -1538,7 +1538,9 @@ class DefaultTemplateFunctions:
         return res
 
     @staticmethod
-    def tmpl_first(s, count=1, skip=0, sep="; ", join_str="; "):
+    def tmpl_first(
+        s, count=1, skip=0, sep=types.MULTI_VALUE_DELIMITER, join_str="; "
+    ):
         """Get the item(s) from x to y in a string separated by something
         and join then with something.
 
@@ -1546,8 +1548,8 @@ class DefaultTemplateFunctions:
             s: the string
             count: The number of items included
             skip: The number of items skipped
-            sep: the separator. Usually is '; ' (default) or '/ '
-            join_str: the string which will join the items, default '; '.
+            sep: the separator
+            join_str: the string which will join the items
         """
         skip = int(skip)
         count = skip + int(count)

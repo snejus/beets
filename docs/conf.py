@@ -108,7 +108,8 @@ rst_epilog = """
 .. |Library| replace:: :class:`~beets.library.library.Library`
 .. |Model| replace:: :class:`~beets.dbcore.db.Model`
 .. |TrackInfo| replace:: :class:`beets.autotag.hooks.TrackInfo`
-"""
+.. |semicolon_space| replace:: :literal:`; \ `
+"""  # noqa: W605
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
