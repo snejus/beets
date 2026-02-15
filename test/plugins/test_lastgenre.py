@@ -146,7 +146,7 @@ class LastGenrePluginTest(IOMixin, PluginTestCase):
             albumartist="Pretend Artist",
             artist="Pretend Artist",
             title="Pretend Track",
-            genre="Original Genre",
+            genres=["Original Genre"],
         )
         album = self.lib.add_album([item])
 
@@ -159,8 +159,8 @@ class LastGenrePluginTest(IOMixin, PluginTestCase):
 
         assert "genres:" in output
         album.load()
-        assert album.genre == "Original Genre"
-        assert album.items()[0].genre == "Original Genre"
+        assert album.genres == ["Original Genre"]
+        assert album.items()[0].genres == ["Original Genre"]
 
     def test_no_duplicate(self):
         """Remove duplicated genres."""
