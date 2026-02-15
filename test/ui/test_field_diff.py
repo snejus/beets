@@ -32,8 +32,11 @@ class TestFieldDiff:
             p({"title": "foo"}, {"title": "bar"}, "title", f"title: {diff_fmt('foo', 'bar')}", id="string_full_replace"),
             p({"title": "prefix foo"}, {"title": "prefix bar"}, "title", "title: prefix [text_diff_removed]foo[/] -> prefix [text_diff_added]bar[/]", id="string_partial_change"),
             p({"year": 2000}, {"year": 2001}, "year", f"year: {diff_fmt('2000', '2001')}", id="int_changed"),
-            p({}, {"genre": "Rock"}, "genre", "genre:  -> [text_diff_added]Rock[/]", id="field_added"),
-            p({"genre": "Rock"}, {}, "genre", "genre: [text_diff_removed]Rock[/] -> ", id="field_removed"),
+            p({}, {"title": "Title"}, "title", "title:  -> [text_diff_added]Title[/]", id="field_added"),
+            p({"title": "Title"}, {}, "title", "title: [text_diff_removed]Title[/] -> ", id="field_removed"),
+            # TODO: there's some weirdness around empty list values handling
+            p({}, {"genres": ["Rock"]}, "genres", "genres: [text_diff_removed][/] -> [text_diff_added]Rock[/]", id="list_field_added"),
+            p({"genres": ["Rock"]}, {}, "genres", "genres: [text_diff_removed]Rock[/] -> [text_diff_added][/]", id="list_field_removed"),
             p({"track": 1}, {"track": 2}, "track", f"track: {diff_fmt('01', '02')}", id="formatted_value_changed"),
             p({"mb_trackid": None}, {"mb_trackid": "1234"}, "mb_trackid", "mb_trackid:  -> [text_diff_added]1234[/]", id="none_to_value"),
             p({}, {"new_flex": "foo"}, "new_flex", "[text_diff_added]new_flex: foo[/]", id="flex_field_added"),
