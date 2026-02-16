@@ -256,13 +256,11 @@ class TerminalImportSession(importer.ImportSession):
 
         # Add a "dummy" choice for the other baked-in option, for
         # duplicate checking.
-        all_choices = (
-            [
-                PromptChoice("a", "Apply", None),
-            ]
-            + choices
-            + extra_choices
-        )
+        all_choices = [
+            PromptChoice("a", "Apply", None),
+            *choices,
+            *extra_choices,
+        ]
 
         # Check for conflicts.
         short_letters = [c.short for c in all_choices]
@@ -329,7 +327,7 @@ def summarize_items(items, singleton):
     return ", ".join(summary_parts)
 
 
-def _summary_judgment(rec):
+def _summary_judgment(rec: Recommendation) -> importer.Action | None:
     """Determines whether a decision should be made without even asking
     the user. This occurs in quiet mode and when an action is chosen for
     NONE recommendations. Return None if the user should be queried.
@@ -337,6 +335,7 @@ def _summary_judgment(rec):
     summary judgment is made.
     """
 
+    action: importer.Action | None
     if config["import"]["quiet"]:
         if rec == Recommendation.strong:
             return importer.Action.APPLY
@@ -501,7 +500,7 @@ def choose_candidate(
         if config["import"]["bell"]:
             ui.print_("\a", end="")
         sel = ui.input_options(
-            ("Apply", "More candidates") + choice_opts,
+            ("Apply", "More candidates", *choice_opts),
             require=require,
             default=default,
         )

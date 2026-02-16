@@ -10,16 +10,21 @@
 #
 # The above copyright notice and this permission notice shall be
 # included in all copies or substantial portions of the Software.
-
+from __future__ import annotations
 
 import os
 import tempfile
-from collections.abc import Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING, ClassVar
 
 import beets
 from beets.dbcore.query import BLOB_TYPE, InQuery
 from beets.util import path_as_posix
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from beets.dbcore.query import FieldQueryType
 
 
 def is_m3u_file(path: str) -> bool:
@@ -64,7 +69,7 @@ class PlaylistQuery(InQuery[bytes]):
                 relative_to = os.path.dirname(playlist_path)
             else:
                 relative_to = config["relative_to"].as_filename()
-            relative_to = beets.util.bytestring_path(relative_to)
+            relative_to_bytes = beets.util.bytestring_path(relative_to)
 
             for line in f:
                 if line[0] == "#":
@@ -73,7 +78,7 @@ class PlaylistQuery(InQuery[bytes]):
 
                 paths.append(
                     beets.util.normpath(
-                        os.path.join(relative_to, line.rstrip())
+                        os.path.join(relative_to_bytes, line.rstrip())
                     )
                 )
             f.close()
@@ -82,7 +87,9 @@ class PlaylistQuery(InQuery[bytes]):
 
 
 class PlaylistPlugin(beets.plugins.BeetsPlugin):
-    item_queries = {"playlist": PlaylistQuery}
+    item_queries: ClassVar[dict[str, FieldQueryType]] = {
+        "playlist": PlaylistQuery
+    }
 
     def __init__(self):
         super().__init__()

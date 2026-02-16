@@ -15,9 +15,6 @@
 """This module includes various helpers that provide fixtures, capture
 information or mock the environment.
 
-- The `control_stdin` and `capture_stdout` context managers allow one to
-  interact with the user interface.
-
 - `has_program` checks the presence of a command on the system.
 
 - The `ImportSessionFixture` allows one to run importer code while
@@ -38,12 +35,12 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
 from functools import cached_property
-from io import StringIO
 from pathlib import Path
 from tempfile import gettempdir, mkdtemp, mkstemp
 from typing import Any, ClassVar
 from unittest.mock import patch
 
+import pytest
 import responses
 from mediafile import Image, MediaFile
 
@@ -83,44 +80,9 @@ def capture_log(logger="beets"):
         log.removeHandler(capture)
 
 
-@contextmanager
-def control_stdin(input=None):
-    """Sends ``input`` to stdin.
-
-    >>> with control_stdin('yes'):
-    ...     input()
-    'yes'
-    """
-    org = sys.stdin
-    sys.stdin = StringIO(input)
-    try:
-        yield sys.stdin
-    finally:
-        sys.stdin = org
-
-
-@contextmanager
-def capture_stdout():
-    """Save stdout in a StringIO.
-
-    >>> with capture_stdout() as output:
-    ...     print('spam')
-    ...
-    >>> output.getvalue()
-    'spam'
-    """
-    org = sys.stdout
-    sys.stdout = capture = StringIO()
-    try:
-        yield sys.stdout
-    finally:
-        sys.stdout = org
-        print(capture.getvalue())
-
-
 def has_program(cmd, args=["--version"]):
     """Returns `True` if `cmd` can be executed."""
-    full_cmd = [cmd] + args
+    full_cmd = [cmd, *args]
     try:
         with open(os.devnull, "wb") as devnull:
             subprocess.check_call(
@@ -163,21 +125,31 @@ NEEDS_REFLINK = unittest.skipUnless(
 )
 
 
-class IOMixin:
-    @cached_property
-    def io(self) -> _common.DummyIO:
-        return _common.DummyIO()
+class RunMixin:
+    def run_command(self, *args, **kwargs):
+        """Run a beets command with an arbitrary amount of arguments. The
+        Library` defaults to `self.lib`, but can be overridden with
+        the keyword argument `lib`.
+        """
+        sys.argv = ["beet"]  # avoid leakage from test suite args
+        lib = None
+        if hasattr(self, "lib"):
+            lib = self.lib
+        lib = kwargs.get("lib", lib)
+        beets.ui._raw_main(list(args), lib)
 
-    def setUp(self):
-        super().setUp()
-        self.io.install()
 
-    def tearDown(self):
-        super().tearDown()
-        self.io.restore()
+@pytest.mark.usefixtures("io")
+class IOMixin(RunMixin):
+    io: _common.DummyIO
+
+    def run_with_output(self, *args):
+        self.io.getoutput()
+        self.run_command(*args)
+        return self.io.getoutput()
 
 
-class TestHelper(ConfigMixin):
+class TestHelper(RunMixin, ConfigMixin):
     """Helper mixin for high-level cli and plugin tests.
 
     This mixin provides methods to isolate beets' global state provide
@@ -364,15 +336,17 @@ class TestHelper(ConfigMixin):
                 items.append(item)
         return self.lib.add_album(items)
 
-    def create_mediafile_fixture(self, ext="mp3", images=[]):
+    def create_mediafile_fixture(self, ext="mp3", images=[], target_dir=None):
         """Copy a fixture mediafile with the extension to `temp_dir`.
 
         `images` is a subset of 'png', 'jpg', and 'tiff'. For each
         specified extension a cover art image is added to the media
         file.
         """
+        if not target_dir:
+            target_dir = self.temp_dir
         src = os.path.join(_common.RSRC, util.bytestring_path(f"full.{ext}"))
-        handle, path = mkstemp(dir=self.temp_dir)
+        handle, path = mkstemp(dir=target_dir)
         path = bytestring_path(path)
         os.close(handle)
         shutil.copyfile(syspath(src), syspath(path))
@@ -389,25 +363,6 @@ class TestHelper(ConfigMixin):
             mediafile.save()
 
         return path
-
-    # Running beets commands
-
-    def run_command(self, *args, **kwargs):
-        """Run a beets command with an arbitrary amount of arguments. The
-        Library` defaults to `self.lib`, but can be overridden with
-        the keyword argument `lib`.
-        """
-        sys.argv = ["beet"]  # avoid leakage from test suite args
-        lib = None
-        if hasattr(self, "lib"):
-            lib = self.lib
-        lib = kwargs.get("lib", lib)
-        beets.ui._raw_main(list(args), lib)
-
-    def run_with_output(self, *args):
-        with capture_stdout() as out:
-            self.run_command(*args)
-        return out.getvalue()
 
     # Safe file operations
 
@@ -524,7 +479,7 @@ class ImportHelper(TestHelper):
     autotagging library and several assertions for the library.
     """
 
-    default_import_config = {
+    default_import_config: ClassVar[dict[str, bool]] = {
         "autotag": True,
         "copy": True,
         "hardlink": False,
@@ -756,10 +711,7 @@ class TerminalImportSessionFixture(TerminalImportSession):
 class TerminalImportMixin(IOMixin, ImportHelper):
     """Provides_a terminal importer for the import session."""
 
-    io: _common.DummyIO
-
     def _get_import_session(self, import_dir: bytes) -> importer.ImportSession:
-        self.io.install()
         return TerminalImportSessionFixture(
             self.lib,
             loghandler=None,
@@ -880,7 +832,7 @@ class FetchImageHelper:
     def run(self, *args, **kwargs):
         super().run(*args, **kwargs)
 
-    IMAGEHEADER: dict[str, bytes] = {
+    IMAGEHEADER: ClassVar[dict[str, bytes]] = {
         "image/jpeg": b"\xff\xd8\xff\x00\x00\x00JFIF",
         "image/png": b"\211PNG\r\n\032\n",
         "image/gif": b"GIF89a",

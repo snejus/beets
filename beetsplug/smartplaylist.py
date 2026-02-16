@@ -17,13 +17,13 @@
 from __future__ import annotations
 
 import os
-from typing import Any, TypeAlias
+from typing import TYPE_CHECKING, Any, TypeAlias
 from urllib.parse import quote
 from urllib.request import pathname2url
 
 from beets import ui
 from beets.dbcore.query import ParsingError, Query, Sort
-from beets.library import Album, Item, Library, parse_query_string
+from beets.library import Album, Item, parse_query_string
 from beets.plugins import BeetsPlugin
 from beets.plugins import send as send_event
 from beets.util import (
@@ -35,6 +35,9 @@ from beets.util import (
     sanitize_path,
     syspath,
 )
+
+if TYPE_CHECKING:
+    from beets.library import Library
 
 QueryAndSort = tuple[Query, Sort]
 PlaylistQuery = Query | tuple[QueryAndSort, ...] | None
@@ -259,8 +262,9 @@ class SmartPlaylistPlugin(BeetsPlugin):
                 "Updating {} smart playlists...", len(self._matched_playlists)
             )
 
-        playlist_dir = self.config["playlist_dir"].as_filename()
-        playlist_dir = bytestring_path(playlist_dir)
+        playlist_dir = bytestring_path(
+            self.config["playlist_dir"].as_filename()
+        )
         tpl = self.config["uri_format"].get()
         prefix = bytestring_path(self.config["prefix"].as_str())
         relative_to = self.config["relative_to"].get()

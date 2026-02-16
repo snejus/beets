@@ -16,17 +16,22 @@
 Title case logic is derived from the python-titlecase library.
 Provides a template function and a tag modification function."""
 
+from __future__ import annotations
+
 import re
 from functools import cached_property
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 from titlecase import titlecase
 
 from beets import ui
-from beets.autotag.hooks import AlbumInfo, Info
-from beets.importer import ImportSession, ImportTask
-from beets.library import Item
+from beets.autotag.hooks import AlbumInfo
 from beets.plugins import BeetsPlugin
+
+if TYPE_CHECKING:
+    from beets.autotag.hooks import Info
+    from beets.importer import ImportSession, ImportTask
+    from beets.library import Item
 
 __author__ = "henryoberholtzer@gmail.com"
 __version__ = "1.0"
@@ -99,7 +104,7 @@ class TitlecasePlugin(BeetsPlugin):
 
     @cached_property
     def replace(self) -> list[tuple[str, str]]:
-        return self.config["replace"].as_pairs()
+        return self.config["replace"].as_pairs(default_value="")
 
     @cached_property
     def the_artist(self) -> bool:

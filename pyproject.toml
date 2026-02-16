@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "beets"
-version = "2.5.1"
+version = "2.6.1"
 description = "music tagger and library organizer"
 authors = ["Adrian Sampson <adrian@radbox.org>"]
 maintainers = ["Serene-Arc"]
@@ -44,7 +44,7 @@ Changelog = "https://github.com/beetbox/beets/blob/master/docs/changelog.rst"
 python = ">=3.10,<4"
 
 colorama = { version = "*", markers = "sys_platform == 'win32'" }
-confuse = ">=2.1.0"
+confuse = ">=2.2.0"
 jellyfish = "*"
 lap = ">=0.5.12"
 mediafile = ">=0.12.0"
@@ -52,6 +52,7 @@ numpy = [
     { python = "<3.13", version = ">=2.0.2" },
     { python = ">=3.13", version = ">=2.3.4" },
 ]
+packaging = ">=24.0"
 platformdirs = ">=3.5.0"
 pyyaml = "*"
 requests = ">=2.32.5"
@@ -69,7 +70,6 @@ scipy = [ # for librosa
     { python = "<3.13", version = ">=1.13.1", optional = true },
     { python = ">=3.13", version = ">=1.16.1", optional = true },
 ]
-musicbrainzngs = { version = ">=0.4", optional = true }
 numba = [ # for librosa
     { python = "<3.13", version = ">=0.60", optional = true },
     { python = ">=3.13", version = ">=0.62.1", optional = true },
@@ -94,6 +94,7 @@ pydata-sphinx-theme = { version = "*", optional = true }
 sphinx = { version = "*", optional = true }
 sphinx-design = { version = ">=0.6.1", optional = true }
 sphinx-copybutton = { version = ">=0.5.2", optional = true }
+sphinx-toolbox = { version = ">=4.1.0", optional = true }
 titlecase = { version = "^2.4.1", optional = true }
 
 [tool.poetry.group.test.dependencies]
@@ -101,7 +102,6 @@ beautifulsoup4 = "*"
 codecov = ">=2.1.13"
 flask = "*"
 langdetect = "*"
-mock = "*"
 pylast = "*"
 pytest = "*"
 pytest-cov = "*"
@@ -118,14 +118,13 @@ titlecase = "^2.4.1"
 
 [tool.poetry.group.lint.dependencies]
 docstrfmt = ">=1.11.1"
-ruff = ">=0.6.4"
+ruff = ">=0.13.0"
 sphinx-lint = ">=1.0.0"
 
 [tool.poetry.group.typing.dependencies]
 mypy = "*"
 types-beautifulsoup4 = "*"
 types-docutils = ">=0.22.2.20251006"
-types-mock = "*"
 types-Flask-Cors = "*"
 types-Pillow = "*"
 types-PyYAML = "*"
@@ -134,7 +133,6 @@ types-urllib3 = "*"
 
 [tool.poetry.group.release.dependencies]
 click = ">=8.1.7"
-packaging = ">=24.0"
 tomli = ">=2.0.1"
 
 [tool.poetry.extras]
@@ -154,6 +152,7 @@ docs = [
     "sphinx-lint",
     "sphinx-design",
     "sphinx-copybutton",
+    "sphinx-toolbox",
 ]
 discogs = ["python3-discogs-client"]
 embedart = ["Pillow"] # ImageMagick
@@ -165,13 +164,9 @@ import = ["py7zr", "rarfile"]
 kodiupdate = ["requests"]
 lastgenre = ["pylast"]
 lastimport = ["pylast"]
-listenbrainz = ["musicbrainzngs"]
 lyrics = ["beautifulsoup4", "langdetect", "requests"]
-mbcollection = ["musicbrainzngs"]
 metasync = ["dbus-python"]
-missing = ["musicbrainzngs"]
 mpdstats = ["python-mpd2"]
-parentwork = ["musicbrainzngs"]
 plexupdate = ["requests"]
 reflink = ["reflink"]
 replaygain = [
@@ -231,7 +226,7 @@ cmd = "make -C docs $COMMANDS"
 
 [tool.poe.tasks.format]
 help = "Format the codebase"
-cmd = "ruff format"
+cmd = "ruff format --config=pyproject.toml"
 
 [tool.poe.tasks.format-docs]
 help = "Format the documentation"
@@ -239,11 +234,21 @@ cmd = "docstrfmt docs *.rst"
 
 [tool.poe.tasks.lint]
 help = "Check the code for linting issues. Accepts ruff options."
-cmd = "ruff check"
+cmd = "ruff check --config=pyproject.toml"
 
 [tool.poe.tasks.lint-docs]
 help = "Lint the documentation"
-shell = "sphinx-lint --enable all --disable default-role $(git ls-files '*.rst')"
+interpreter = "bash"
+shell = """
+set -o pipefail
+files=$(git ls-files '*.rst')
+
+grep -Eno ' `[^`][^`]+`[^_]' $files |
+    sed 's/ .*/ Use double backticks for inline literal (double-backticks-required)/' && failed=1
+sphinx-lint --enable all --disable default-role $files || failed=1
+
+exit ${failed:-0}
+"""
 
 [tool.poe.tasks.update-dependencies]
 help = "Update dependencies to their latest versions."
@@ -295,10 +300,11 @@ extend-exclude = [
 ]
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
 line-length = 80
 
 [tool.ruff.lint]
+future-annotations = true
 select = [
     # "ARG", # flake8-unused-arguments
     # "C4", # flake8-comprehensions
@@ -310,9 +316,9 @@ select = [
     "ISC", # flake8-implicit-str-concat
     "N", # pep8-naming
     "PT", # flake8-pytest-style
-    # "RUF", # ruff
+    "RUF", # ruff
     "UP", # pyupgrade
-    "TCH", # flake8-type-checking
+    "TC", # flake8-type-checking
     "W", # pycodestyle
 ]
 ignore = [
@@ -321,8 +327,11 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "beets/**" = ["PT"]
+"test/plugins/test_ftintitle.py" = ["E501"]
 "test/test_util.py" = ["E501"]
 "test/ui/test_field_diff.py" = ["E501"]
+"test/util/test_id_extractors.py" = ["E501"]
+"test/**" = ["RUF001"] # we use Unicode characters in tests
 
 [tool.ruff.lint.isort]
 split-on-trailing-comma = false

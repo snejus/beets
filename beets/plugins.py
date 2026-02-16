@@ -35,9 +35,9 @@ from beets.util import unique_list
 from beets.util.deprecation import deprecate_for_maintainers, deprecate_for_user
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Sequence
+    from collections.abc import Callable, Iterable, Iterator, Sequence
 
-    from confuse import ConfigView
+    from confuse import Subview
 
     from beets.dbcore import Query
     from beets.dbcore.db import FieldQueryType
@@ -58,7 +58,6 @@ if TYPE_CHECKING:
     P = ParamSpec("P")
     Ret = TypeVar("Ret", bound=Any)
     Listener = Callable[..., Any]
-    IterF = Callable[P, Iterable[Ret]]
 
 
 PLUGIN_NAMESPACE = "beetsplug"
@@ -141,7 +140,13 @@ class PluginLogFilter(logging.Filter):
 # Managing the plugins themselves.
 
 
-class BeetsPlugin(metaclass=abc.ABCMeta):
+class BeetsPluginMeta(abc.ABCMeta):
+    template_funcs: ClassVar[TFuncMap[str]] = {}
+    template_fields: ClassVar[TFuncMap[Item]] = {}
+    album_template_fields: ClassVar[TFuncMap[Album]] = {}
+
+
+class BeetsPlugin(metaclass=BeetsPluginMeta):
     """The base class for all beets plugins. Plugins provide
     functionality by defining a subclass of BeetsPlugin and overriding
     the abstract methods defined here.
@@ -151,17 +156,18 @@ class BeetsPlugin(metaclass=abc.ABCMeta):
         list
     )
     listeners: ClassVar[dict[EventType, list[Listener]]] = defaultdict(list)
-    template_funcs: ClassVar[TFuncMap[str]] | TFuncMap[str] = {}  # type: ignore[valid-type]
-    template_fields: ClassVar[TFuncMap[Item]] | TFuncMap[Item] = {}  # type: ignore[valid-type]
-    album_template_fields: ClassVar[TFuncMap[Album]] | TFuncMap[Album] = {}  # type: ignore[valid-type]
+
+    template_funcs: TFuncMap[str]
+    template_fields: TFuncMap[Item]
+    album_template_fields: TFuncMap[Album]
 
     name: str
-    config: ConfigView
+    config: Subview
     early_import_stages: list[ImportStageFunc]
     import_stages: list[ImportStageFunc]
 
     def __init_subclass__(cls) -> None:
-        """Enable legacy metadata‐source plugins to work with the new interface.
+        """Enable legacy metadata source plugins to work with the new interface.
 
         When a plugin subclass of BeetsPlugin defines a `data_source` attribute
         but does not inherit from MetadataSourcePlugin, this hook:
@@ -220,14 +226,10 @@ class BeetsPlugin(metaclass=abc.ABCMeta):
         self.name = name or self.__module__.split(".")[-1]
         self.config = beets.config[self.name]
 
-        # If the class attributes are not set, initialize as instance attributes.
-        # TODO: Revise with v3.0.0, see also type: ignore[valid-type] above
-        if not self.template_funcs:
-            self.template_funcs = {}
-        if not self.template_fields:
-            self.template_fields = {}
-        if not self.album_template_fields:
-            self.album_template_fields = {}
+        # create per-instance storage for template fields and functions
+        self.template_funcs = {}
+        self.template_fields = {}
+        self.album_template_fields = {}
 
         self.early_import_stages = []
         self.import_stages = []
@@ -545,7 +547,7 @@ def named_queries(model_cls: type[AnyModel]) -> dict[str, FieldQueryType]:
 
 def notify_info_yielded(
     event: EventType,
-) -> Callable[[IterF[P, Ret]], IterF[P, Ret]]:
+) -> Callable[[Callable[P, Iterable[Ret]]], Callable[P, Iterator[Ret]]]:
     """Makes a generator send the event 'event' every time it yields.
     This decorator is supposed to decorate a generator, but any function
     returning an iterable should work.
@@ -553,9 +555,11 @@ def notify_info_yielded(
     'send'.
     """
 
-    def decorator(func: IterF[P, Ret]) -> IterF[P, Ret]:
+    def decorator(
+        func: Callable[P, Iterable[Ret]],
+    ) -> Callable[P, Iterator[Ret]]:
         @wraps(func)
-        def wrapper(*args: P.args, **kwargs: P.kwargs) -> Iterable[Ret]:
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> Iterator[Ret]:
             for v in func(*args, **kwargs):
                 send(event, info=v)
                 yield v
