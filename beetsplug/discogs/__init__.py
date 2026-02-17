@@ -491,7 +491,7 @@ class DiscogsPlugin(MetadataSourcePlugin):
                 else None
             ),
             style=self.config["separator"].as_str().join(styles) or None,
-            genre=genres,
+            genres=genres,
             media=media,
             original_year=original_year,
             data_source=self.data_source,
