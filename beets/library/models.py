@@ -32,7 +32,6 @@ from .queries import PF_KEY_DEFAULT, parse_query_string
 if TYPE_CHECKING:
     from collections.abc import Iterator, KeysView
 
-    from ..dbcore import types
     from ..dbcore.db import Model, Results
     from ..dbcore.query import FieldQuery, FieldQueryType
     from ..plugins import TFuncMap
