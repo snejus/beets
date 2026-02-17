@@ -24,6 +24,7 @@ from beets.util import (
 )
 from beets.util.functemplate import PathFormat, get_template
 
+from ..dbcore import types
 from ..dbcore.fields import TYPE_BY_FIELD
 from .exceptions import FileOperationError, ReadError, WriteError
 from .queries import PF_KEY_DEFAULT, parse_query_string
@@ -31,7 +32,6 @@ from .queries import PF_KEY_DEFAULT, parse_query_string
 if TYPE_CHECKING:
     from collections.abc import Iterator, KeysView
 
-    from ..dbcore import types
     from ..dbcore.db import Model, Results
     from ..dbcore.query import FieldQuery, FieldQueryType
     from ..plugins import TFuncMap
