@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Protocol
 
+from rich.progress import track
+
 from beets import library, logging, ui
 from beets.exceptions import UserError
 from beets.util import syspath
@@ -35,7 +37,9 @@ def write_items(
     if not items:
         raise UserError("No matching items to write.")
 
-    for item in items:
+    for item in track(
+        items, "Writing items...", total=len(items), console=ui.console
+    ):
         # Item deleted?
         if not os.path.exists(syspath(item.path)):
             log.info("missing file: {.filepath}", item)

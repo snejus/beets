@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Protocol
 
+from rich.progress import track
+
 from beets import library, logging, ui
 from beets.exceptions import UserError
 from beets.util import ancestry, syspath
@@ -75,7 +77,9 @@ def update_items(
 
         # Walk through the items and pick up their changes.
         affected_albums = set()
-        for item in items:
+        for item in track(
+            items, "Updating items...", total=len(items), console=ui.console
+        ):
             # Item deleted?
             if not item.path or not os.path.exists(syspath(item.path)):
                 ui.print_(format(item))

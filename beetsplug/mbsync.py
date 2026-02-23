@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import TYPE_CHECKING, Protocol
 
+from rich.progress import track
+
 from beets import library, metadata_plugins, ui, util
 from beets.autotag import AlbumMatch, Distance, TrackMatch
 from beets.plugins import BeetsPlugin, apply_item_changes
@@ -116,7 +118,13 @@ class MBSyncPlugin(BeetsPlugin):
         query and their items.
         """
         # Process matching albums.
-        for album in lib.albums(query):
+        albums = lib.albums(query)
+        for album in track(
+            albums,
+            "Synchronising albums...",
+            total=len(albums),
+            console=ui.console,
+        ):
             if not (album_id := album.mb_albumid):
                 self._log.info("Skipping album with no mb_albumid: {}", album)
                 continue
