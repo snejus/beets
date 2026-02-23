@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import TYPE_CHECKING, Protocol
 
+from rich.progress import track
+
 from beets import library, metadata_plugins, ui, util
 from beets.autotag import AlbumMatch, Distance, TrackMatch
 from beets.plugins import BeetsPlugin, apply_item_changes
@@ -83,7 +85,14 @@ class MBSyncPlugin(BeetsPlugin):
         """Retrieve and apply info from the autotagger for items matched by
         query.
         """
-        for item in lib.items([*query, "singleton:true"], limit=limit):
+        ui.console.stderr = True
+        items = lib.items([*query, "singleton:true"], limit=limit)
+        for item in track(
+            items,
+            "Synchronising singletons...",
+            total=len(items),
+            console=ui.console,
+        ):
             if not (track_id := item.mb_trackid):
                 self._log.info(
                     "Skipping singleton with no mb_trackid: {}", item
@@ -120,7 +129,14 @@ class MBSyncPlugin(BeetsPlugin):
         query and their items.
         """
         # Process matching albums.
-        for album in lib.albums(query, limit=limit):
+        ui.console.stderr = True
+        albums = lib.albums(query, limit=limit)
+        for album in track(
+            albums,
+            "Synchronising albums...",
+            total=len(albums),
+            console=ui.console,
+        ):
             if not (album_id := album.mb_albumid):
                 self._log.info("Skipping album with no mb_albumid: {}", album)
                 continue
