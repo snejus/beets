@@ -2,8 +2,10 @@
 
 import os
 
+from rich.progress import track
+
 from beets import library, logging, ui
-from beets.util import syspath
+from beets.util import get_console, syspath
 
 from .utils import do_query
 
@@ -17,7 +19,9 @@ def write_items(lib, query, pretend, force):
     """
     items, _ = do_query(lib, query, False, False)
 
-    for item in items:
+    for item in track(
+        items, "Writing items...", total=len(items), console=get_console()
+    ):
         # Item deleted?
         if not os.path.exists(syspath(item.path)):
             log.info("missing file: {.filepath}", item)
