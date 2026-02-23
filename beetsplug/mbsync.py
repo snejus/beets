@@ -16,10 +16,13 @@
 
 from collections import defaultdict
 
+from rich.progress import track
+
 from beets import library, metadata_plugins, ui, util
 from beets.autotag.distance import Distance
 from beets.autotag.hooks import AlbumMatch, TrackMatch
 from beets.plugins import BeetsPlugin, apply_item_changes
+from beets.util import get_console
 
 
 class MBSyncPlugin(BeetsPlugin):
@@ -102,7 +105,13 @@ class MBSyncPlugin(BeetsPlugin):
         query and their items.
         """
         # Process matching albums.
-        for album in lib.albums(query):
+        albums = lib.albums(query)
+        for album in track(
+            albums,
+            "Synchronising albums...",
+            total=len(albums),
+            console=get_console(),
+        ):
             if not (album_id := album.mb_albumid):
                 self._log.info("Skipping album with no mb_albumid: {}", album)
                 continue
