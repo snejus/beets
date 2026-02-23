@@ -2,8 +2,10 @@
 
 import os
 
+from rich.progress import track
+
 from beets import library, logging, ui
-from beets.util import ancestry, syspath
+from beets.util import ancestry, get_console, syspath
 from beets.util.color import colorize
 
 from .utils import do_query
@@ -45,7 +47,9 @@ def update_items(lib, query, album, move, pretend, fields, exclude_fields=None):
 
         # Walk through the items and pick up their changes.
         affected_albums = set()
-        for item in items:
+        for item in track(
+            items, "Updating items...", total=len(items), console=get_console()
+        ):
             # Item deleted?
             if not item.path or not os.path.exists(syspath(item.path)):
                 ui.print_(format(item))
