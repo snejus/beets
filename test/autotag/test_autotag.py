@@ -286,7 +286,6 @@ class ApplyTest(BeetsTestCase):
         assert self.items[0].day == 3
 
 
-
 @pytest.mark.parametrize(
     "overwrite_fields,expected_item_artist",
     [
