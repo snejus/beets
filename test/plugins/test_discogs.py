@@ -208,11 +208,13 @@ class TestDGAlbumInfo(DiscogsTestMixin, TestHelper):
             "tracklist": [audio_track("A", "1", "01:01")],
             "artists": [_artist("ARTIST NAME", id=321)],
             "title": "TITLE",
+            "country": "Germany",
         }
         release = get_release(data)
         d = DiscogsPlugin().get_album_info(release)
         assert d.artist == "ARTIST NAME"
         assert d.album == "TITLE"
+        assert d.country == "DE"
         assert len(d.tracks) == 1
 
     def test_default_genre_style_settings(self):
