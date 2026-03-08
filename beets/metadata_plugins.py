@@ -310,7 +310,7 @@ class MetadataSourcePlugin(BeetsPlugin, metaclass=abc.ABCMeta):
 class IDResponse(TypedDict):
     """Response from the API containing an ID."""
 
-    id: str
+    id: str | int
 
 
 class SearchParams(NamedTuple):
@@ -432,10 +432,10 @@ class SearchApiMetadataSourcePlugin(
         va_likely: bool,
     ) -> Iterable[AlbumInfo]:
         results = self._get_candidates("album", items, artist, album, va_likely)
-        return filter(None, self.albums_for_ids(r["id"] for r in results))
+        return filter(None, self.albums_for_ids(str(r["id"]) for r in results))
 
     def item_candidates(
         self, item: Item, artist: str, title: str
     ) -> Iterable[TrackInfo]:
         results = self._get_candidates("track", [item], artist, title, False)
-        return filter(None, self.tracks_for_ids(r["id"] for r in results))
+        return filter(None, self.tracks_for_ids(str(r["id"]) for r in results))
