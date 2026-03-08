@@ -28,7 +28,15 @@ import threading
 import time
 import webbrowser
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypedDict
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Literal,
+    TypedDict,
+    TypeVar,
+    overload,
+)
 
 import confuse
 import requests
@@ -38,15 +46,18 @@ from beets.autotag.hooks import AlbumInfo, TrackInfo
 from beets.dbcore import types
 from beets.exceptions import UserError
 from beets.library import Library
-from beets.metadata_plugins import IDResponse, SearchApiMetadataSourcePlugin
+from beets.metadata_plugins import (
+    IDResponse,
+    QueryType,
+    SearchApiMetadataSourcePlugin,
+)
 from beets.util import chunks
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from beets.library import Item, Library
-    from beets.metadata_plugins import QueryType, SearchParams
-    from beetsplug._typing import JSONDict
+    from beets.metadata_plugins import SearchParams
 
 DEFAULT_WAITING_TIME = 5
 
@@ -78,7 +89,15 @@ class AudioFeatures(TypedDict, total=False):
     valence: float
 
 
-class SearchResponseAlbums(IDResponse):
+T = TypeVar("T", bound=QueryType)
+
+
+class SearchResponse(IDResponse):
+    available_markets: Sequence[str]
+    name: str
+
+
+class SearchResponseAlbums(SearchResponse):
     """A response returned by the Spotify API.
 
     We only use items and disregard the pagination information. i.e.
@@ -91,18 +110,16 @@ class SearchResponseAlbums(IDResponse):
 
     """
 
+    type: Literal["album"]
     album_type: str
-    available_markets: Sequence[str]
-    name: str
 
 
-class SearchResponseTracks(IDResponse):
+class SearchResponseTracks(SearchResponse):
     """A track response returned by the Spotify API."""
 
+    type: Literal["track"]
     album: SearchResponseAlbums
-    available_markets: Sequence[str]
     popularity: int
-    name: str
 
 
 class APIError(Exception):
@@ -121,6 +138,7 @@ class SimplifiedArtist(TypedDict):
 
 
 class SimplifiedAlbum(TypedDict):
+    id: str
     name: str
 
 
@@ -140,9 +158,7 @@ class Track(IDResponse):
     popularity: int
 
 
-class SpotifyPlugin(
-    SearchApiMetadataSourcePlugin[SearchResponseAlbums | SearchResponseTracks]
-):
+class SpotifyPlugin(SearchApiMetadataSourcePlugin[SearchResponse]):
     item_types: ClassVar[dict[str, types.Type]] = {
         "spotify_track_popularity": types.INTEGER,
         "spotify_acousticness": types.FLOAT,
@@ -261,7 +277,7 @@ class SpotifyPlugin(
         params: Any = None,
         retry_count: int = 0,
         max_retries: int = 3,
-    ) -> JSONDict:
+    ):
         """Send a request, reauthenticating if necessary.
 
         :param method: HTTP method to use for the request.
@@ -473,7 +489,7 @@ class SpotifyPlugin(
             album = None
         return TrackInfo(
             title=track_data["name"],
-            track_id=track_data["id"],
+            track_id=str(track_data["id"]),
             spotify_track_id=track_data["id"],
             artist=artist,
             album=album,
@@ -575,6 +591,30 @@ class SpotifyPlugin(
             )
 
         return ()
+
+    @overload  # type: ignore[override, no-overload-impl]
+    def _search_api(
+        self,
+        query_type: Literal["album"],
+        query: str,
+        filters: dict[str, str],
+    ) -> Sequence[SearchResponseAlbums]: ...
+
+    @overload
+    def _search_api(
+        self,
+        query_type: Literal["track"],
+        query: str,
+        filters: dict[str, str],
+    ) -> Sequence[SearchResponseTracks]: ...
+
+    def _search_api(
+        self,
+        query_type: QueryType,
+        query: str,
+        filters: dict[str, str],
+    ) -> Sequence[SearchResponse]:
+        return super()._search_api(query_type, query, filters)
 
     def commands(self) -> list[ui.Subcommand]:
         # autotagger import command
@@ -693,7 +733,11 @@ class SpotifyPlugin(
             if album:
                 query += f" album:'{album}'"
 
-            response_data_tracks = self._search_api("track", query, {})
+            response_data_tracks = self._search_api(
+                query_type="track",
+                query=query_string,
+                filters={},
+            )
             if not response_data_tracks:
                 failures.append(query)
                 continue
@@ -724,11 +768,7 @@ class SpotifyPlugin(
                     len(response_data_tracks),
                 )
                 chosen_result = max(
-                    response_data_tracks,
-                    key=lambda x: x[
-                        # We are sure this is a track response!
-                        "popularity"  # type: ignore[typeddict-item]
-                    ],
+                    response_data_tracks, key=lambda x: x["popularity"]
                 )
             results.append(chosen_result)
 

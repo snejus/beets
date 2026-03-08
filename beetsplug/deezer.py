@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import collections
 import time
-from typing import TYPE_CHECKING, ClassVar, TypedDict
+from typing import TYPE_CHECKING, ClassVar, Literal, TypedDict
 
 import requests
 from typing_extensions import NotRequired
@@ -36,28 +36,108 @@ if TYPE_CHECKING:
     from beets.library import Item, Library
     from beets.metadata_plugins import QueryType, SearchParams
 
-    from ._typing import JSONDict
-
 
 class Artist(TypedDict):
     """Artist object returned by the Deezer API."""
 
     id: int
+    type: Literal["artist"]
     name: str
     link: str
+    picture_small: str
+    picture_medium: str
+    picture_big: str
+    picture_xl: str
+    tracklist: str
 
 
-class Track(IDResponse):
+class Contributor(Artist):
+    share: str
+    radio: bool
+    role: Literal[
+        "Main", "Guest", "Composer", "Lyricist", "Producer", "Remixer", "Other"
+    ]
+
+
+class SearchTrack(IDResponse):
+    type: Literal["track"]
+    readable: bool
     title: str
-    artist: Artist
-    track_position: int
-    disk_number: NotRequired[int]
-    duration: int
+    title_short: str
+    title_version: str
     link: str
-    contributors: NotRequired[list[Artist]]
+    duration: int
+    rank: int
+    explicit_lyrics: bool
+    explicit_content_lyrics: int
+    explicit_content_cover: int
+    preview: str
+    md5_image: str
+    artist: Artist
+    album: TrackAlbum
 
 
-class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
+class Track(SearchTrack):
+    isrc: str
+    share: str
+    track_position: int
+    disk_number: int
+    release_date: str
+    bpm: int
+    gain: int
+    available_countries: list[str]
+    contributors: NotRequired[list[Contributor]]
+    track_token: str
+
+
+class TrackAlbum(IDResponse):
+    """Artist object returned by the Deezer API."""
+
+    type: Literal["album"]
+    title: str
+    cover: str
+    cover_small: str
+    cover_medium: str
+    cover_big: str
+    cover_xl: str
+    md5_image: str
+    tracklist: str
+
+
+class SearchAlbum(TrackAlbum):
+    """Album object returned by the Deezer Search API."""
+
+    genre_id: int
+    nb_tracks: int
+    record_type: Literal["album"]
+    explicit_lyrics: bool
+    artist: Artist
+
+
+class Genre(TypedDict):
+    id: int
+    type: Literal["genre"]
+    name: str
+    picture: str
+
+
+class Album(SearchAlbum):
+    upc: str
+    share: str
+    genres: dict[Literal["data"], list[Genre]]
+    label: str
+    link: str
+    duration: int
+    fans: int
+    release_date: str
+    available: bool
+    explicit_content_lyrics: int
+    explicit_content_cover: int
+    contributors: list[Contributor]
+    tracks: dict[Literal["data"], Sequence[SearchTrack]]
+
+
+class DeezerPlugin(SearchApiMetadataSourcePlugin[SearchTrack | SearchAlbum]):
     item_types: ClassVar[dict[str, types.Type]] = {
         "deezer_track_rank": types.INTEGER,
         "deezer_track_id": types.INTEGER,
@@ -92,6 +172,7 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             return None
 
         album_url = f"{self.album_url}{deezer_id}"
+        album_data: Album | None
         if not (album_data := self.fetch_data(album_url)):
             return None
 
@@ -181,6 +262,7 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             self._log.debug("Invalid Deezer track_id: {}", track_id)
             return None
 
+        track_data: Track
         if not (track_data := self.fetch_data(f"{self.track_url}{deezer_id}")):
             self._log.debug("Track not found: {}", track_id)
             return None
@@ -213,7 +295,7 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
         track.medium_total = medium_total
         return track
 
-    def _get_track(self, track_data: JSONDict, total: int = 0) -> TrackInfo:
+    def _get_track(self, track_data: Track, total: int = 0) -> TrackInfo:
         """Convert a Deezer track object dict to a TrackInfo object.
 
         :param track_data: Deezer Track object dict
@@ -224,7 +306,7 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
         position = track_data.get("track_position")
         return TrackInfo(
             title=track_data["title"],
-            track_id=track_data["id"],
+            track_id=str(track_data["id"]),
             deezer_track_id=track_data["id"],
             isrc=track_data.get("isrc"),
             artist=artist,
@@ -253,7 +335,9 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
 
         return query, {query_type: name} if name else {}
 
-    def get_search_response(self, params: SearchParams) -> list[IDResponse]:
+    def get_search_response(
+        self, params: SearchParams
+    ) -> list[SearchTrack | SearchAlbum]:
         """Search Deezer and return the raw result payload entries."""
 
         response = requests.get(
