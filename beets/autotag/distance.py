@@ -557,6 +557,9 @@ def distance(
     if not album_info.catalognum:
         dist.add("missing_catalognum", 1.0)
 
+    if not album_info.label:
+        dist.add("missing_label", 1.0)
+
     if not album_info.month:
         dist.add("missing_month", 1.0)
 
