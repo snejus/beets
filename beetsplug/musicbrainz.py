@@ -38,6 +38,7 @@ from ._utils.requests import HTTPNotFoundError
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
+    from beets.autotag.hooks import Info
     from beets.library import Item
     from beets.metadata_plugins import QueryType, SearchParams
 
@@ -474,12 +475,21 @@ class MusicBrainzPlugin(
             **self._parse_artist_relations(
                 recording.get("artist_relations", [])
             ),
-            genres=(
-                get_genre(recording.get(field, []))
-                if (field := self.genres_field)
+            label=(
+                label_rels[0]["label"]["name"]
+                if (label_rels := recording.get("label_relations", []))
                 else None
             ),
         )
+        if releases := recording.get("releases"):
+            release = releases[0]
+            info.country = release["country"]
+            info.albumstatus = release["status"]
+            if date := release.get("date"):
+                info.year, info.month, info.day = _get_date(date)
+
+            if (media := release["media"]) and (fmt := media[0]["format"]):
+                info.media = fmt
 
         # Supplementary fields provided by plugins
         extra_trackdatas = plugins.send("mb_track_extract", data=recording)
