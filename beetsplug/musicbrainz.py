@@ -35,6 +35,7 @@ if TYPE_CHECKING:
         LabelInfo,
         Medium,
         Recording,
+        RecordingRelease,
         Release,
         ReleaseGroup,
         Tag,
@@ -127,6 +128,13 @@ class ArtistRelationsInfo(TypedDict):
     remixers_ids: list[str] | None
 
 
+class ReleaseEventsInfo(TypedDict):
+    country: str | None
+    year: int | None
+    month: int | None
+    day: int | None
+
+
 def _preferred_alias(
     aliases: list[Alias], languages: list[str] | None = None
 ) -> Alias | None:
@@ -164,19 +172,26 @@ def _key_with_preferred_alias(
     return alias["name"] if alias else obj[key]
 
 
-def _preferred_release_event(release: Release) -> tuple[str | None, str | None]:
+def _preferred_release_event(release: RecordingRelease) -> ReleaseEventsInfo:
     """Select the most relevant release country and date for matching.
 
     Fall back to the default release event if a preferred event is not found.
     """
     preferred_countries = config["match"]["preferred"]["countries"].as_str_seq()
 
-    for country in preferred_countries:
-        for event in release.get("release_events", []):
-            if (area := event["area"]) and country in area["iso_3166_1_codes"]:
-                return country, event["date"]
+    pairs = (
+        (c, e["date"])
+        for c in preferred_countries
+        for e in release.get("release_events", [])
+        if (area := e["area"]) and c in area["iso_3166_1_codes"]
+    )
+    try:
+        country, date = next(pairs)
+        year, month, day = _get_date(date)
+    except StopIteration:
+        country = date = year = month = day = None
 
-    return release.get("country"), release.get("date")
+    return {"country": country, "year": year, "month": month, "day": day}
 
 
 def _get_date(date_str: str) -> tuple[int | None, int | None, int | None]:
@@ -475,12 +490,19 @@ class MusicBrainzPlugin(
             **self._parse_artist_relations(
                 recording.get("artist_relations", [])
             ),
-            genres=(
-                get_genre(recording.get(field, []))
-                if (field := self.genres_field)
+            label=(
+                label_rels[0]["label"]["name"]
+                if (label_rels := recording.get("label_relations", []))
                 else None
             ),
         )
+        if releases := recording.get("releases"):
+            release = releases[0]
+            info.albumstatus = release["status"]
+            info.update(_preferred_release_event(release))
+
+            if (media := release["media"]) and (fmt := media[0]["format"]):
+                info.media = fmt
 
         # Supplementary fields provided by plugins
         extra_trackdatas = plugins.send("mb_track_extract", data=recording)
@@ -683,7 +705,12 @@ class MusicBrainzPlugin(
             **self._parse_release_group(release["release_group"]),
             **self._parse_label_infos(release["label_info"]),
             **self._parse_external_ids(release.get("url_relations", [])),
+            **_preferred_release_event(release),
         )
+        info.year = info.year or info.original_year
+        info.month = info.month or info.original_month
+        info.day = info.day or info.original_day
+
         info.va = info.artist_id == VARIOUS_ARTISTS_ID
         if info.va:
             va_name = config["va_name"].as_str()
@@ -695,18 +722,11 @@ class MusicBrainzPlugin(
             info.artists_credit = [va_name]
 
         # Release events.
-        info.country, release_date = _preferred_release_event(release)
         if info.country == "XW":
             artist_countries = (
                 c["artist"].get("country") for c in release["artist_credit"]
             )
             info.country = next(filter(None, artist_countries), "XW")
-
-        info.year, info.month, info.day = (
-            _get_date(release_date)
-            if release_date
-            else (info.original_year, info.original_month, info.original_day)
-        )
 
         extra_albumdatas = plugins.send("mb_album_extract", data=release)
         for extra_albumdata in extra_albumdatas:
