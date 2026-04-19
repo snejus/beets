@@ -74,6 +74,9 @@ RECORDING_INCLUDES = [
     "artist-rels",
     "genres",
     "tags",
+    "label-rels",
+    "releases",
+    "media",
 ]
 
 
@@ -291,15 +294,12 @@ class ReleaseEvent(TypedDict):
     date: str
 
 
-class Label(TypedDict):
-    aliases: list[Alias]
+class RelationLabel(TypedDict):
     disambiguation: str
-    genres: list[Genre]
     id: str
     label_code: int | None
     name: str
     sort_name: str
-    tags: list[Tag]
     type: (
         Literal[
             "Bootleg Production",
@@ -309,6 +309,7 @@ class Label(TypedDict):
             "Imprint",
             "Manufacturer",
             "Original Production",
+            "Production",
             "Publisher",
             "Reissue Production",
             "Rights Society",
@@ -316,6 +317,12 @@ class Label(TypedDict):
         | None
     )
     type_id: str | None
+
+
+class Label(RelationLabel):
+    aliases: list[Alias]
+    genres: list[Genre]
+    tags: list[Tag]
 
 
 class LabelInfo(TypedDict):
@@ -341,6 +348,7 @@ class RelationBase(_Period):
 ArtistRelationType = Literal[
     "arranger",
     "art direction",
+    "artists and repertoire",
     "artwork",
     "composer",
     "conductor",
@@ -418,10 +426,16 @@ class WorkRelation(RelationBase):
         "orchestration",
         "other version",
         "parts",
+        "performance",
         "revision of",
     ]
     ordering_key: NotRequired[int]
     work: Work
+
+
+class LabelRelation(RelationBase):
+    type: Literal["phonographic copyright", "produced for", "publishing"]
+    label: RelationLabel
 
 
 class Work(TypedDict):
@@ -451,6 +465,8 @@ class Recording(TypedDict):
     artist_relations: NotRequired[list[ArtistRelation]]
     first_release_date: NotRequired[str]
     genres: NotRequired[list[Genre]]
+    label_relations: NotRequired[list[LabelRelation]]
+    releases: NotRequired[list[RecordingRelease]]
     tags: NotRequired[list[Tag]]
     url_relations: NotRequired[list[UrlRelation]]
     work_relations: NotRequired[list[WorkRelation]]
@@ -524,8 +540,12 @@ class BaseRelease(TypedDict):
     release_events: NotRequired[list[ReleaseEvent]]
 
 
-class Release(BaseRelease):
+class RecordingRelease(BaseRelease):
     aliases: list[Alias]
+    media: list[Medium]
+
+
+class Release(BaseRelease):
     asin: str | None
     cover_art_archive: CoverArtArchive
     genres: list[Genre]
