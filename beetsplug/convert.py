@@ -410,6 +410,7 @@ class ConvertPlugin(BeetsPlugin):
         dest = item.destination(
             basedir=self.dest, path_formats=self.path_formats
         )
+        should_transcode = self.should_transcode(item)
 
         # Ensure that desired item is readable before processing it. Needed
         # to avoid any side-effect of the conversion (linking, keep_new,
@@ -423,16 +424,12 @@ class ConvertPlugin(BeetsPlugin):
         # When keeping the new file in the library, we first move the
         # current (pristine) file to the destination. We'll then copy it
         # back to its old path or transcode it to a new path.
-        if keep_new:
-            original = dest
-            converted = item.path
-            if self.should_transcode(item):
-                converted = replace_ext(converted, ext)
-        else:
-            original = item.path
-            if self.should_transcode(item):
-                dest = replace_ext(dest, ext)
-            converted = dest
+        original = dest if keep_new else item.path
+        converted = item.path if keep_new else dest
+        if should_transcode:
+            converted = replace_ext(converted, ext)
+            if not keep_new:
+                dest = converted
 
         # Ensure that only one thread tries to create directories at a
         # time. (The existence check is not atomic with the directory
@@ -456,7 +453,7 @@ class ConvertPlugin(BeetsPlugin):
                 self._log.info("Moving to {}", util.displayable_path(original))
                 util.move(item.path, original)
 
-        if self.should_transcode(item):
+        if should_transcode:
             linked = False
             try:
                 self.encode(command, original, converted)
@@ -524,12 +521,12 @@ class ConvertPlugin(BeetsPlugin):
                     id3v23=id3v23,
                 )
 
-        if keep_new:
-            plugins.send("after_convert", item=item, dest=dest, keepnew=True)
-        else:
-            plugins.send(
-                "after_convert", item=item, dest=converted, keepnew=False
-            )
+        plugins.send(
+            "after_convert",
+            item=item,
+            dest=dest if keep_new else converted,
+            keepnew=keep_new,
+        )
 
     def copy_album_art(self, album: Album) -> None:
         """Copies or converts the associated cover art of the album. Album must
