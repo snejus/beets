@@ -411,6 +411,11 @@ class ConvertPlugin(BeetsPlugin):
             basedir=self.dest, path_formats=self.path_formats
         )
         should_transcode = self.should_transcode(item)
+        original = item.path
+        converted = replace_ext(dest, ext) if should_transcode else dest
+        keep_new_path = (
+            replace_ext(item.path, ext) if should_transcode else item.path
+        )
 
         # Ensure that desired item is readable before processing it. Needed
         # to avoid any side-effect of the conversion (linking, keep_new,
@@ -421,16 +426,6 @@ class ConvertPlugin(BeetsPlugin):
             self._log.error("Could not open file to convert: {}", exc)
             return
 
-        # When keeping the new file in the library, we first move the
-        # current (pristine) file to the destination. We'll then copy it
-        # back to its old path or transcode it to a new path.
-        original = dest if keep_new else item.path
-        converted = item.path if keep_new else dest
-        if should_transcode:
-            converted = replace_ext(converted, ext)
-            if not keep_new:
-                dest = converted
-
         # Ensure that only one thread tries to create directories at a
         # time. (The existence check is not atomic with the directory
         # creation inside this function.)
@@ -438,20 +433,17 @@ class ConvertPlugin(BeetsPlugin):
             with _fs_lock:
                 util.mkdirall(dest)
 
-        if os.path.exists(util.syspath(dest)):
+        if os.path.exists(util.syspath(converted)) or (
+            keep_new and os.path.exists(util.syspath(dest))
+        ):
             self._log.info("Skipping {.filepath} (target file exists)", item)
             return
 
-        if keep_new:
-            if pretend:
-                self._log.info(
-                    "mv {.filepath} {}",
-                    item,
-                    util.displayable_path(original),
-                )
-            else:
-                self._log.info("Moving to {}", util.displayable_path(original))
-                util.move(item.path, original)
+        if keep_new and should_transcode and converted == dest and not pretend:
+            fd, converted = tempfile.mkstemp(
+                b"." + ext, dir=os.path.dirname(dest)
+            )
+            os.close(fd)
 
         if should_transcode:
             linked = False
@@ -486,6 +478,26 @@ class ConvertPlugin(BeetsPlugin):
                     util.link(original, converted)
                 else:
                     util.copy(original, converted)
+
+        if keep_new and should_transcode:
+            if pretend:
+                self._log.info(
+                    "mv {.filepath} {}",
+                    item,
+                    util.displayable_path(dest),
+                )
+                self._log.info(
+                    "mv {} {}",
+                    util.displayable_path(converted),
+                    util.displayable_path(keep_new_path),
+                )
+            else:
+                self._log.info("Moving to {}", util.displayable_path(dest))
+                util.move(item.path, dest)
+                util.move(converted, keep_new_path)
+                converted = keep_new_path
+        elif keep_new:
+            converted = item.path
 
         if pretend:
             return
