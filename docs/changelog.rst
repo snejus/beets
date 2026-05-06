@@ -9,9 +9,11 @@ below!
 Unreleased
 ----------
 
-..
-    New features
-    ~~~~~~~~~~~~
+New features
+~~~~~~~~~~~~
+
+- :doc:`plugins/convert`: The ``--force`` and ``--keep-new`` CLI flags are now
+  also available as config options via ``force`` and ``keep_new``.
 
 ..
     Bug fixes
