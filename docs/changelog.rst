@@ -14,6 +14,8 @@ New features
 
 - :doc:`plugins/convert`: The ``--force`` and ``--keep-new`` CLI flags are now
   also available as config options via ``force`` and ``keep_new``.
+- :ref:`import-cmd`: The ``--nomove`` / ``-M`` CLI flag can now be used to
+  override the ``move: yes`` config option during import.
 
 ..
     Bug fixes
