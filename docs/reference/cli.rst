@@ -46,7 +46,7 @@ import
 
 ::
 
-    beet import [-CWAPRqst] [-l LOGPATH] PATH...
+    beet import [-CMWAPRqst] [-l LOGPATH] PATH...
     beet import [options] -L QUERY
 
 Add music to your library, attempting to get correct tags for it from
@@ -71,9 +71,11 @@ Optional command flags:
 
 - By default, the command copies files to your library directory and updates the
   ID3 tags on your music. In order to move the files, instead of copying, use
-  the ``-m`` (move) option. If you'd like to leave your music files untouched,
-  try the ``-C`` (don't copy) and ``-W`` (don't write tags) options. You can
-  also disable this behavior by default in the configuration file (below).
+  the ``-m`` (move) option. When importing an archive with ``-m``, if all files
+  are imported, the archive is removed from disk. If you'd like to leave your
+  music files untouched, try the ``-C`` (don't copy), ``-M`` (don't move), and
+  ``-W`` (don't write tags) options. You can also disable this behavior by
+  default in the configuration file (below).
 - Also, you can disable the autotagging behavior entirely using ``-A`` (don't
   autotag)---then your music will be imported with its existing metadata.
 - During a long tagging import, it can be useful to keep track of albums that
@@ -172,6 +174,11 @@ Optional command flags:
     true, of course, if ``move`` is enabled.) That is, your directory
     structure will be updated to reflect the new tags if copying is enabled; you
     never end up with two copies of the file.
+
+    Using ``-C`` (don't copy) in combination with ``-M`` (don't move) will retag
+    music while leaving the files where they are. This is useful for players/music
+    servers that get confused when an item changes path and tags at the same time.
+    One can later use the :ref:`move-cmd` command to move items based on their new tags.
 
     The ``-L`` (``--library``) flag is also useful for retagging. Instead of
     listing paths you want to import on the command line, specify a :doc:`query

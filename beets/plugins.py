@@ -96,6 +96,10 @@ EventType = Literal[
     "pluginload",
     "trackinfo_received",
     "write",
+    # convert plugin
+    "after_convert",
+    # smartplaylist plugin
+    "smartplaylist_update",
 ]
 # Global logger.
 log = logging.getLogger("beets")

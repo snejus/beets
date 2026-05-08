@@ -72,7 +72,6 @@ class PathsMixin:
         return self.lib_path / "Tag Artist" / "Tag Album" / "Tag Track 1.mp3"
 
 
-@_common.slow_test()
 class NonAutotaggedImportTest(PathsMixin, AsIsImporterMixin, ImportTestCase):
     db_on_disk = True
 
@@ -180,6 +179,9 @@ class RmTempTest(BeetsTestCase):
         super().setUp()
         self.want_resume = False
         self.config["incremental"] = False
+        self.config["copy"] = False
+        self.config["move"] = False
+        self.config["delete"] = False
         self._old_home = None
 
     def test_rm(self):
@@ -190,6 +192,48 @@ class RmTempTest(BeetsTestCase):
         assert tmp_path.exists()
         archive_task.finalize(self)
         assert not tmp_path.exists()
+
+    def test_archive_removed_on_move_complete(self):
+        zip_path = create_archive(self)
+        archive_task = importer.ArchiveImportTask(zip_path)
+        archive_task.extract()
+        for root, _, files in os.walk(syspath(archive_task.toppath)):
+            for f in files:
+                os.remove(os.path.join(root, f))
+        assert Path(os.fsdecode(zip_path)).exists()
+        archive_task.cleanup(move=True)
+        assert not Path(os.fsdecode(zip_path)).exists()
+
+    def test_archive_preserved_on_move_partial(self):
+        zip_path = create_archive(self)
+        archive_task = importer.ArchiveImportTask(zip_path)
+        archive_task.extract()
+        archive_task.cleanup(move=True)
+        assert Path(os.fsdecode(zip_path)).exists()
+
+    def test_archive_preserved_on_copy(self):
+        zip_path = create_archive(self)
+        archive_task = importer.ArchiveImportTask(zip_path)
+        archive_task.extract()
+        archive_task.cleanup(copy=True)
+        assert Path(os.fsdecode(zip_path)).exists()
+
+    def test_tempdir_removed_in_all_modes(self):
+        for cleanup_kwargs in (
+            {},
+            {"move": True},
+            {"copy": True},
+            {"copy": True, "delete": True},
+        ):
+            zip_path = create_archive(self)
+            archive_task = importer.ArchiveImportTask(zip_path)
+            archive_task.extract()
+            tmp_path = Path(os.fsdecode(archive_task.toppath))
+            assert tmp_path.exists(), f"extract failed for {cleanup_kwargs}"
+            archive_task.cleanup(**cleanup_kwargs)
+            assert not tmp_path.exists(), (
+                f"tempdir {tmp_path} not removed for {cleanup_kwargs}"
+            )
 
 
 class ImportZipTest(AsIsImporterMixin, ImportTestCase):
@@ -1013,6 +1057,21 @@ class ImportDuplicateAlbumTest(PluginMixin, ImportTestCase):
         item = self.lib.items().get()
         assert item.title == "new title"
 
+    def test_remove_duplicate_album_deletes_art(self):
+        album = self.lib.albums().get()
+        art_source = os.path.join(_common.RSRC, b"abbey.jpg")
+        album.set_art(art_source)
+        album.store()
+        old_artpath = album.art_filepath
+
+        assert old_artpath.exists()
+
+        self.importer.default_resolution = self.importer.Resolution.REMOVE
+        self.importer.run()
+
+        assert not old_artpath.exists()
+        assert len(self.lib.albums()) == 1
+
     def test_no_autotag_removes_duplicate_album(self):
         config["import"]["autotag"] = False
         album = self.lib.albums().get()
@@ -1467,6 +1526,59 @@ class MultiDiscAlbumsInDirTest(BeetsTestCase):
         root, items = albums[0]
         assert root == self.dirs[0:3]
         assert len(items) == 3
+
+    def test_coalesce_markers(self):
+        for i, (marker, suffix1, suffix2) in enumerate(
+            [
+                (b"Disc", b" 1", b" 02"),  # titlecase, space-separated
+                (b"disk 757", b" 1", b" 02"),  # lowercase, numerical suffix
+                (b"CD", b"01", b"02"),  # uppercase, no space (e.g. CD01)
+                (b"disc", b"_1", b"_2"),  # underscore separator (e.g. disc_1)
+                (b"cAsSeTtE", b" 1", b" 02"),  # mixed case
+                (b"Digital   Media", b" 1", b" 02"),  # multiple spaces
+                (b"vinyl", b" 1", b" 02"),  # lowercase
+                (b"12 vinyl", b" 1", b" 02"),  # common prefix
+            ]
+        ):
+            with self.subTest(marker=marker, suffix1=suffix1, suffix2=suffix2):
+                base = os.path.abspath(
+                    os.path.join(self.temp_dir, b"marker_" + str(i).encode())
+                )
+                os.mkdir(syspath(base))
+
+                album_dir = os.path.join(base, b"Album Name")
+                os.mkdir(syspath(album_dir))
+
+                discs = []
+                for suffix in (suffix1, suffix2):
+                    disc = os.path.join(album_dir, marker + suffix)
+                    os.mkdir(syspath(disc))
+                    _mkmp3(syspath(os.path.join(disc, b"song.mp3")))
+                    discs.append(disc)
+
+                albums = list(albums_in_dir(base))
+                assert len(albums) == 1
+                root, items = albums[0]
+                for disc in discs:
+                    assert disc in root
+                assert len(items) == 2
+
+    def test_no_coalesce_mismatched_prefixes(self):
+        # "CD 02" and "Enhanced CD 01" share the "cd" marker but have
+        # different prefixes, so they should not be collapsed.
+        base = os.path.abspath(os.path.join(self.temp_dir, b"mismatched"))
+        os.mkdir(syspath(base))
+
+        album_dir = os.path.join(base, b"Album Name")
+        os.mkdir(syspath(album_dir))
+
+        for subdir in (b"CD 02", b"Enhanced CD 01"):
+            d = os.path.join(album_dir, subdir)
+            os.mkdir(syspath(d))
+            _mkmp3(syspath(os.path.join(d, b"song.mp3")))
+
+        albums = list(albums_in_dir(base))
+        assert len(albums) == 2
 
 
 class ReimportTest(AutotagImportTestCase):

@@ -140,6 +140,17 @@ class TestLyricsUtils:
     def test_slug(self, text, expected):
         assert lyrics.slug(text) == expected
 
+    @pytest.mark.parametrize(
+        "text, expected",
+        [
+            ("If They’re Shooting at You", "If-They-re-Shooting-at-You"),
+            ("‘Round Midnight", "-Round-Midnight"),
+            ("Don't Stop", "Don-t-Stop"),
+        ],
+    )
+    def test_musixmatch_encode(self, text, expected):
+        assert lyrics.MusiXmatch.encode(text) == expected
+
 
 class TestHtml:
     def test_scrape_strip_cruft(self):
@@ -316,6 +327,13 @@ class TestLyricsPlugin(LyricsPluginMixin):
                 "new plain",
                 "new plain",
                 id="replace-with-unsynced-lyrics-when-disabled",
+            ),
+            pytest.param(
+                {"force": True, "keep_synced": True},
+                "[00:00.00] old synced",
+                "new",
+                "[00:00.00] old synced",
+                id="keep_synced_keeps_old_synced",
             ),
         ],
     )

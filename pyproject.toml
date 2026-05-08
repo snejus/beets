@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "beets"
-version = "2.9.0"
+version = "2.11.0"
 description = "music tagger and library organizer"
 authors = ["Adrian Sampson <adrian@radbox.org>"]
 maintainers = ["Serene-Arc"]
@@ -48,7 +48,7 @@ colorama = { version = "*", markers = "sys_platform == 'win32'" }
 confuse = ">=2.2.0"
 jellyfish = "*"
 lap = ">=0.5.12"
-mediafile = ">=0.16.1"
+mediafile = ">=0.16.2"
 numpy = [
     { python = "<3.13", version = ">=2.0.2" },
     { python = ">=3.13", version = ">=2.3.5" },
@@ -106,6 +106,7 @@ langdetect = "*"
 pylast = "*"
 pytest = "*"
 pytest-cov = "*"
+pytest-factoryboy = ">=2.8.1"
 pytest-flask = "*"
 python-mpd2 = "*"
 python3-discogs-client = ">=2.3.15"
@@ -269,8 +270,7 @@ ref = "test"
 # measure coverage across logical branches
 # show which tests cover specific lines in the code (see the HTML report)
 env.OPTS = """
---cov=beets
---cov=beetsplug
+--cov=.
 --cov-report=xml:.reports/coverage.xml
 --cov-report=html:.reports/html
 --cov-branch

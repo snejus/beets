@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from contextlib import suppress
 from functools import cached_property
-from typing import TYPE_CHECKING, ClassVar, NamedTuple, TypeVar
+from typing import TYPE_CHECKING, ClassVar, NamedTuple
 
 from confuse.exceptions import ConfigError
 
@@ -12,22 +12,12 @@ from beets import ui
 from beets.dbcore.db import Migration
 from beets.dbcore.pathutils import normalize_path_for_db
 from beets.dbcore.types import MULTI_VALUE_DELIMITER
-from beets.util import unique_list
+from beets.util import chunks, unique_list
 from beets.util.lyrics import Lyrics
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
-
     from beets.dbcore.db import Model
     from beets.library import Library
-
-T = TypeVar("T")
-
-
-def chunks(lst: list[T], n: int) -> Iterator[list[T]]:
-    """Yield successive n-sized chunks from lst."""
-    for i in range(0, len(lst), n):
-        yield lst[i : i + n]
 
 
 class MultiValueFieldMigration(Migration):
@@ -237,7 +227,13 @@ class RelativePathMigration(Migration):
         table = model_cls._table
 
         with self.db.transaction() as tx:
-            rows = tx.query(f"SELECT id, {field} FROM {table}")  # type: ignore[assignment]
+            rows = tx.query(
+                f"""
+                SELECT id, {field}
+                FROM {table}
+                WHERE {field} IS NOT NULL
+                """
+            )
 
         total = len(rows)
         to_migrate = [r for r in rows if r[field] and os.path.isabs(r[field])]
@@ -249,7 +245,9 @@ class RelativePathMigration(Migration):
             tx.mutate_many(
                 f"UPDATE {table} SET {field} = ? WHERE id = ?",
                 [
-                    (normalize_path_for_db(r[field]), r["id"])
+                    # Convert to bytes in case a user has manually set paths to
+                    # a TEXT value
+                    (normalize_path_for_db(os.fsencode(r[field])), r["id"])
                     for r in to_migrate
                 ],
             )
