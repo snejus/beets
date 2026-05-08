@@ -17,9 +17,11 @@ New features
 - :ref:`import-cmd`: The ``--nomove`` / ``-M`` CLI flag can now be used to
   override the ``move: yes`` config option during import.
 
-..
-    Bug fixes
-    ~~~~~~~~~
+Bug fixes
+~~~~~~~~~
+
+- :doc:`plugins/mbpseudo`: Fix crashes when applying a pseudo-release. One in
+  ``PseudoAlbumInfo.raw_data`` and a ``sqlite3.ProgrammingError``.
 
 ..
     For plugin developers
