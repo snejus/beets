@@ -24,6 +24,8 @@ Bug fixes
   ``PseudoAlbumInfo.raw_data`` and a ``sqlite3.ProgrammingError``.
 - :doc:`plugins/duplicates`: Fix plugin output: information about duplicate
   items was not displayed by default. --count option was ignored :bug:`6476`
+- :doc:`plugins/mbsync` / :doc:`plugins/bpsync`: Do not clear items metadata
+  when ``import.from_scratch`` is enabled. :bug:`6613`
 
 ..
     For plugin developers
