@@ -22,6 +22,8 @@ Bug fixes
 
 - :doc:`plugins/mbpseudo`: Fix crashes when applying a pseudo-release. One in
   ``PseudoAlbumInfo.raw_data`` and a ``sqlite3.ProgrammingError``.
+- :doc:`plugins/duplicates`: Fix plugin output: information about duplicate
+  items was not displayed by default. --count option was ignored :bug:`6476`
 
 ..
     For plugin developers
