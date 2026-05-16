@@ -18,7 +18,7 @@ python3-discogs-client library.
 
 from __future__ import annotations
 
-import http.client
+import http
 import json
 import os
 import re
@@ -496,7 +496,7 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             track.medium_total = mediums.count(track.medium)
             # Discogs does not have track IDs. Invent our own IDs as proposed
             # in #2336.
-            track.track_id = f"{album_id}-{track.track_alt}"
+            track.track_id = f"{album_id}-{track.track_alt or track.index}"
             track.data_url = data_url
             track.data_source = "Discogs"
 
