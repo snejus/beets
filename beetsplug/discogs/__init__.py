@@ -550,7 +550,7 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
         label = labels[0] if (labels := result.data.get("labels")) else None
         return AlbumInfo(
             album=album,
-            album_id=album_id,
+            album_id=str(album_id),
             **albumartist.info,  # Unpacks values to satisfy the keyword arguments
             tracks=track_infos,
             albumstatus=albumstatus,
@@ -563,7 +563,7 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             comments=result.data.get("notes"),
             label=self.strip_disambiguation(label["name"]) if label else None,
             mediums=len(set(mediums)),
-            releasegroup_id=master_id,
+            releasegroup_id=str(master_id) if master_id else None,
             catalognum=(
                 label
                 and label["catno"].replace("none", "").replace(" ", "").upper()
@@ -798,7 +798,6 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             prefix = ", ".join(divisions)
             if prefix:
                 title = f"{prefix}: {title}"
-        track_id = None
         medium, medium_index, _ = self.get_track_index(track["position"])
 
         length = self.get_track_length(track["duration"])
@@ -814,7 +813,6 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
         return (
             TrackInfo(
                 title=title,
-                track_id=track_id,
                 **artistinfo.info,
                 length=length,
                 index=index,
