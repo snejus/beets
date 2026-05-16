@@ -4,7 +4,6 @@ import os
 import re
 from typing import Literal
 
-from rich.text import Text
 
 from beets import config
 
@@ -53,17 +52,3 @@ def colorize(color_name: ColorName, text: str) -> str:
         return _colorize(color_name, text)
 
     return text
-
-
-def uncolorize(text: str) -> str:
-    return Text(text).plain
-
-
-def color_split(colored_text: str, index: int) -> tuple[str, str]:
-    pre, post = [ln.markup for ln in Text(colored_text).divide((index,))]
-    return pre, post
-
-
-def color_len(colored_text: str) -> int:
-    """Return the length of a string without color codes."""
-    return len(uncolorize(colored_text))

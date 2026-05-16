@@ -23,12 +23,10 @@ import errno
 import optparse
 import os.path
 import re
-import shutil
 import sqlite3
 import sys
 import textwrap
 import traceback
-from functools import cache
 from typing import TYPE_CHECKING, Any
 
 import confuse
@@ -435,13 +433,6 @@ def get_replacements():
                 f"malformed regular expression in replace: {pattern}"
             )
     return replacements
-
-
-@cache
-def term_width() -> int:
-    """Get the width (columns) of the terminal."""
-    columns, _ = shutil.get_terminal_size(fallback=(0, 0))
-    return columns if columns else config["ui"]["terminal_width"].get(int)
 
 
 def show_model_changes(
