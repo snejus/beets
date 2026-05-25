@@ -13,7 +13,7 @@ from beets.util import as_string, cached_classproperty
 from beets.util.color import colorize
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, KeysView
+    from collections.abc import Iterator, KeysView, Sequence
 
     from beets.library import Item
     from beets.util import Likelies
@@ -443,6 +443,7 @@ def distance(
     album_info: AlbumInfo,
     item_info_pairs: list[tuple[Item, TrackInfo]],
     unmatched_count: int,
+    disambig_fields: Sequence[str],
 ) -> Distance:
     """Determine how "significant" an album metadata change would be.
 
@@ -545,6 +546,21 @@ def distance(
     # Unmatched tracks.
     for _ in range(unmatched_count):
         dist.add("unmatched_tracks", 1.0)
+
+    if not album_info.catalognum:
+        dist.add("missing_catalognum", 1.0)
+
+    if not album_info.genres:
+        dist.add("missing_genres", 1.0)
+
+    if not album_info.label:
+        dist.add("missing_label", 1.0)
+
+    if not album_info.month:
+        dist.add("missing_month", 1.0)
+
+    missing_field_count = sum(f not in album_info for f in disambig_fields)
+    dist.add("missing_fields", missing_field_count / len(disambig_fields))
 
     dist.add_data_source(original.data_source, album_info.data_source)
 

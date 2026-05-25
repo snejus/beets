@@ -359,7 +359,13 @@ def _add_candidate(
     )
 
     # Get the change distance.
-    dist = distance(source.data, info, item_info_pairs, len(extra_items))
+    dist = distance(
+        source.data,
+        info,
+        item_info_pairs,
+        len(extra_items),
+        AlbumMatch.disambig_fields,
+    )
 
     # Skip matches with ignored penalties.
     penalties = [key for key, _ in dist]
