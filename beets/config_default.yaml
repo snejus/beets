@@ -185,6 +185,11 @@ match:
         albumdisambig: 0.5
         album_id: 5.0
         tracks: 2.0
+        missing_catalognum: 1.0
+        missing_fields: 1.0
+        missing_genres: 1.0
+        missing_label: 1.0
+        missing_month: 1.0
         missing_tracks: 0.9
         unmatched_tracks: 0.6
         track_title: 3.0

@@ -11,6 +11,7 @@ from beets.autotag import (
     string_dist,
     track_distance,
 )
+from beets.autotag.match import AlbumMatch
 from beets.library import Item
 from beets.metadata_plugins import MetadataSourcePlugin, get_penalty
 from beets.plugins import BeetsPlugin
@@ -193,6 +194,7 @@ class TestAlbumDistance:
                 info,
                 list(zip(items, info.tracks)),
                 len(items) - len(info.tracks),
+                AlbumMatch.disambig_fields,
             )
 
         return inner
@@ -202,6 +204,10 @@ class TestAlbumDistance:
         return AlbumInfo(
             artist="artist",
             album="album",
+            catalognum="catalognum",
+            genres=["genre"],
+            label="label",
+            month=1,
             tracks=[
                 TrackInfo(
                     title=i.title,
