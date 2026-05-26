@@ -19,7 +19,11 @@ from beets.util import PromptChoice, displayable_path
 from beets.util.color import colorize
 from beets.util.units import human_bytes, human_seconds_short
 
-from .display import show_change
+from .display import (
+    print_album_candidates,
+    print_singleton_candidates,
+    show_change,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -451,35 +455,11 @@ def choose_candidate(
 
         if not bypass_candidates:
             # Display list of candidates.
-            ui.print_("")
             ui.print_(f'Finding tags for {source.type} "{source.desc}".')
-
-            ui.print_("  Candidates:")
-            for i, match in enumerate(candidates):
-                # Index, metadata, and distance.
-                dist_color = match.distance.color
-                line_parts = [
-                    colorize(dist_color, f"{i + 1}."),
-                    match.distance.string,
-                    colorize(
-                        dist_color if i == 0 else "text_highlight_minor",
-                        f"{match.info.artist} - {match.info.name}",
-                    ),
-                ]
-                ui.print_(f"  {' '.join(line_parts)}")
-
-                # Penalties.
-                if penalty_keys := match.distance.generic_penalty_keys:
-                    if len(penalty_keys) > 3:
-                        penalty_keys = [*penalty_keys[:3], "..."]
-                    penalty_text = colorize(
-                        "changed", f"\u2260 {', '.join(penalty_keys)}"
-                    )
-                    ui.print_(f"{' ' * 13}{penalty_text}")
-
-                # Disambiguation
-                if disambig := match.disambig_string:
-                    ui.print_(f"{' ' * 13}{disambig}")
+            if source.type == "track":
+                print_singleton_candidates(candidates)
+            else:
+                print_album_candidates(candidates)
 
             # Ask the user for a choice.
             sel = ui.input_options(choice_opts, numrange=(1, len(candidates)))

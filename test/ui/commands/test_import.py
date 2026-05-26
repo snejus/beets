@@ -55,7 +55,6 @@ class ImportTest(BeetsTestCase):
         assert actual_paths == expected_paths
 
 
-@patch("beets.ui.term_width", Mock(return_value=54))
 class ShowChangeTestCase(IOMixin, BeetsTestCase):
     def _show_change(self):
         """Return an unicode string representing the changes"""

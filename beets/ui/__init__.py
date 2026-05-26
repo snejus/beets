@@ -8,12 +8,10 @@ from __future__ import annotations
 import errno
 import optparse
 import os.path
-import shutil
 import sqlite3
 import sys
 import textwrap
 import traceback
-from functools import cache
 from typing import TYPE_CHECKING, Any, Literal, TextIO, TypeVar, overload
 
 import confuse
@@ -94,7 +92,7 @@ def decargs(arglist: list[bytes]) -> list[bytes]:
     return arglist
 
 
-def print_(*strings: str, end: str = "\n") -> None:
+def print_(*args: RenderableType, end: str = "\n") -> None:
     """Like print, but rather than raising an error when a character
     is not in the terminal's encoding's character set, just silently
     replaces it.
@@ -102,7 +100,10 @@ def print_(*strings: str, end: str = "\n") -> None:
     The `end` keyword argument behaves similarly to the built-in `print`
     (it defaults to a newline).
     """
-    console.print(" ".join(strings or []), end=end)
+    if args and all(isinstance(i, str) for i in args):
+        console.print(" ".join(args or []))  # type: ignore[arg-type, call-overload]
+    else:
+        console.print(*args, end=end)
 
 
 # Configuration wrappers.
@@ -421,13 +422,6 @@ def input_select_objects(
 
     # No.
     return []
-
-
-@cache
-def term_width() -> int:
-    """Get the width (columns) of the terminal."""
-    columns, _ = shutil.get_terminal_size(fallback=(0, 0))
-    return columns if columns else config["ui"]["terminal_width"].get(int)
 
 
 def show_model_changes(
