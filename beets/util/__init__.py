@@ -37,6 +37,7 @@ from typing import (
     cast,
 )
 
+from rich_tables.utils import make_console
 from typing_extensions import Self
 from unidecode import unidecode
 
@@ -1260,3 +1261,6 @@ class Likelies(AttrDict[Any]):
     media: str
     albumdisambig: str
     data_source: str
+
+
+console = make_console(highlight=False, stderr=True)
