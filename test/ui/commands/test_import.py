@@ -10,7 +10,7 @@ from beets.exceptions import UserError
 from beets.test import _common
 from beets.test.helper import BeetsTestCase, IOMixin
 from beets.ui.commands.import_ import paths_from_logfile
-from beets.ui.commands.import_.display import show_change
+from beets.ui.commands.import_.display import show_album_change
 from beets.ui.commands.import_.session import summarize_items
 
 
@@ -55,7 +55,6 @@ class ImportTest(BeetsTestCase):
         assert actual_paths == expected_paths
 
 
-@patch("beets.ui.term_width", Mock(return_value=54))
 class ShowChangeTestCase(IOMixin, BeetsTestCase):
     def _show_change(self):
         """Return an unicode string representing the changes"""
@@ -92,7 +91,7 @@ class ShowChangeTestCase(IOMixin, BeetsTestCase):
             source.data, info, item_info_pairs, len(items) - len(info.tracks)
         )
         change_dist._penalties = {"album": [0.1], "artist": [0.1]}
-        show_change(
+        show_album_change(
             source, AlbumMatch(change_dist, info, dict(item_info_pairs))
         )
         return self.io.getoutput()
