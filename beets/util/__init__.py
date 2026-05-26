@@ -39,7 +39,6 @@ from typing import (
 )
 
 from confuse import Optional
-from rich_tables.utils import make_console
 from typing_extensions import Self
 from unidecode import unidecode
 
@@ -65,8 +64,6 @@ Replacements = Sequence[tuple[Pattern[str], str]]
 # Here for now to allow for a easy replace later on
 # once we can move to a PathLike (mainly used in importer)
 PathBytes = bytes
-
-console = make_console(highlight=False, stderr=True)
 
 
 class HumanReadableError(Exception):

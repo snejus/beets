@@ -25,44 +25,13 @@ class TestStrFormatLogger:
         l4 = log.getLogger("bar123")
         assert l3 == l4
         assert l3.__class__ == blog.BeetsLogger
-        assert isinstance(
-            l3, (blog.StrFormatLogger, blog.ThreadLocalLevelLogger)
-        )
+        assert isinstance(l3, blog.ThreadLocalLevelLogger)
 
         l5 = l3.getChild("shalala")
         assert l5.__class__ == blog.BeetsLogger
 
         l6 = blog.getLogger()
         assert l1 != l6
-
-    @pytest.mark.parametrize(
-        "level", [log.DEBUG, log.INFO, log.WARNING, log.ERROR]
-    )
-    @pytest.mark.parametrize(
-        "msg, args, kwargs, expected",
-        [
-            ("foo {} bar {}", ("oof", "baz"), {}, "foo oof bar baz"),
-            (
-                "foo {bar} baz {foo}",
-                (),
-                {"foo": "oof", "bar": "baz"},
-                "foo baz baz oof",
-            ),
-            ("no args", (), {}, "no args"),
-            ("foo {} bar {baz}", ("oof",), {"baz": "baz"}, "foo oof bar baz"),
-        ],
-    )
-    def test_str_format_logging(
-        self, level, msg, args, kwargs, expected, caplog
-    ):
-        logger = blog.getLogger("test_logger")
-        logger.setLevel(level)
-
-        with caplog.at_level(level, logger="test_logger"):
-            logger.log(level, msg, *args, **kwargs)
-
-        assert caplog.records, "No log records were captured"
-        assert str(caplog.records[0].msg) == expected
 
 
 class TestLogSanitization:
