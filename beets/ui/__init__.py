@@ -15,24 +15,34 @@ import traceback
 from typing import TYPE_CHECKING, Any, Literal, TextIO, TypeVar, overload
 
 import confuse
+from rich.logging import RichHandler
+from rich.traceback import install
+from rich_tables.utils import make_console
 
 from beets import config, library, logging, plugins, util
 from beets.dbcore import db
 from beets.dbcore import query as db_query
 from beets.exceptions import UserError
-from beets.util import as_string, console
+from beets.util import as_string
 from beets.util.color import colorize
 from beets.util.deprecation import deprecate_for_maintainers
 from beets.util.diff import get_model_changes
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
+    from logging import LogRecord
     from pathlib import Path
+
+    from rich.console import RenderableType
 
     from beets.library import LibModel
     from beets.util.color import ColorName
 
 T = TypeVar("T")
+
+console = make_console(
+    highlight=False, force_terminal=config["ui"]["color"].get()
+)
 
 # On Windows platforms, use colorama to support "ANSI" terminal colors.
 if sys.platform == "win32":
@@ -45,6 +55,14 @@ if sys.platform == "win32":
 
 
 log = logging.getLogger(__name__)
+
+
+class SafeRichHandler(RichHandler):
+    def emit(self, record: LogRecord) -> None:
+        try:
+            return super().emit(record)
+        except Exception:
+            self.handleError(record)
 
 
 # Encoding utilities.
@@ -988,22 +1006,46 @@ def _get_logging_handler() -> logging.Handler:
 
 
 def _bootstrap_logging() -> None:
-    if not log.handlers:
-        handler = _get_logging_handler()
-        handler.setFormatter(
-            logging.LegacyFormatter("%(legacy_prefix)s%(message)s")
+    root = logging.getLogger("beets")
+    if not root.handlers:
+        handler = SafeRichHandler(
+            show_path=False,
+            show_level=True,
+            omit_repeated_times=False,
+            rich_tracebacks=True,
+            tracebacks_show_locals=True,
+            tracebacks_width=console.width,
+            tracebacks_extra_lines=1,
+            keywords=["Sending event"],
+            markup=True,
+            console=console,
         )
-        log.addHandler(handler)
+        handler.setFormatter(
+            logging.Formatter(
+                "[b grey42]{name:<20}[/] {message}", datefmt="%T", style="{"
+            )
+        )
+        root.addHandler(handler)
+    root.propagate = False  # Don't propagate to root handler.
 
     # Verbosity level set via cli --verbose.
     if config["verbose"].get(int):
-        log.set_global_level(logging.DEBUG)
+        root.setLevel(logging.DEBUG)
     else:
-        log.set_global_level(logging.INFO)
+        root.setLevel(logging.INFO)
 
     # List configuration sources for user convenience.
-    config.log_sources(log)
+    config.log_sources(root)
     log.debug("data directory: {}", util.displayable_path(config.config_dir()))
+
+    install(
+        console=console,
+        show_locals=True,
+        width=console.width,
+        code_width=console.width,
+        locals_max_length=1,
+        locals_hide_sunder=True,
+    )
 
 
 def main(args: list[str] | None = None) -> None:

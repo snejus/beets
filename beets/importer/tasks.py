@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import os
 import re
 import shutil
@@ -13,7 +12,7 @@ from typing import TYPE_CHECKING, Any, AnyStr
 
 import mediafile
 
-from beets import config, library, plugins, util
+from beets import config, library, logging, plugins, util
 from beets.autotag import AlbumMatch, Source, tag_album, tag_item
 from beets.dbcore.query import PathQuery
 from beets.util import extension

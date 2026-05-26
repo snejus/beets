@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import os
 import pickle
 from bisect import bisect_left, insort
@@ -9,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import Self
 
-from beets import config
+from beets import config, logging
 
 if TYPE_CHECKING:
     from types import TracebackType

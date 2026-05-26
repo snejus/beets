@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import contextvars
 import itertools
-import logging
 from typing import TYPE_CHECKING, TypeAlias
 
-from beets import config, plugins
+from beets import config, logging, plugins
 from beets.util import MoveOperation, displayable_path, pipeline
 
 from .actions import Action, DuplicateAction
