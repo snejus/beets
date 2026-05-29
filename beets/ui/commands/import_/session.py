@@ -5,14 +5,7 @@ from itertools import chain
 from typing import TYPE_CHECKING
 
 from beets import config, importer, logging, plugins, ui
-from beets.autotag import (
-    AlbumMatch,
-    Proposal,
-    Recommendation,
-    TrackMatch,
-    tag_album,
-    tag_item,
-)
+from beets.autotag import AlbumMatch, Recommendation, TrackMatch
 from beets.util import PromptChoice, displayable_path
 from beets.util.color import colorize
 from beets.util.units import human_bytes, human_seconds_short
@@ -21,6 +14,7 @@ from .display import show_change
 
 if TYPE_CHECKING:
     from beets.autotag import Source
+    from beets.importer import ImportTask
 
 # Global logger.
 log = logging.getLogger("beets")
@@ -59,7 +53,7 @@ class TerminalImportSession(importer.ImportSession):
             )
 
         # Take immediate action if appropriate.
-        action = _summary_judgment(task.rec)
+        action = _summary_judgment(task.candidates.recommendation)
         if action == importer.Action.APPLY:
             match = task.candidates[0]
             show_change(task.source, match)
@@ -75,7 +69,10 @@ class TerminalImportSession(importer.ImportSession):
             # `PromptChoice`.
             choices = self._get_choices(task)
             choice = choose_candidate(
-                task.candidates, task.rec, task.source, choices=choices
+                task.candidates,
+                task.candidates.recommendation,
+                task.source,
+                choices=choices,
             )
 
             # Basic choices that require no more action here.
@@ -89,10 +86,6 @@ class TerminalImportSession(importer.ImportSession):
                 post_choice = choice.callback(self, task)
                 if isinstance(post_choice, importer.Action):
                     return post_choice
-                elif isinstance(post_choice, Proposal):
-                    # Use the new candidates and continue around the loop.
-                    task.candidates = post_choice.candidates
-                    task.rec = post_choice.recommendation
 
             # Otherwise, we have a specific match selection.
             else:
@@ -107,12 +100,11 @@ class TerminalImportSession(importer.ImportSession):
         """
         ui.print_()
         ui.print_(displayable_path(task.item.path))
-        candidates, rec = task.candidates, task.rec
 
         # Take immediate action if appropriate.
-        action = _summary_judgment(task.rec)
+        action = _summary_judgment(task.candidates.recommendation)
         if action == importer.Action.APPLY:
-            match = candidates[0]
+            match = task.candidates[0]
             show_change(task.source, match)
             return match
         elif action is not None:
@@ -122,7 +114,10 @@ class TerminalImportSession(importer.ImportSession):
             # Ask for a choice.
             choices = self._get_choices(task)
             choice = choose_candidate(
-                candidates, rec, task.source, choices=choices
+                task.candidates,
+                task.candidates.recommendation,
+                task.source,
+                choices=choices,
             )
 
             if choice in (importer.Action.SKIP, importer.Action.ASIS):
@@ -132,9 +127,6 @@ class TerminalImportSession(importer.ImportSession):
                 post_choice = choice.callback(self, task)
                 if isinstance(post_choice, importer.Action):
                     return post_choice
-                elif isinstance(post_choice, Proposal):
-                    candidates = post_choice.candidates
-                    rec = post_choice.recommendation
 
             else:
                 # Chose a candidate.
@@ -482,33 +474,26 @@ def choose_candidate(candidates, rec, source: Source, choices=[]):
             return choice_actions[sel]
 
 
-def manual_search(session, task):
-    """Get a new `Proposal` using manual search criteria.
+def manual_search(session, task: ImportTask):
+    """Resolve candidates using a manual search.
 
     Input either an artist and album (for full albums) or artist and
     track name (for singletons) for manual search.
     """
-    artist = ui.input_("Artist:").strip()
-    name = ui.input_(f"{task.source.type.capitalize()}:").strip()
-
-    if task.is_album:
-        return tag_album(task.source, artist, name)
-    else:
-        return tag_item(task.source, artist, name)
+    task.candidates.search(
+        ui.input_("Artist:").strip(),
+        ui.input_(f"{task.source.type.capitalize()}:").strip(),
+    )
 
 
-def manual_id(session, task):
-    """Get a new `Proposal` using a manually-entered ID.
+def manual_id(session, task: ImportTask):
+    """Resolve candidates using a manually-entered ID.
 
     Input an ID, either for an album ("release") or a track ("recording").
     """
-    prompt = f"Enter {task.source.type} ID:"
-    search_id = ui.input_(prompt).strip()
-
-    if task.is_album:
-        return tag_album(task.source, search_ids=search_id.split())
-    else:
-        return tag_item(task.source, search_ids=search_id.split())
+    task.candidates.search_ids(
+        ui.input_(f"Enter {task.source.type} ID:").strip().split()
+    )
 
 
 def abort_action(session, task):

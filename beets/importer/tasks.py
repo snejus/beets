@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any
 import mediafile
 
 from beets import config, library, plugins, util
-from beets.autotag import AlbumMatch, Source, tag_album, tag_item
+from beets.autotag import AlbumCandidates, AlbumMatch, Source, TrackCandidates
 from beets.dbcore.query import PathQuery
 from beets.util import extension
 from beets.util.extension import remux_mpeglayer3_wav
@@ -37,9 +37,9 @@ from beets.util.extension import remux_mpeglayer3_wav
 from .state import ImportState
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Iterable
 
-    from beets.autotag import Recommendation, TrackMatch
+    from beets.autotag import Candidates, TrackMatch
 
     from .session import ImportSession
 
@@ -165,13 +165,13 @@ class ImportTask(BaseImportTask):
     choice_flag: Action | None = None
     match: AlbumMatch | TrackMatch | None = None
 
-    # Keep track of the current task item
-    candidates: Sequence[AlbumMatch | TrackMatch] | None = None
-    rec: Recommendation | None = None
-
     @cached_property
     def source(self) -> Source:
         return Source.from_items(self.items)
+
+    @cached_property
+    def candidates(self) -> Candidates[Any, Any]:
+        return AlbumCandidates(self.source)
 
     def __init__(
         self,
@@ -384,9 +384,7 @@ class ImportTask(BaseImportTask):
         If User-specified ``search_ids`` list is not empty, the lookup is
         restricted to only those IDs.
         """
-        self.candidates, self.rec = tag_album(
-            self.source, search_ids=search_ids
-        )
+        self.candidates.resolve(search_ids)
 
     def find_duplicates(self, lib: library.Library) -> list[library.Album]:
         """Return a list of albums from `lib` with the same artist and
@@ -684,6 +682,10 @@ class SingletonImportTask(ImportTask):
     def source(self) -> Source:
         return Source.from_item(self.item)
 
+    @cached_property
+    def candidates(self) -> TrackCandidates:
+        return TrackCandidates(self.source)
+
     def __init__(self, toppath: util.PathBytes | None, item: library.Item):
         super().__init__(toppath, [item.path], [item])
         self.item = item
@@ -696,9 +698,6 @@ class SingletonImportTask(ImportTask):
     def _emit_imported(self, lib):
         for item in self.imported_items():
             plugins.send("item_imported", lib=lib, item=item)
-
-    def lookup_candidates(self, search_ids: list[str]) -> None:
-        self.candidates, self.rec = tag_item(self.source, search_ids=search_ids)
 
     def find_duplicates(self, lib: library.Library) -> list[library.Item]:  # type: ignore[override] # Need splitting Singleton and Album tasks into separate classes
         """Return a list of items from `lib` that have the same artist
