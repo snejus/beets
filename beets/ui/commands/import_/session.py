@@ -17,7 +17,7 @@ from beets.util import PromptChoice, displayable_path
 from beets.util.color import colorize
 from beets.util.units import human_bytes, human_seconds_short
 
-from .display import show_change, show_item_change
+from .display import show_change
 
 if TYPE_CHECKING:
     from beets.autotag import Source
@@ -113,7 +113,7 @@ class TerminalImportSession(importer.ImportSession):
         action = _summary_judgment(task.rec)
         if action == importer.Action.APPLY:
             match = candidates[0]
-            show_item_change(task.source, match)
+            show_change(task.source, match)
             return match
         elif action is not None:
             return action
@@ -456,10 +456,7 @@ def choose_candidate(candidates, rec, source: Source, choices=[]):
         bypass_candidates = False
 
         # Show what we're about to do.
-        if source.type == "track":
-            show_item_change(source, match)
-        else:
-            show_change(source, match)
+        show_change(source, match)
 
         # Exact match => tag automatically if we're not in timid mode.
         if rec == Recommendation.strong and not config["import"]["timid"]:
