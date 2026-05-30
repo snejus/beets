@@ -189,3 +189,5 @@ adfb73b66dba0fc799880af176ef6f9ac0a7ee68
 6493d4dd018e08eb5d16d5381ebff47deea98bb1
 # Import everything from parent beets.autotag
 40efb26fff9907610f365e5efbbbf3a7947a62fe
+# Add missing types to importer.tasks
+277d18c8890122fa71a16f47de035660d6c2f0e9
