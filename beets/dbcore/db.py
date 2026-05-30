@@ -179,7 +179,7 @@ class FormattedMapping(Mapping[str, str]):
 # by some methods build intermediate lists, such that modification of the
 # `LazyConvertDict` becomes safe during iteration. Some code does in fact rely
 # on this.
-class LazyConvertDict:
+class LazyConvertDict(Mapping[str, Any]):
     """Lazily convert types for attributes fetched from the database"""
 
     def __init__(self, model_cls: Model):
