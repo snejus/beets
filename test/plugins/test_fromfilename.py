@@ -33,7 +33,6 @@ class Item:
 class Task:
     def __init__(self, items):
         self.items = items
-        self.is_album = True
 
 
 @pytest.mark.parametrize(

@@ -172,6 +172,14 @@ class ImportTask(BaseImportTask, Generic[library.AnyLibModel]):
     def candidates(self) -> Candidates[Any, Any]:
         return Candidates.from_source(self.source)
 
+    @cached_property
+    def is_album(self) -> bool:
+        return self.source.type == "album"
+
+    @property
+    def target(self) -> library.AnyLibModel | None:
+        raise NotImplementedError
+
     def __init__(
         self,
         toppath: util.PathBytes | None,
@@ -181,7 +189,6 @@ class ImportTask(BaseImportTask, Generic[library.AnyLibModel]):
         super().__init__(toppath, paths, items)
         self.should_remove_duplicates = False
         self.should_merge_duplicates = False
-        self.is_album = True
 
     def set_choice(self, choice: Action | AlbumMatch | TrackMatch) -> None:
         """Given an AlbumMatch or TrackMatch object or an action constant,
@@ -548,6 +555,10 @@ class AlbumImportTask(ImportTask[library.Album]):
     def source(self) -> Source:
         return Source.from_items(self.items)
 
+    @property
+    def target(self) -> library.Album | None:
+        return self.album
+
     def imported_items(self) -> list[library.Item]:
         """Return a list of Items that should be added to the library.
 
@@ -722,12 +733,15 @@ class SingletonImportTask(ImportTask):
     def source(self) -> Source:
         return Source.from_item(self.item)
 
+    @property
+    def target(self) -> library.Item | None:
+        return self.item
+
     def __init__(
         self, toppath: util.PathBytes | None, item: library.Item
     ) -> None:
         super().__init__(toppath, [item.path], [item])
         self.item = item
-        self.is_album = False
         self.paths = [item.path]
 
     def imported_items(self) -> list[library.Item]:
@@ -829,7 +843,6 @@ class SentinelImportTask(ImportTask):
         super().__init__(toppath, paths, ())
         # TODO Remove the remaining attributes eventually
         self.should_remove_duplicates = False
-        self.is_album = True
         self.choice_flag = None
 
     def save_history(self) -> None:

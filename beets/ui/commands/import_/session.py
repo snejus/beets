@@ -13,8 +13,11 @@ from beets.util.units import human_bytes, human_seconds_short
 from .display import show_change
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from beets.autotag import Source
     from beets.importer import ImportTask
+    from beets.library import Album, Item
 
 # Global logger.
 log = logging.getLogger("beets")
@@ -133,14 +136,15 @@ class TerminalImportSession(importer.ImportSession):
                 assert isinstance(choice, TrackMatch)
                 return choice
 
-    def resolve_duplicate(self, task, found_duplicates):
+    def resolve_duplicate(
+        self,
+        task: ImportTask,
+        found_duplicates: Iterable[Item] | Iterable[Album],
+    ):
         """Decide what to do when a new album or item seems similar to one
         that's already in the library.
         """
-        log.warning(
-            "This {} is already in the library!",
-            ("album" if task.is_album else "item"),
-        )
+        log.warning("This {.source.type} is already in the library!", task)
 
         if config["import"]["quiet"]:
             # In quiet mode, don't prompt -- just skip.
@@ -149,31 +153,18 @@ class TerminalImportSession(importer.ImportSession):
         else:
             # Print some detail about the existing and new items so the
             # user can make an informed decision.
+            is_album = task.is_album
             for duplicate in found_duplicates:
-                ui.print_(
-                    "Old: "
-                    + summarize_items(
-                        (
-                            list(duplicate.items())
-                            if task.is_album
-                            else [duplicate]
-                        ),
-                        not task.is_album,
-                    )
-                )
+                duplicates = duplicate.items() if is_album else [duplicate]
+                ui.print_(f"Old: {summarize_items(duplicates, not is_album)}")
                 if config["import"]["duplicate_verbose_prompt"]:
-                    if task.is_album:
-                        for dup in duplicate.items():
-                            print(f"  {dup}")
-                    else:
-                        print(f"  {duplicate}")
+                    for dup in duplicates:
+                        print(f"  {dup}")
 
-            ui.print_(
-                "New: "
-                + summarize_items(task.imported_items(), not task.is_album)
-            )
+            new_items = task.imported_items()
+            ui.print_(f"New: {summarize_items(new_items, not is_album)}")
             if config["import"]["duplicate_verbose_prompt"]:
-                for item in task.imported_items():
+                for item in new_items:
                     print(f"  {item}")
 
             sel = ui.input_options(
