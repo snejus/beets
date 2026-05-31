@@ -8,9 +8,10 @@ import unicodedata
 from contextlib import suppress
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from mediafile import MediaFile, UnreadableFileError
+from typing_extensions import TypeVar
 
 import beets
 from beets import dbcore, logging, plugins, util
@@ -40,6 +41,8 @@ if TYPE_CHECKING:
     from .library import Library  # noqa: F401
 
 log = logging.getLogger("beets")
+
+AnyLibModel = TypeVar("AnyLibModel", bound="LibModel", default=Any)
 
 
 class LibModel(dbcore.Model["Library"]):

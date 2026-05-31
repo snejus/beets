@@ -24,6 +24,7 @@ from beets.util import MoveOperation, displayable_path, pipeline
 
 from .tasks import (
     Action,
+    AlbumImportTask,
     ImportTask,
     ImportTaskFactory,
     SentinelImportTask,
@@ -90,7 +91,7 @@ def query_tasks(session: ImportSession):
             items = list(album.items())
             _freshen_items(items)
 
-            task = ImportTask(None, [album.item_dir()], items)
+            task = AlbumImportTask(None, [album.item_dir()], items)
             for task in task.handle_created(session):
                 yield task
 
@@ -120,7 +121,9 @@ def group_albums(session: ImportSession):
         sorted_items: list[library.Item] = sorted(task.items, key=group)
         for _, items in itertools.groupby(sorted_items, group):
             l_items = list(items)
-            task = ImportTask(task.toppath, [i.path for i in l_items], l_items)
+            task = AlbumImportTask(
+                task.toppath, [i.path for i in l_items], l_items
+            )
             tasks += task.handle_created(session)
         tasks.append(SentinelImportTask(task.toppath, task.paths))
 
