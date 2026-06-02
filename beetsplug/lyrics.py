@@ -22,7 +22,7 @@ import re
 import textwrap
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
-from functools import cached_property, partial, total_ordering
+from functools import cached_property, partial, reduce, total_ordering
 from html import unescape
 from itertools import filterfalse, groupby
 from pathlib import Path
@@ -44,7 +44,7 @@ from beets.util.lyrics import INSTRUMENTAL_LYRICS, Lyrics
 from ._utils.requests import HTTPNotFoundError, RequestHandler
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
+    from collections.abc import Callable, Iterable, Iterator
 
     import confuse
 
@@ -59,6 +59,8 @@ if TYPE_CHECKING:
         LRCLibAPI,
         TranslatorAPI,
     )
+
+    HtmlTransformer = Callable[[str], str]
 
 
 class CaptchaError(requests.exceptions.HTTPError):
@@ -444,6 +446,13 @@ class MusiXmatch(Backend):
         return Lyrics(lyrics, self.__class__.name, url)
 
 
+def apply_methods(html: str, methods: Iterable[HtmlTransformer]) -> str:
+    def apply_method(text: str, method: Callable[[str], str]) -> str:
+        return method(text)
+
+    return reduce(apply_method, methods, initial=html)
+
+
 class Html:
     collapse_space = partial(re.compile(r"(^| ) +", re.M).sub, r"\1")
     expand_br = partial(re.compile(r"\s*<br[^>]*>\s*", re.I).sub, "\n")
@@ -474,11 +483,13 @@ class Html:
 
     @classmethod
     def remove_ads(cls, text: str) -> str:
-        return cls.remove_adslot(cls.remove_aside(text))
+        return apply_methods(text, [cls.remove_aside, cls.remove_adslot])
 
     @classmethod
     def merge_paragraphs(cls, text: str) -> str:
-        return cls.merge_blocks(cls.merge_lines(cls.remove_empty_tags(text)))
+        return apply_methods(
+            text, [cls.merge_blocks, cls.merge_lines, cls.remove_empty_tags]
+        )
 
 
 class SoupMixin:
