@@ -451,20 +451,24 @@ class TestLyricsSources(LyricsBackendTest):
             "beetsplug.lyrics.LyricsRequestHandler.create_session",
             lambda _: requests.Session(),
         )
+        expected_lyrics = Lyrics(
+            lyrics_page.lyrics,
+            lyrics_page.backend,
+            url=lyrics_page.url,
+            language=lyrics_page.language,
+        )
 
-        assert lyrics_plugin.find_lyrics(
+        actual_lyrics = lyrics_plugin.find_lyrics(
             Item(
                 artist=lyrics_page.artist,
                 title=lyrics_page.track_title,
                 album="",
                 length=186.0,
             )
-        ) == Lyrics(
-            lyrics_page.lyrics,
-            lyrics_page.backend,
-            url=lyrics_page.url,
-            language=lyrics_page.language,
         )
+        assert actual_lyrics
+        assert actual_lyrics.text == expected_lyrics.text
+        assert actual_lyrics == expected_lyrics
 
 
 class TestGoogleLyrics(LyricsBackendTest):
