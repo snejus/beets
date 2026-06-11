@@ -369,6 +369,15 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
         kwargs["type"] = "release"
         query = " ".join(args)
         self._log.debug("Searching for '{}', {}", query, kwargs)
+
+        def check_release(r: Release) -> bool:
+            try:
+                return not (
+                    len(r.tracklist) == 1 and r.title == r.tracklist[0].title
+                )
+            except Exception:
+                return False
+
         try:
             results = self.discogs_client.search(*args, **kwargs)
             results.per_page = self.search_limit
@@ -383,9 +392,7 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
                 r
                 for r in results.page(1)
                 if not any(f["name"] == "Box Set" for f in r.formats)
-                and not (
-                    len(r.tracklist) == 1 and r.title == r.tracklist[0].title
-                )
+                and check_release(r)
             )
             yield from islice(
                 filter(None, map(self.get_album_info, releases)),
