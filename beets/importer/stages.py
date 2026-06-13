@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     StageReturn: TypeAlias = ImportTask | pipeline.MultiMessage | str
 
 # Global logger.
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 # ---------------------------- Producer functions ---------------------------- #
 # Functions that are called first i.e. they generate import tasks

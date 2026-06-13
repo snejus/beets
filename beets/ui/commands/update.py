@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 # Global logger.
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 
 class UpdateCLIOpts(Protocol):

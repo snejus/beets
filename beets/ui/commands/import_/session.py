@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from beets.util import PathBytes
 
 # Global logger.
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 
 class TerminalImportSession(importer.ImportSession):

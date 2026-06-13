@@ -44,7 +44,7 @@ if sys.platform == "win32":
         colorama.init()
 
 
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 
 # Encoding utilities.

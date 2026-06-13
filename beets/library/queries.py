@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from beets.dbcore.queryparse import Prefixes
     from beets.library import LibModel
 
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 
 # Query construction helpers.

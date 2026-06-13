@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     Candidates = dict[Info.Identifier, AnyMatch]
 
 # Global logger.
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 
 # Recommendation enumeration.
