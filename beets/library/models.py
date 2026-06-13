@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
     from .library import Library
 
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 AlbumOrItem = TypeVar("AlbumOrItem", "Album", "Item")
 

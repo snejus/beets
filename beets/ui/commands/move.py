@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from beets.library import Album, AlbumOrItem, Item, Library
 
 # Global logger.
-log = logging.getLogger("beets")
+log = logging.getLogger(__name__)
 
 
 class MoveCLIOpts(Protocol):
