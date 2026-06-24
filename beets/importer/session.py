@@ -9,7 +9,7 @@ from typing_extensions import Self
 
 from beets import config, library, logging, plugins, util
 from beets.importer.tasks import Action
-from beets.util import displayable_path, pipeline, syspath
+from beets.util import pipeline, syspath
 
 from . import stages as stagefuncs
 from .actions import DuplicateAction
@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from beets.library import AlbumOrItem
     from beets.util import PathBytes
 
+    from .actions import Action
     from .tasks import ImportTask, SingletonImportTask
 
 
@@ -108,41 +109,6 @@ class ImportSession(ImportLog):
             iconfig["delete"] = False
 
         self.want_resume = config["resume"].as_choice([True, False, "ask"])
-
-    def tag_log(self, status: str, paths: Sequence[PathBytes]) -> None:
-        """Log a message about a given album to the importer log. The status
-        should reflect the reason the album couldn't be tagged.
-        """
-        self.importlog.info("{} {}", status, displayable_path(paths))
-
-    def log_choice(
-        self, task: ImportTask[AnyMatch], duplicate: bool = False
-    ) -> None:
-        """Logs the task's current choice if it should be logged. If
-        ``duplicate``, then this is a secondary choice after a duplicate was
-        detected and a decision was made.
-        """
-        paths = task.paths
-        if duplicate:
-            # Duplicate: log all three choices (skip, keep both, and trump).
-            if task.duplicate_action is DuplicateAction.REMOVE:
-                self.tag_log("duplicate-replace", paths)
-            elif task.choice_flag in (Action.ASIS, Action.APPLY):
-                self.tag_log("duplicate-keep", paths)
-            elif task.skip:
-                self.tag_log("duplicate-skip", paths)
-        else:
-            # Non-duplicate: log "skip" and "asis" choices.
-            if task.choice_flag is Action.ASIS:
-                self.tag_log("asis", paths)
-            elif task.skip:
-                self.tag_log("skip", paths)
-            elif task.choice_flag is Action.APPLY:
-                if task.is_album:
-                    tolog = ["album", task.match.info["album"]]
-                else:
-                    tolog = ["track", task.match.info["title"]]
-                self.tag_log("apply", tolog)
 
     def should_resume(self, path: PathBytes) -> bool:
         raise NotImplementedError
