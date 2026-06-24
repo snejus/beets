@@ -5,6 +5,7 @@ import os
 import re
 import time
 from functools import cached_property
+from itertools import chain, islice
 from typing import TYPE_CHECKING, ClassVar, Literal, Protocol, overload
 
 import confuse
@@ -96,6 +97,11 @@ class TidalPlugin(MetadataSourcePlugin):
             token_path=self._tokenfile(),
         )
 
+    @cached_property
+    def search_limit(self) -> int:
+        """Maximum number of search results to return."""
+        return self.config["search_limit"].get(int)
+
     def _tokenfile(self) -> str:
         """Return the configured path to the token file in the app directory."""
         return self.config["tokenfile"].get(confuse.Filename(in_app_dir=True))
@@ -148,13 +154,15 @@ class TidalPlugin(MetadataSourcePlugin):
                 filter(None, self.search_albums_by_ids(barcode_ids=barcodes))
             )
         ):
-            return candidates
+            return candidates[: self.search_limit]
 
-        for query in self._album_queries(items):
-            candidates += self.search_albums_by_query(query)
-
-        log.debug("Found {0} candidates", len(candidates))
-        return candidates
+        return islice(
+            chain.from_iterable(
+                self.search_albums_by_query(q)
+                for q in self._album_queries(items)
+            ),
+            self.search_limit,
+        )
 
     def item_candidates(
         self, item: Item, artist: str, title: str
@@ -167,13 +175,14 @@ class TidalPlugin(MetadataSourcePlugin):
             if candidates := list(
                 filter(None, self.search_tracks_by_ids(isrcs=[isrc]))
             ):
-                return candidates
+                return candidates[: self.search_limit]
 
-        for query in self._item_queries(item):
-            candidates += self.search_tracks_by_query(query)
-
-        log.debug("Found {0} candidates", len(candidates))
-        return candidates
+        return islice(
+            chain.from_iterable(
+                self.search_tracks_by_query(q) for q in self._item_queries(item)
+            ),
+            self.search_limit,
+        )
 
     @staticmethod
     def _item_queries(item: Item) -> Iterable[str]:
