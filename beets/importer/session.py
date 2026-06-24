@@ -8,12 +8,12 @@ from typing import TYPE_CHECKING
 from typing_extensions import Self
 
 from beets import config, library, logging, plugins, util
-from beets.exceptions import UserError
 from beets.importer.tasks import Action
-from beets.util import cached_classproperty, displayable_path, pipeline, syspath
+from beets.util import displayable_path, pipeline, syspath
 
 from . import stages as stagefuncs
 from .actions import DuplicateAction
+from .importlog import ImportLog
 from .state import ImportState
 
 if TYPE_CHECKING:
@@ -40,7 +40,7 @@ class ImportAbortError(Exception):
 
 
 @dataclass
-class ImportSession:
+class ImportSession(ImportLog):
     """Controls an import action. Subclasses should implement methods to
     communicate with the user or otherwise make decisions.
     """
@@ -52,23 +52,6 @@ class ImportSession:
     _is_resuming: dict[bytes, bool] = field(default_factory=dict, init=False)
     _merged_items: set[bytes] = field(default_factory=set, init=False)
     _merged_dirs: set[bytes] = field(default_factory=set, init=False)
-
-    @cached_classproperty
-    def logger(cls) -> logging.Logger:
-        """Get the logger for this class."""
-        if not (view := config["import"]["log"]):
-            return log
-
-        path = syspath(view.as_filename())
-        try:
-            handler = logging.FileHandler(path, encoding="utf-8")
-        except OSError as e:
-            raise UserError(f"Could not open file for writing: {path}") from e
-
-        handler.setFormatter(logging.Formatter("%(asctime)s | %(message)s"))
-        log.propagate = True
-        log.handlers.append(handler)
-        return log
 
     @classmethod
     def make(cls, *args, **kwargs) -> Self:
@@ -130,7 +113,7 @@ class ImportSession:
         """Log a message about a given album to the importer log. The status
         should reflect the reason the album couldn't be tagged.
         """
-        self.logger.info("{} {}", status, displayable_path(paths))
+        self.importlog.info("{} {}", status, displayable_path(paths))
 
     def log_choice(
         self, task: ImportTask[AnyMatch], duplicate: bool = False
@@ -182,7 +165,7 @@ class ImportSession:
 
     def run(self) -> None:
         """Run the import task."""
-        self.logger.info("import started {}", time.asctime())
+        self.importlog.info("import started {}", time.asctime())
         self.set_config(config["import"])
 
         stages: list[Iterator[stagefuncs.StageMessage]]
