@@ -364,7 +364,7 @@ def _resolve_duplicates(session: ImportSession, task: ImportTask) -> None:
                 else:
                     task.apply_upgrade(kept, superseded, old_album_ids)
 
-            session.log_choice(task, True)
+            task.tag_log(task.duplicate_action.name.lower(), task.paths)
 
 
 def _freshen_items(items: Iterable[library.Item]) -> None:
