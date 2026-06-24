@@ -10,7 +10,7 @@ from beets.importer import DuplicateAction, SingletonImportTask
 from beets.library import Album
 from beets.util import PromptChoice, displayable_path
 from beets.util.color import colorize
-from beets.util.units import human_bytes, human_seconds_short
+from beets.util.units import human_bytes
 
 from .display import (
     print_album_candidates,
@@ -310,32 +310,26 @@ def summarize_items(items: Sequence[Item], singleton: bool) -> str:
     if not singleton:
         summary_parts.append(f"{len(items)} items")
 
-    format_counts: dict[str, int] = {}
-    for item in items:
-        format_counts[item.format] = format_counts.get(item.format, 0) + 1
+    format_counts = Counter(i.format for i in items)
+
     if len(format_counts) == 1:
         # A single format.
         summary_parts.append(items[0].format)
     else:
-        # Enumerate all the formats by decreasing frequencies:
-        for fmt, count in sorted(
-            format_counts.items(),
-            key=lambda fmt_and_count: (-fmt_and_count[1], fmt_and_count[0]),
-        ):
-            summary_parts.append(f"{fmt} {count}")
+        summary_parts.extend(f"{f} {c}" for f, c in format_counts.most_common())
 
     if items:
-        average_bitrate = sum([item.bitrate for item in items]) / len(items)
-        total_duration = sum([item.length for item in items])
-        total_filesize = sum([item.filesize for item in items])
-        summary_parts.append(f"{int(average_bitrate / 1000)}kbps")
-        if items[0].format == "FLAC":
-            sample_bits = (
-                f"{round(int(items[0].samplerate) / 1000, 1)}kHz"
-                f"/{items[0].bitdepth} bit"
+        average_bitrate = sum(item.bitrate for item in items) / len(items)
+        summary_parts.append(f"{average_bitrate / 1000:.0f}kbps")
+
+        if (item := items[0]).format == "FLAC":
+            summary_parts.append(
+                f"{item.samplerate / 1000:.1f}kHz/{item.bitdepth} bit"
             )
-            summary_parts.append(sample_bits)
-        summary_parts.append(human_seconds_short(total_duration))
+
+        duration = sum(item.length for item in items)
+        summary_parts.append(f"{duration // 60:n}:{duration % 60:.0f}")
+        total_filesize = sum(item.filesize for item in items)
         summary_parts.append(human_bytes(total_filesize))
 
     return ", ".join(summary_parts)
