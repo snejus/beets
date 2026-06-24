@@ -33,10 +33,11 @@ class Source(NamedTuple):
     def from_items(cls, items: Sequence[Item]) -> Source:
         """Create a Source object from a list of items."""
         likelies = get_most_common_tags(items)
+        first_item = items[0]
         return cls(
             type="album",
-            artist=likelies.artist,
-            name=likelies.album,
+            artist=likelies.artist or first_item.artist,
+            name=likelies.album or first_item.title,
             data=likelies,
             items=items,
             id=likelies.mb_albumid,
