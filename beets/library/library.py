@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from contextlib import contextmanager
 from functools import cached_property
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import platformdirs
@@ -60,7 +61,7 @@ class Library(dbcore.Database):
 
     def __init__(
         self,
-        path="library.blb",
+        path: Path = Path("library.blb"),
         directory: str | None = None,
         set_music_dir: bool = True,
     ):

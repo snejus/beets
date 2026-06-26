@@ -49,6 +49,7 @@ if TYPE_CHECKING:
         KeysView,
         Sequence,
     )
+    from pathlib import Path
     from sqlite3 import Connection
     from types import TracebackType
 
@@ -1076,7 +1077,7 @@ class Database:
     data is written in a transaction.
     """
 
-    def __init__(self, path, timeout: float = 5.0):
+    def __init__(self, path: Path, timeout: float = 5.0):
         if sqlite3.threadsafety == 0:
             raise RuntimeError(
                 "sqlite3 must be compiled with multi-threading support"
@@ -1175,7 +1176,7 @@ class Database:
         # bytestring paths here on Python 3, so we need to
         # provide a `str` using `os.fsdecode`.
         conn = sqlite3.connect(
-            os.fsdecode(self.path),
+            str(self.path),
             timeout=self.timeout,
             # We have our own same-thread checks in _connection(), but need to
             # call conn.close() in _close()

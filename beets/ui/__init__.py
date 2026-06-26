@@ -780,7 +780,7 @@ def _ensure_db_directory_exists(path):
 
 def _open_library(config: confuse.LazyConfig) -> library.Library:
     """Create a new library instance from the configuration."""
-    dbpath = util.bytestring_path(config["library"].as_filename())
+    dbpath = config["library"].as_path()
     _ensure_db_directory_exists(dbpath)
     try:
         lib = library.Library(dbpath, config["directory"].as_filename())
