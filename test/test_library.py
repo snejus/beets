@@ -376,7 +376,7 @@ class TestDestination(PytestItemHelper):
 
     def test_get_formatted_does_not_replace_separators(self, item_in_db):
         with _common.platform_posix():
-            name = os.path.join("a", "b")
+            name = str(Path("a") / "b")
             item_in_db.title = name
             newname = item_in_db.formatted().get("title")
         assert name == newname

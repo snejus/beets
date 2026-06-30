@@ -124,7 +124,7 @@ class UtilTest(unittest.TestCase):
 class PathConversionTest(unittest.TestCase):
     def test_syspath_windows_format(self):
         with _common.platform_windows():
-            path = os.path.join("a", "b", "c")
+            path = Path("a") / "b" / "c"
             outpath = util.syspath(path)
         assert isinstance(outpath, str)
         assert outpath.startswith("\\\\?\\")
@@ -140,7 +140,7 @@ class PathConversionTest(unittest.TestCase):
 
     def test_syspath_posix_unchanged(self):
         with _common.platform_posix():
-            path = os.path.join("a", "b", "c")
+            path = str(Path("a") / "b" / "c")
             outpath = util.syspath(path)
         assert path == outpath
 

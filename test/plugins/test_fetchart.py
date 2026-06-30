@@ -1,5 +1,4 @@
 import ctypes
-import os
 import sys
 from unittest import mock
 
@@ -18,12 +17,12 @@ class FetchartCliTest(IOMixin, PluginTestCase):
         self.album = self.add_album()
 
     def cover_path(self, ext: str = "jpg"):
-        return os.path.join(self.album.path, f"mycover.{ext}".encode())
+        return self.album.filepath / f"mycover.{ext}"
 
     def check_cover_is_stored(self, ext: str = "jpg"):
-        assert self.album["artpath"] == self.cover_path(ext)
-        with open(util.syspath(self.cover_path(ext))) as f:
-            assert f.read() == "IMAGE"
+        cover_path = self.cover_path(ext)
+        assert cover_path == self.album.art_filepath
+        assert cover_path.read_text() == "IMAGE"
 
     def hide_file_windows(self, path: bytes) -> None:
         if sys.platform == "win32":
@@ -41,7 +40,7 @@ class FetchartCliTest(IOMixin, PluginTestCase):
         self.check_cover_is_stored()
 
     def test_filesystem_does_not_pick_up_folder(self):
-        os.makedirs(os.path.join(self.album.path, b"mycover.jpg"))
+        (self.album.filepath / "mycover.jpg").mkdir(parents=True)
         self.run_command("fetchart")
         self.album.load()
         assert self.album["artpath"] is None

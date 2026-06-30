@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import fnmatch
-import os.path
+import os
 import shlex
 import sys
 from typing import TYPE_CHECKING
@@ -154,8 +154,7 @@ class TestConvertCli(ConvertPluginHelper, ConvertCommand):
         image_path = _common.RSRC / "image-2x3.jpg"
         self.album.artpath = image_path
         self.album.store()
-        with open(os.path.join(image_path), "rb") as f:
-            image_data = f.read()
+        image_data = image_path.read_bytes()
 
         self.io.addinput("y")
         self.run_convert()
@@ -181,8 +180,7 @@ class TestConvertCli(ConvertPluginHelper, ConvertCommand):
         converted = self.converted_mp3
         self.touch(converted, content="XXX")
         self.run_convert("--yes")
-        with open(converted) as f:
-            assert f.read() == "XXX"
+        assert converted.read_text() == "XXX"
 
     def test_pretend(self):
         self.run_convert("--pretend")
