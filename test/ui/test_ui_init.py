@@ -74,7 +74,7 @@ class InputMethodsTest(IOMixin, unittest.TestCase):
 
 class ParentalDirCreation(IOMixin, BeetsTestCase):
     def test_create_yes(self):
-        non_exist_path = self.temp_dir_path / "nonexist" / str(random())
+        non_exist_path = self.temp_path / "nonexist" / str(random())
         # Deepcopy instead of recovering because exceptions might
         # occur; wish I can use a golang defer here.
         test_config = deepcopy(config)
@@ -84,7 +84,7 @@ class ParentalDirCreation(IOMixin, BeetsTestCase):
         lib._close()
 
     def test_create_no(self):
-        non_exist_path_parent = self.temp_dir_path / "nonexist"
+        non_exist_path_parent = self.temp_path / "nonexist"
         non_exist_path = non_exist_path_parent / str(random())
         test_config = deepcopy(config)
         test_config["library"] = str(non_exist_path)

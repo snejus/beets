@@ -49,7 +49,7 @@ class ImportTest(BeetsTestCase):
                 "/music/Soulwax/Any Minute Now",
             ]
 
-        logfile = self.temp_dir_path / "logfile.log"
+        logfile = self.temp_path / "logfile.log"
         with open(logfile, mode="w") as fp:
             fp.write(logfile_content)
         actual_paths = list(paths_from_logfile(logfile))
