@@ -379,7 +379,7 @@ class SmartPlaylistCLITest(PlaylistDirMixin, IOMixin, PluginTestCase):
         for name in ("my_playlist.m3u", "all.m3u"):
             assert (
                 self.playlist_dir / name
-            ).read_bytes() == self.item.path + b"\n"
+            ).read_text() == f"{self.item.filepath}\n"
 
     def test_splupdate_unknown_playlist_error_is_sorted_and_quoted(self):
         config["smartplaylist"]["playlists"].set(

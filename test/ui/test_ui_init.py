@@ -9,7 +9,6 @@ import pytest
 
 from beets import config, ui
 from beets.exceptions import UserError
-from beets.test import _common
 from beets.test.helper import BeetsTestCase, IOMixin
 
 
@@ -75,26 +74,20 @@ class InputMethodsTest(IOMixin, unittest.TestCase):
 
 class ParentalDirCreation(IOMixin, BeetsTestCase):
     def test_create_yes(self):
-        non_exist_path = _common.os.fsdecode(
-            os.path.join(self.temp_dir, b"nonexist", str(random()).encode())
-        )
+        non_exist_path = self.temp_dir_path / "nonexist" / str(random())
         # Deepcopy instead of recovering because exceptions might
         # occur; wish I can use a golang defer here.
         test_config = deepcopy(config)
-        test_config["library"] = non_exist_path
+        test_config["library"] = str(non_exist_path)
         self.io.addinput("y")
         lib = ui._open_library(test_config)
         lib._close()
 
     def test_create_no(self):
-        non_exist_path_parent = _common.os.fsdecode(
-            os.path.join(self.temp_dir, b"nonexist")
-        )
-        non_exist_path = _common.os.fsdecode(
-            os.path.join(non_exist_path_parent.encode(), str(random()).encode())
-        )
+        non_exist_path_parent = self.temp_dir_path / "nonexist"
+        non_exist_path = non_exist_path_parent / str(random())
         test_config = deepcopy(config)
-        test_config["library"] = non_exist_path
+        test_config["library"] = str(non_exist_path)
 
         self.io.addinput("n")
         with pytest.raises(UserError):

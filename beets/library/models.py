@@ -447,7 +447,12 @@ class Album(LibModel):
             assert False, "unknown MoveOperation"
         self.artpath = new_art
 
-    def move(self, operation=MoveOperation.MOVE, basedir=None, store=True):
+    def move(
+        self,
+        operation=MoveOperation.MOVE,
+        basedir: bytes | None = None,
+        store=True,
+    ):
         """Move, copy, link or hardlink (depending on `operation`)
         all items to their destination. Any album art moves along with them.
 
@@ -460,7 +465,7 @@ class Album(LibModel):
         the album is not stored automatically, and it will have to be manually
         stored after invoking this method.
         """
-        basedir = basedir or self._db.directory
+        basedir = basedir or self.db.directory
 
         # Ensure new metadata is available to items for destination
         # computation.

@@ -61,7 +61,7 @@ class TestPermissionsPlugin(AsIsImporterMixin, PluginMixin, ImportHelper):
             pytest.skip("permissions not available on Windows")
         self.run_asis_importer()
         album = self.lib.albums().get()
-        artpath = os.path.join(self.temp_dir, b"cover.jpg")
+        artpath = self.temp_dir_path / "cover.jpg"
         touch(artpath)
         album.set_art(artpath)
         assert expect_success == check_permissions(album.artpath, 0o777)

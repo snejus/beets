@@ -352,7 +352,7 @@ class TestWebPlugin(WebPluginMixin, PytestTestHelper):
         web.app.config["READONLY"] = False
 
         # Create an item with a file
-        ipath = os.path.join(self.temp_dir, b"testfile1.mp3")
+        ipath = self.temp_dir_path / "testfile1.mp3"
         shutil.copy(os.path.join(_common.RSRC, b"full.mp3"), ipath)
         assert os.path.exists(ipath)
         item_id = self.lib.add(Item.from_path(ipath))
@@ -380,7 +380,7 @@ class TestWebPlugin(WebPluginMixin, PytestTestHelper):
         web.app.config["READONLY"] = False
 
         # Create an item with a file
-        ipath = os.path.join(self.temp_dir, b"testfile2.mp3")
+        ipath = self.temp_dir_path / "testfile2.mp3"
         shutil.copy(os.path.join(_common.RSRC, b"full.mp3"), ipath)
         assert os.path.exists(ipath)
         item_id = self.lib.add(Item.from_path(ipath))
@@ -687,7 +687,7 @@ class TestWebPlugin(WebPluginMixin, PytestTestHelper):
         self.lib.get_item(item_id).remove()
 
     def test_get_item_file(self):
-        ipath = os.path.join(self.temp_dir, b"testfile2.mp3")
+        ipath = self.temp_dir_path / "testfile2.mp3"
         shutil.copy(os.path.join(_common.RSRC, b"full.mp3"), ipath)
         assert os.path.exists(ipath)
         item_id = self.lib.add(Item.from_path(ipath))
