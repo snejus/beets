@@ -1170,7 +1170,7 @@ def get_temp_filename(
     prefix: str = "",
     path: PathLike | None = None,
     suffix: str = "",
-) -> bytes:
+) -> Path:
     """Return temporary filename for the given module and prefix.
 
     The filename starts with the given `prefix`.
@@ -1187,7 +1187,7 @@ def get_temp_filename(
         dir=tempdir, prefix=prefix, suffix=suffix
     )
     os.close(descriptor)
-    return bytestring_path(filename)
+    return Path(filename)
 
 
 def unique_list(elements: Iterable[T]) -> list[T]:
