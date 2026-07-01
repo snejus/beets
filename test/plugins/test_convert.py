@@ -178,7 +178,8 @@ class TestConvertCli(ConvertPluginHelper, ConvertCommand):
 
     def test_skip_existing(self):
         converted = self.converted_mp3
-        self.touch(converted, content="XXX")
+        converted.parent.mkdir(parents=True)
+        converted.write_text("XXX")
         self.run_convert("--yes")
         assert converted.read_text() == "XXX"
 

@@ -255,7 +255,7 @@ class ConfigTest(IOMixin, TestPluginTestCase):
 
     def test_beetsdir_points_to_file_error(self):
         beetsdir = self.temp_path / "beetsfile"
-        open(beetsdir, "a").close()
+        beetsdir.touch()
         os.environ["BEETSDIR"] = beetsdir
         with pytest.raises(ConfigError):
             self.run_command("test")

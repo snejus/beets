@@ -24,7 +24,7 @@ class UpdateTest(IOMixin, BeetsTestCase):
 
         # Album art.
         artfile = self.temp_path / "testart.jpg"
-        _common.touch(artfile)
+        artfile.touch()
         self.album.set_art(artfile)
         self.album.store()
         remove(artfile)

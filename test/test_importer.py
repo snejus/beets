@@ -508,7 +508,7 @@ class TestImport(PathsMixin, AutotagImportHelper):
     @NEEDS_FFPROBE
     def test_skip_non_album_dirs(self):
         assert (self.import_path / "album").exists()
-        self.touch("cruft", dir_=self.import_path)
+        (self.import_path / "cruft").touch()
         self.importer.add_choice(importer.Action.APPLY)
         self.importer.run()
 
@@ -524,7 +524,7 @@ class TestImport(PathsMixin, AutotagImportHelper):
     @NEEDS_FFPROBE
     def test_empty_directory_warning(self, caplog):
         import_dir = self.temp_path / "empty"
-        self.touch(b"non-audio", dir_=import_dir)
+        (import_dir / "non-audio").touch()
         self.setup_importer(import_dir=import_dir)
         with caplog.at_level("DEBUG"):
             self.importer.run()
@@ -534,7 +534,7 @@ class TestImport(PathsMixin, AutotagImportHelper):
     @NEEDS_FFPROBE
     def test_empty_directory_singleton_warning(self, caplog):
         import_dir = self.temp_path / "empty"
-        self.touch(b"non-audio", dir_=import_dir)
+        (import_dir / "non-audio").touch()
         self.setup_singleton_importer(import_dir=import_dir)
         with caplog.at_level("DEBUG"):
             self.importer.run()

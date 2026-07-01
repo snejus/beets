@@ -9,7 +9,7 @@ from pathlib import Path
 import beets.library
 from beets import util
 from beets.test import _common
-from beets.test._common import item, touch
+from beets.test._common import item
 from beets.test.helper import NEEDS_REFLINK, BeetsTestCase
 from beets.util import MoveOperation, syspath
 
@@ -137,7 +137,7 @@ class MoveTest(BeetsTestCase):
         # Make a conflicting file at the destination.
         dest = Path(os.fsdecode(self.i.destination()))
         dest.parent.mkdir(parents=True, exist_ok=True)
-        touch(dest)
+        dest.touch()
 
         self.i.move()
         assert self.i.path != dest
@@ -209,7 +209,7 @@ class AlbumFileTest(BeetsTestCase):
         # Make a file for the item.
         self.i.path = self.i.destination()
         util.mkdirall(self.i.path)
-        touch(self.i.path)
+        self.i.filepath.touch()
         # Make an album.
         self.ai = self.lib.add_album((self.i,))
         # Alternate destination dir.
@@ -270,7 +270,7 @@ class ArtFileTest(BeetsTestCase):
         self.i.path = self.i.destination()
         # Make a music file.
         util.mkdirall(self.i.path)
-        touch(self.i.path)
+        self.i.filepath.touch()
         # Make an album.
         self.ai = self.lib.add_album((self.i,))
         # Make an art file too.
@@ -371,7 +371,7 @@ class ArtFileTest(BeetsTestCase):
 
         # Make a file at the destination.
         artdest = Path(os.fsdecode(ai.art_destination(newart)))
-        touch(artdest)
+        artdest.touch()
 
         # Set the art - should replace the existing file, not create a suffixed
         # duplicate like cover.2.jpg.
@@ -494,7 +494,7 @@ class RemoveTest(BeetsTestCase):
 
     def test_removing_last_item_in_album_with_albumart_prunes_dir(self):
         artfile = self.temp_path / "testart.jpg"
-        touch(artfile)
+        artfile.touch()
         self.ai.set_art(artfile)
         self.ai.store()
 

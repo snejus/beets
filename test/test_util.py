@@ -14,7 +14,6 @@ import pytest
 from beets import util
 from beets.library import Item
 from beets.test import _common
-from beets.test._common import touch
 from beets.test.helper import NEEDS_REFLINK, BeetsTestCase
 
 _p = pytest.param
@@ -373,10 +372,10 @@ class WalkTest(BeetsTestCase):
         self.base = self.temp_path / "testdir"
         self.str_base = str(self.base)
         self.base.mkdir()
-        touch(self.base / "y")
-        touch(self.base / "x")
-        os.mkdir(syspath(self.base / "d"))
-        touch(self.base / "d" / "z")
+        (self.base / "y").touch()
+        (self.base / "x").touch()
+        (self.base / "d").mkdir()
+        (self.base / "d" / "z").touch()
 
     def test_sorted_files(self):
         res = list(util.sorted_walk(self.str_base))
@@ -407,10 +406,10 @@ class UniquePathTest(BeetsTestCase):
 
         self.base = self.temp_path / "testdir"
         self.base.mkdir()
-        touch(self.base / "x.mp3")
-        touch(self.base / "x.1.mp3")
-        touch(self.base / "x.2.mp3")
-        touch(self.base / "y.mp3")
+        (self.base / "x.mp3").touch()
+        (self.base / "x.1.mp3").touch()
+        (self.base / "x.2.mp3").touch()
+        (self.base / "y.mp3").touch()
 
     def test_new_file_unchanged(self):
         path = util.unique_path(self.base / "z.mp3")

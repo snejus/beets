@@ -1343,8 +1343,7 @@ class TestItemPruneDirsClutter(TestHelper):
     def _drop_clutter(self, directory: Path) -> Path:
         """Create a clutter file in *directory* (bytes path)."""
         path = directory / "unwanted.log"
-        with open(syspath(path), "w"):
-            pass
+        path.touch()
         return path
 
     def test_move_prunes_dir_with_config_clutter(self):

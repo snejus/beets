@@ -6,7 +6,6 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from beets.test._common import touch
 from beets.test.helper import AsIsImporterMixin, ImportHelper, PluginMixin
 from beetsplug.permissions import (
     check_permissions,
@@ -62,6 +61,6 @@ class TestPermissionsPlugin(AsIsImporterMixin, PluginMixin, ImportHelper):
         self.run_asis_importer()
         album = self.lib.albums().get()
         artpath = self.temp_path / "cover.jpg"
-        touch(artpath)
+        artpath.touch()
         album.set_art(artpath)
         assert expect_success == check_permissions(album.artpath, 0o777)

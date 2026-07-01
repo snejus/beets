@@ -15,7 +15,6 @@ import beets.library
 import beetsplug
 from beets import importer, logging
 from beets.ui import commands
-from beets.util import syspath
 
 if TYPE_CHECKING:
     import pytest
@@ -152,10 +151,6 @@ class DummyIO:
 
 
 # Utility.
-
-
-def touch(path):
-    open(syspath(path), "a").close()
 
 
 class Bag:
