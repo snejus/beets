@@ -1,7 +1,6 @@
 """Tests for the 'acousticbrainz' plugin."""
 
 import json
-import os.path
 import unittest
 
 from beets.test._common import RSRC
@@ -51,7 +50,7 @@ class MapDataToSchemeTest(unittest.TestCase):
 
     def test_realistic(self):
         ab = AcousticPlugin()
-        data_path = os.path.join(RSRC, b"acousticbrainz/data.json")
+        data_path = RSRC / "acousticbrainz/data.json"
         with open(data_path) as res:
             data = json.load(res)
         mapping = set(ab._map_data_to_scheme(data, ABSCHEME))

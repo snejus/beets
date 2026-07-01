@@ -86,7 +86,7 @@ class M3UFileTest(unittest.TestCase):
     @unittest.skipIf(sys.platform == "win32", "win32")
     def test_playlist_load_ascii(self):
         """Test loading ascii paths from a playlist file."""
-        the_playlist_file = path.join(RSRC, b"playlist.m3u")
+        the_playlist_file = RSRC / "playlist.m3u"
         m3ufile = M3UFile(the_playlist_file)
         m3ufile.load()
         assert m3ufile.media_list[0] == bytestring_path(
@@ -96,7 +96,7 @@ class M3UFileTest(unittest.TestCase):
     @unittest.skipIf(sys.platform == "win32", "win32")
     def test_playlist_load_unicode(self):
         """Test loading unicode paths from a playlist file."""
-        the_playlist_file = path.join(RSRC, b"playlist.m3u8")
+        the_playlist_file = RSRC / "playlist.m3u8"
         m3ufile = M3UFile(the_playlist_file)
         m3ufile.load()
         assert m3ufile.media_list[0] == bytestring_path(
@@ -106,7 +106,7 @@ class M3UFileTest(unittest.TestCase):
     @unittest.skipUnless(sys.platform == "win32", "win32")
     def test_playlist_load_unicode_windows(self):
         """Test loading unicode paths from a playlist file."""
-        the_playlist_file = path.join(RSRC, b"playlist_windows.m3u8")
+        the_playlist_file = RSRC / "playlist_windows.m3u8"
         winpath = bytestring_path(
             path.join("x:\\", "This", "is", "å", "path", "to_a_file.mp3")
         )
@@ -116,14 +116,14 @@ class M3UFileTest(unittest.TestCase):
 
     def test_playlist_load_extm3u(self):
         """Test loading a playlist with an #EXTM3U header."""
-        the_playlist_file = path.join(RSRC, b"playlist.m3u")
+        the_playlist_file = RSRC / "playlist.m3u"
         m3ufile = M3UFile(the_playlist_file)
         m3ufile.load()
         assert m3ufile.extm3u
 
     def test_playlist_load_non_extm3u(self):
         """Test loading a playlist without an #EXTM3U header."""
-        the_playlist_file = path.join(RSRC, b"playlist_non_ext.m3u")
+        the_playlist_file = RSRC / "playlist_non_ext.m3u"
         m3ufile = M3UFile(the_playlist_file)
         m3ufile.load()
         assert not m3ufile.extm3u

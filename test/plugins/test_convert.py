@@ -40,7 +40,7 @@ class ConvertPluginHelper(IOMixin, PluginTestHelper):
         `tag` to the copy.
         """
         # A Python script that copies the file and appends a tag.
-        stub = os.path.join(_common.RSRC, b"convert_stub.py").decode("utf-8")
+        stub = str(_common.RSRC / "convert_stub.py")
         return f"{shlex.quote(sys.executable)} {shlex.quote(stub)} $source $dest {tag}"
 
     def file_endswith(self, path: Path, tag: str):
@@ -151,7 +151,7 @@ class TestConvertCli(ConvertPluginHelper, ConvertCommand):
 
     def test_embed_album_art(self):
         self.config["convert"]["embed"] = True
-        image_path = os.path.join(_common.RSRC, b"image-2x3.jpg")
+        image_path = _common.RSRC / "image-2x3.jpg"
         self.album.artpath = image_path
         self.album.store()
         with open(os.path.join(image_path), "rb") as f:
@@ -166,7 +166,7 @@ class TestConvertCli(ConvertPluginHelper, ConvertCommand):
         # A missing/stale art source should be skipped instead of crashing
         # the conversion (see #4692).
         self.config["convert"]["copy_album_art"] = True
-        self.album.artpath = os.path.join(_common.RSRC, b"nonexistent.jpg")
+        self.album.artpath = _common.RSRC / "nonexistent.jpg"
         self.album.store()
 
         with caplog.at_level("INFO", logger="beets.convert"):
