@@ -16,7 +16,6 @@ from beets.library import Item
 from beets.test import _common
 from beets.test._common import touch
 from beets.test.helper import NEEDS_REFLINK, BeetsTestCase
-from beets.util import syspath
 
 _p = pytest.param
 
@@ -373,7 +372,7 @@ class WalkTest(BeetsTestCase):
 
         self.base = self.temp_path / "testdir"
         self.str_base = str(self.base)
-        os.mkdir(syspath(self.base))
+        self.base.mkdir()
         touch(self.base / "y")
         touch(self.base / "x")
         os.mkdir(syspath(self.base / "d"))
@@ -407,7 +406,7 @@ class UniquePathTest(BeetsTestCase):
         super().setUp()
 
         self.base = self.temp_path / "testdir"
-        os.mkdir(syspath(self.base))
+        self.base.mkdir()
         touch(self.base / "x.mp3")
         touch(self.base / "x.1.mp3")
         touch(self.base / "x.2.mp3")

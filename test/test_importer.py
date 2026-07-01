@@ -1374,8 +1374,7 @@ class TestIncrementalImport(AsIsImporterMixin, ImportHelper):
         assert len(self.lib.items()) == 2
 
     def test_invalid_state_file(self):
-        with open(self.config["statefile"].as_filename(), "wb") as f:
-            f.write(b"000")
+        self.config["statefile"].as_path().write_bytes(b"000")
         self.run_asis_importer(incremental=True)
         assert len(self.lib.albums()) == 1
 
@@ -1390,19 +1389,22 @@ class AlbumsInDirTest(BeetsTestCase):
 
         # create a directory structure for testing
         base = (self.temp_path / "tempdir").resolve()
-        os.mkdir(syspath(base))
+        base.mkdir()
 
-        os.mkdir(syspath(base / "album1"))
-        os.mkdir(syspath(base / "album2"))
-        os.mkdir(syspath(base / "more"))
-        os.mkdir(syspath(base / "more" / "album3"))
-        os.mkdir(syspath(base / "more" / "album4"))
+        album1_dir = base / "album1"
+        album2_dir = base / "album2"
+        album3_dir = base / "more" / "album3"
+        album4_dir = base / "more" / "album4"
+        album1_dir.mkdir()
+        album2_dir.mkdir()
+        album3_dir.mkdir(parents=True)
+        album4_dir.mkdir(parents=True)
 
-        _mkmp3(base / "album1" / "album1song1.mp3")
-        _mkmp3(base / "album1" / "album1song2.mp3")
-        _mkmp3(base / "album2" / "album2song.mp3")
-        _mkmp3(base / "more" / "album3" / "album3song.mp3")
-        _mkmp3(base / "more" / "album4" / "album4song.mp3")
+        _mkmp3(album1_dir / "album1song1.mp3")
+        _mkmp3(album1_dir / "album1song2.mp3")
+        _mkmp3(album2_dir / "album2song.mp3")
+        _mkmp3(album3_dir / "album3song.mp3")
+        _mkmp3(album4_dir / "album4song.mp3")
         self.base = str(base)
 
     def test_finds_all_albums(self):
@@ -1436,7 +1438,7 @@ class MultiDiscAlbumsInDirTest(BeetsTestCase):
         otherwise, we use Unicode names.
         """
         self.base = (self.temp_path / "tempdir").resolve()
-        os.mkdir(syspath(self.base))
+        self.base.mkdir()
 
         name = "CAT" if ascii_ else "C\xc1T"
         name_alt_case = "CAt" if ascii_ else "C\xc1t"
@@ -1466,15 +1468,15 @@ class MultiDiscAlbumsInDirTest(BeetsTestCase):
             self.dirs = [self._normalize_path(p) for p in self.dirs]
             self.files = [self._normalize_path(p) for p in self.files]
 
-        self.dirs = list(map(str, self.dirs))
-        self.files = list(map(str, self.files))
-        self.base = str(self.base)
-
         for path in self.dirs:
-            os.mkdir(syspath(path))
+            path.mkdir()
         if files:
             for path in self.files:
                 _mkmp3(syspath(path))
+
+        self.dirs = list(map(str, self.dirs))
+        self.files = list(map(str, self.files))
+        self.base = str(self.base)
 
     def _normalize_path(self, path: Path) -> Path:
         """Normalize a path's Unicode combining form according to the
@@ -1886,8 +1888,8 @@ class TestMpeglayerWavImport(AsIsImporterMixin, ImportHelper):
 
         assert mp3_path is not None
         assert mp3_path.suffix == ".mp3"
-        assert os.path.exists(mp3_path)
-        assert not os.path.exists(dest)
+        assert mp3_path.exists()
+        assert not dest.exists()
 
     def test_remux_mpeglayer3_wav_disabled(self):
         """When remux_mp3_in_wav is disabled, WAV file should not be remuxed."""
@@ -1897,4 +1899,4 @@ class TestMpeglayerWavImport(AsIsImporterMixin, ImportHelper):
         shutil.copy(syspath(src), syspath(dest))
 
         self.run_asis_importer()
-        assert os.path.exists(dest)
+        assert dest.exists()

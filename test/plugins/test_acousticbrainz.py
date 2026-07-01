@@ -51,8 +51,7 @@ class MapDataToSchemeTest(unittest.TestCase):
     def test_realistic(self):
         ab = AcousticPlugin()
         data_path = RSRC / "acousticbrainz/data.json"
-        with open(data_path) as res:
-            data = json.load(res)
+        data = json.loads(data_path.read_text())
         mapping = set(ab._map_data_to_scheme(data, ABSCHEME))
         expected = {
             ("chords_key", "A"),

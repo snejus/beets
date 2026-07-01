@@ -1153,11 +1153,11 @@ class TestMtime(TestHelper):
         item = beets.library.Item.from_path(self.ipath)
         self.lib.add(item)
         yield item
-        if os.path.exists(self.ipath):
-            os.remove(self.ipath)
+        if self.ipath.exists():
+            self.ipath.unlink()
 
     def _mtime(self):
-        return int(os.path.getmtime(self.ipath))
+        return int(self.ipath.stat().st_mtime)
 
     def test_mtime_initially_up_to_date(self, item):
         assert item.mtime >= self._mtime()
@@ -1340,9 +1340,9 @@ class TestFilesize(TestHelper):
 class TestItemPruneDirsClutter(TestHelper):
     """Regression tests: prune_dirs respects config["clutter"] during move/remove."""
 
-    def _drop_clutter(self, directory, filename=b"unwanted.log"):
+    def _drop_clutter(self, directory: Path) -> Path:
         """Create a clutter file in *directory* (bytes path)."""
-        path = os.path.join(directory, filename)
+        path = directory / "unwanted.log"
         with open(syspath(path), "w"):
             pass
         return path
@@ -1351,7 +1351,7 @@ class TestItemPruneDirsClutter(TestHelper):
         """After moving an item, old dir is removed even when only clutter remains."""
         config["clutter"] = ["*.log"]
         item = self.add_item_fixture()
-        old_dir = os.path.dirname(item.path)
+        old_dir = item.filepath.parent
         self._drop_clutter(old_dir)
 
         # Change artist so the destination path differs, forcing a real move.
@@ -1359,18 +1359,18 @@ class TestItemPruneDirsClutter(TestHelper):
         item.store()
         item.move()
 
-        assert not os.path.exists(syspath(old_dir))
+        assert not old_dir.exists()
 
     def test_remove_prunes_dir_with_config_clutter(self):
         """After deleting an item, its dir is removed even when only clutter remains."""
         config["clutter"] = ["*.log"]
         item = self.add_item_fixture()
-        old_dir = os.path.dirname(item.path)
+        old_dir = item.filepath.parent
         self._drop_clutter(old_dir)
 
         item.remove(delete=True)
 
-        assert not os.path.exists(syspath(old_dir))
+        assert not old_dir.exists()
 
 
 class TestParseQuery:

@@ -1,6 +1,5 @@
 """Test module for file ui/__init__.py"""
 
-import os
 import unittest
 from copy import deepcopy
 from random import random
@@ -92,4 +91,4 @@ class ParentalDirCreation(IOMixin, BeetsTestCase):
         self.io.addinput("n")
         with pytest.raises(UserError):
             ui._open_library(test_config)
-        assert not os.path.exists(non_exist_path_parent)
+        assert not non_exist_path_parent.exists()

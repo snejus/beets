@@ -4,7 +4,6 @@ import os
 import shutil
 import stat
 import unittest
-from os.path import join
 from pathlib import Path
 
 import beets.library
@@ -20,7 +19,7 @@ class MoveTest(BeetsTestCase):
         super().setUp()
 
         # make a temporary file
-        self.temp_music_file_name = "temp.mp3"
+        self.temp_music_file_name = Path("temp.mp3")
         self.path = self.temp_path / self.temp_music_file_name
         shutil.copy(self.resource_path, self.path)
 
@@ -30,7 +29,7 @@ class MoveTest(BeetsTestCase):
 
         # set up the destination
         self.lib.path_formats = [
-            ("default", join("$artist", "$album", "$title"))
+            ("default", str(Path("$artist") / "$album" / "$title"))
         ]
         self.i.artist = "one"
         self.i.album = "two"
@@ -124,31 +123,31 @@ class MoveTest(BeetsTestCase):
 
     def test_read_only_file_copied_writable(self):
         # Make the source file read-only.
-        os.chmod(syspath(self.path), 0o444)
+        self.path.chmod(0o444)
 
         try:
             self.i.move(operation=MoveOperation.COPY)
             assert os.access(syspath(self.i.path), os.W_OK)
         finally:
             # Make everything writable so it can be cleaned up.
-            os.chmod(syspath(self.path), 0o777)
-            os.chmod(syspath(self.i.path), 0o777)
+            self.path.chmod(0o777)
+            self.i.filepath.chmod(0o777)
 
     def test_move_avoids_collision_with_existing_file(self):
         # Make a conflicting file at the destination.
-        dest = self.i.destination()
-        os.makedirs(syspath(os.path.dirname(dest)))
+        dest = Path(os.fsdecode(self.i.destination()))
+        dest.parent.mkdir(parents=True, exist_ok=True)
         touch(dest)
 
         self.i.move()
         assert self.i.path != dest
-        assert os.path.dirname(self.i.path) == os.path.dirname(dest)
+        assert self.i.filepath.parent == dest.parent
 
     @unittest.skipUnless(_common.HAVE_SYMLINK, "need symlinks")
     def test_link_arrives(self):
         self.i.move(operation=MoveOperation.LINK)
         assert self.dest.exists()
-        assert os.path.islink(syspath(self.dest))
+        assert self.dest.is_symlink()
         assert self.dest.resolve() == self.path.resolve()
 
     @unittest.skipUnless(_common.HAVE_SYMLINK, "need symlinks")
@@ -165,8 +164,8 @@ class MoveTest(BeetsTestCase):
     def test_hardlink_arrives(self):
         self.i.move(operation=MoveOperation.HARDLINK)
         assert self.dest.exists()
-        s1 = os.stat(syspath(self.path))
-        s2 = os.stat(syspath(self.dest))
+        s1 = self.path.stat()
+        s2 = self.dest.stat()
         assert (s1[stat.ST_INO], s1[stat.ST_DEV]) == (
             s2[stat.ST_INO],
             s2[stat.ST_DEV],
@@ -184,14 +183,14 @@ class MoveTest(BeetsTestCase):
 
     @unittest.skipUnless(_common.HAVE_HARDLINK, "need hardlinks")
     def test_hardlink_from_symlink(self):
-        link_path = join(self.temp_path / "temp_link.mp3")
-        link_source = join("./", self.temp_music_file_name)
-        os.symlink(syspath(link_source), syspath(link_path))
+        link_path = self.temp_path / "temp_link.mp3"
+        link_source = "./" / self.temp_music_file_name
+        link_path.symlink_to(link_source)
         self.i.path = link_path
         self.i.move(operation=MoveOperation.HARDLINK)
 
-        s1 = os.stat(syspath(self.path))
-        s2 = os.stat(syspath(self.dest))
+        s1 = self.path.stat()
+        s2 = self.dest.stat()
         assert (s1[stat.ST_INO], s1[stat.ST_DEV]) == (
             s2[stat.ST_INO],
             s2[stat.ST_DEV],
@@ -204,7 +203,7 @@ class AlbumFileTest(BeetsTestCase):
 
         # Make library and item.
         self.lib.path_formats = [
-            ("default", join("$albumartist", "$album", "$title"))
+            ("default", str(Path("$albumartist") / "$album" / "$title"))
         ]
         self.i = item(self.lib)
         # Make a file for the item.
@@ -246,14 +245,14 @@ class AlbumFileTest(BeetsTestCase):
 
     @NEEDS_REFLINK
     def test_albuminfo_move_reflinks_file(self):
-        oldpath = self.i.path
+        oldpath = self.i.filepath
         self.ai.album = "newAlbumName"
         self.ai.move(operation=MoveOperation.REFLINK)
         self.ai.store()
         self.i.load()
 
-        assert os.path.exists(oldpath)
-        assert os.path.exists(self.i.path)
+        assert oldpath.exists()
+        assert self.i.filepath.exists()
 
     def test_albuminfo_move_to_custom_dir(self):
         self.ai.move(basedir=self.otherdir)
@@ -371,13 +370,13 @@ class ArtFileTest(BeetsTestCase):
         i2.move(operation=MoveOperation.COPY)
 
         # Make a file at the destination.
-        artdest = ai.art_destination(newart)
+        artdest = Path(os.fsdecode(ai.art_destination(newart)))
         touch(artdest)
 
         # Set the art - should replace the existing file, not create a suffixed
         # duplicate like cover.2.jpg.
         ai.set_art(newart)
-        assert artdest == ai.artpath
+        assert artdest == ai.art_filepath
 
     def test_setart_replaces_old_art_at_different_path(self):
         newart = self.lib_path / "newart.png"
@@ -390,8 +389,8 @@ class ArtFileTest(BeetsTestCase):
 
         # Set initial art.
         ai.set_art(newart)
-        old_artpath = ai.artpath
-        assert os.path.exists(syspath(old_artpath))
+        old_artpath = ai.art_filepath
+        assert old_artpath.exists()
 
         # Set new art with a different extension.
         another_art = self.lib_path / "another.jpg"
@@ -399,7 +398,7 @@ class ArtFileTest(BeetsTestCase):
         ai.set_art(another_art)
 
         # Old art should be removed.
-        assert not os.path.exists(syspath(old_artpath))
+        assert not old_artpath.exists()
         assert ai.art_filepath.exists()
 
     def test_setart_sets_permissions(self):
@@ -417,14 +416,14 @@ class ArtFileTest(BeetsTestCase):
             i2.move(operation=MoveOperation.COPY)
             ai.set_art(newart)
 
-            mode = stat.S_IMODE(os.stat(syspath(ai.artpath)).st_mode)
+            mode = stat.S_IMODE(ai.art_filepath.stat().st_mode)
             assert mode & stat.S_IRGRP
             assert os.access(syspath(ai.artpath), os.W_OK)
 
         finally:
             # Make everything writable so it can be cleaned up.
-            os.chmod(syspath(newart), 0o777)
-            os.chmod(syspath(ai.artpath), 0o777)
+            newart.chmod(0o777)
+            ai.art_filepath.chmod(0o777)
 
     def test_move_last_file_moves_albumart(self):
         oldartpath = self.lib.albums()[0].art_filepath

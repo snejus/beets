@@ -358,7 +358,7 @@ class TestWebPlugin(WebPluginMixin, PytestTestHelper):
 
         # Check the file has not gone
         assert ipath.exists()
-        os.remove(ipath)
+        ipath.unlink()
 
     def test_delete_item_with_file(self):
         web.app.config["READONLY"] = False

@@ -1,7 +1,8 @@
+import os
+
 from mediafile import MediaFile
 
 from beets.test.helper import IOMixin, PluginTestCase
-from beets.util import displayable_path
 
 
 class InfoTest(IOMixin, PluginTestCase):
@@ -18,7 +19,7 @@ class InfoTest(IOMixin, PluginTestCase):
         mediafile.save()
 
         out = self.run_with_output("info", path)
-        assert displayable_path(path) in out
+        assert os.fsdecode(path) in out
         assert "albumartist: AAA" in out
         assert "disctitle: DDD" in out
         assert "genres: a; b; c" in out
@@ -32,10 +33,10 @@ class InfoTest(IOMixin, PluginTestCase):
         item1.store()
 
         out = self.run_with_output("info", "album:yyyy")
-        assert displayable_path(item1.path) in out
+        assert str(item1.filepath) in out
         assert "album: xxxx" in out
 
-        assert displayable_path(item2.path) not in out
+        assert str(item2.filepath) not in out
 
     def test_item_library_query(self):
         (item,) = self.add_item_fixtures()
@@ -43,7 +44,7 @@ class InfoTest(IOMixin, PluginTestCase):
         item.store()
 
         out = self.run_with_output("info", "--library", "album:xxxx")
-        assert displayable_path(item.path) in out
+        assert str(item.filepath) in out
         assert "album: xxxx" in out
 
     def test_collect_item_and_path(self):

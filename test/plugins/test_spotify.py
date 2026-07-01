@@ -58,8 +58,7 @@ class SpotifyPluginTest(PluginTestCase):
     @responses.activate
     def test_missing_request(self):
         json_file = _common.RSRC / "spotify" / "missing_request.json"
-        with open(json_file, "rb") as f:
-            response_body = f.read()
+        response_body = json_file.read_bytes()
 
         responses.add(
             responses.GET,
@@ -88,8 +87,7 @@ class SpotifyPluginTest(PluginTestCase):
     @responses.activate
     def test_track_request(self):
         json_file = _common.RSRC / "spotify" / "track_request.json"
-        with open(json_file, "rb") as f:
-            response_body = f.read()
+        response_body = json_file.read_bytes()
 
         responses.add(
             responses.GET,
@@ -124,8 +122,7 @@ class SpotifyPluginTest(PluginTestCase):
 
         # Mock the Spotify 'Get Track' call
         json_file = _common.RSRC / "spotify" / "track_info.json"
-        with open(json_file, "rb") as f:
-            response_body = f.read()
+        response_body = json_file.read_bytes()
 
         responses.add(
             responses.GET,
@@ -137,8 +134,7 @@ class SpotifyPluginTest(PluginTestCase):
 
         # Mock the Spotify 'Get Album' call
         json_file = _common.RSRC / "spotify" / "album_info.json"
-        with open(json_file, "rb") as f:
-            response_body = f.read()
+        response_body = json_file.read_bytes()
 
         responses.add(
             responses.GET,
@@ -150,8 +146,7 @@ class SpotifyPluginTest(PluginTestCase):
 
         # Mock the Spotify 'Search' call
         json_file = _common.RSRC / "spotify" / "track_request.json"
-        with open(json_file, "rb") as f:
-            response_body = f.read()
+        response_body = json_file.read_bytes()
 
         responses.add(
             responses.GET,
@@ -182,8 +177,7 @@ class SpotifyPluginTest(PluginTestCase):
         json_file = _common.RSRC / "spotify" / "japanese_track_request.json"
 
         # Load the mock JSON response
-        with open(json_file, "rb") as f:
-            response_body = f.read()
+        response_body = json_file.read_bytes()
 
         # Mock Spotify Search API response
         responses.add(
@@ -242,8 +236,7 @@ class SpotifyPluginTest(PluginTestCase):
 
         # Mock the Spotify 'Get Album' call
         json_file = _common.RSRC / "spotify" / "multiartist_album.json"
-        with open(json_file, "rb") as f:
-            album_response_body = f.read()
+        album_response_body = json_file.read_bytes()
 
         responses.add(
             responses.GET,
@@ -255,8 +248,7 @@ class SpotifyPluginTest(PluginTestCase):
 
         # Mock the Spotify 'Get Track' call
         json_file = _common.RSRC / "spotify" / "multiartist_track.json"
-        with open(json_file, "rb") as f:
-            track_response_body = f.read()
+        track_response_body = json_file.read_bytes()
 
         responses.add(
             responses.GET,

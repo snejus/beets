@@ -50,8 +50,7 @@ class ImportTest(BeetsTestCase):
             ]
 
         logfile = self.temp_path / "logfile.log"
-        with open(logfile, mode="w") as fp:
-            fp.write(logfile_content)
+        logfile.write_text(logfile_content)
         actual_paths = list(paths_from_logfile(logfile))
         assert actual_paths == expected_paths
 
