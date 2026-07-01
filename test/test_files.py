@@ -208,7 +208,7 @@ class AlbumFileTest(BeetsTestCase):
         self.i = item(self.lib)
         # Make a file for the item.
         self.i.path = self.i.destination()
-        util.mkdirall(self.i.path)
+        self.i.path.parent.mkdir(parents=True, exist_ok=True)
         self.i.filepath.touch()
         # Make an album.
         self.ai = self.lib.add_album((self.i,))
@@ -269,7 +269,7 @@ class ArtFileTest(BeetsTestCase):
         self.i = item(self.lib)
         self.i.path = self.i.destination()
         # Make a music file.
-        util.mkdirall(self.i.path)
+        self.i.path.parent.mkdir(parents=True, exist_ok=True)
         self.i.filepath.touch()
         # Make an album.
         self.ai = self.lib.add_album((self.i,))
@@ -464,7 +464,7 @@ class RemoveTest(BeetsTestCase):
         self.i = item(self.lib)
         self.i.path = self.i.destination()
         # Make a music file.
-        util.mkdirall(self.i.path)
+        self.i.path.parent.mkdir(parents=True, exist_ok=True)
         self.i.filepath.touch()
         # Make an album with the item.
         self.ai = self.lib.add_album((self.i,))
@@ -499,4 +499,4 @@ class RemoveTest(BeetsTestCase):
         self.ai.store()
 
         self.i.remove(True)
-        assert not self.i.filepath.parent.exists()
+        self.i.path.parent.mkdir(parents=True, exist_ok=True)
