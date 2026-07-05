@@ -634,7 +634,7 @@ def reflink(
         ) from exc
 
 
-def unique_path(path: AnyStr) -> AnyStr:
+def unique_path(path: AnyPath) -> AnyPath:
     """Returns a version of ``path`` that does not exist on the
     filesystem. Specifically, if ``path` itself already exists, then
     something unique is appended to the path.
@@ -655,9 +655,11 @@ def unique_path(path: AnyStr) -> AnyStr:
         suffix = f".{num}".encode() + ext
         new_path = base + suffix
         if not os.path.exists(new_path):
-            if not isinstance(path, bytes):
+            if isinstance(path, bytes):
+                return new_path
+            if isinstance(path, str):
                 return os.fsdecode(new_path)
-            return new_path
+            return Path(os.fsdecode(new_path))
 
 
 # Note: The Windows "reserved characters" are, of course, allowed on

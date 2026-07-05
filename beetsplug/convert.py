@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 
 _fs_lock = threading.Lock()
 # Keep track of temporary transcoded files for deletion.
-_temp_files: list[bytes] = []
+_temp_files: list[str] = []
 
 # Some convenient alternate names for formats.
 ALIASES = {"windows media": "wma", "vorbis": "ogg"}
@@ -45,16 +45,15 @@ LOSSLESS_FORMATS = ["ape", "flac", "alac", "wave", "aiff"]
 
 class FormatCommand(NamedTuple):
     command: bytes
-    ext: bytes
+    ext: str
 
 
-def replace_ext(path: bytes, ext: bytes) -> bytes:
+def replace_ext(path: Path, ext: str) -> Path:
     """Return the path with its extension replaced by `ext`.
 
     The new extension must not contain a leading dot.
     """
-    ext_dot = b"." + ext
-    return os.path.splitext(path)[0] + ext_dot
+    return path.with_suffix(f".{ext}")
 
 
 class ConvertPlugin(BeetsPlugin):
@@ -216,11 +215,11 @@ class ConvertPlugin(BeetsPlugin):
         return [cmd]
 
     @cached_property
-    def dest(self) -> bytes:
-        dest = self.config["dest"].get()
+    def dest(self) -> Path:
+        dest = self.config["dest"].as_path()
         if not dest:
             raise UserError("no convert destination set")
-        return util.bytestring_path(dest)
+        return dest
 
     @cached_property
     def threads(self) -> int:
@@ -235,9 +234,9 @@ class ConvertPlugin(BeetsPlugin):
         return self.config["format"].as_str().lower()
 
     @cached_property
-    def playlist(self) -> bytes | None:
+    def playlist(self) -> Path | None:
         if (playlist := self.config["playlist"].get()) is not None:
-            return os.path.join(self.dest, util.bytestring_path(playlist))
+            return (self.dest / playlist).expanduser().resolve()
 
         return None
 
@@ -394,7 +393,7 @@ class ConvertPlugin(BeetsPlugin):
             return True
         return self.fmt != item.format.lower()
 
-    def get_item_destination(self, item: Item) -> bytes:
+    def get_item_destination(self, item: Item) -> Path:
         return item.destination(
             basedir=self.dest, path_formats=self.path_formats
         )
@@ -681,8 +680,7 @@ class ConvertPlugin(BeetsPlugin):
         items_paths = None
         if playlist := self.playlist:
             # Playlist paths are understood as relative to the dest directory.
-            pl_normpath = util.normpath(playlist)
-            pl_dir = os.path.dirname(pl_normpath)
+            pl_dir = playlist.parent
             items_paths = []
             for item in items:
                 item_path = self.get_item_destination(item)
@@ -716,9 +714,8 @@ class ConvertPlugin(BeetsPlugin):
             tmpdir = self.config["tmpdir"].get()
             if tmpdir:
                 tmpdir = util.bytestring_path(tmpdir)
-            fd, dest = tempfile.mkstemp(b"." + ext, dir=tmpdir)
+            fd, dest = tempfile.mkstemp(f".{ext}", dir=tmpdir)
             os.close(fd)
-            dest = util.bytestring_path(dest)
             _temp_files.append(dest)  # Delete the transcode later.
 
             # Convert.

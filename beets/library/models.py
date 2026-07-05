@@ -397,7 +397,7 @@ class Album(LibModel):
     def move_art(
         self,
         operation: MoveOperation = MoveOperation.MOVE,
-        item_dir: bytes | None = None,
+        item_dir: Path | None = None,
     ) -> None:
         """Move, copy, link or hardlink (depending on `operation`) any
         existing album art so that it remains in the same directory as
@@ -409,14 +409,13 @@ class Album(LibModel):
         the art. If not provided, the directory of the album's first
         item is used.
         """
-        old_art = self.artpath
+        old_art = self.art_filepath
         if not old_art:
             return
 
-        if not os.path.exists(syspath(old_art)):
+        if not old_art.exists:
             log.error(
-                "removing reference to missing album art file {}",
-                util.displayable_path(old_art),
+                "removing reference to missing album art file {}", old_art
             )
             self.artpath = None
             return
@@ -426,15 +425,11 @@ class Album(LibModel):
             return
 
         new_art = util.unique_path(new_art)
-        log.debug(
-            "moving album art {} to {}",
-            util.displayable_path(old_art),
-            util.displayable_path(new_art),
-        )
+        log.debug("moving album art {} to {}", old_art, new_art)
         if operation == MoveOperation.MOVE:
             util.move(old_art, new_art)
             util.prune_dirs(
-                os.path.dirname(old_art),
+                old_art.parent,
                 self.db.directory,
                 clutter=beets.config["clutter"].as_str_seq(),
             )
@@ -455,7 +450,7 @@ class Album(LibModel):
     def move(
         self,
         operation=MoveOperation.MOVE,
-        basedir: bytes | None = None,
+        basedir: Path | None = None,
         store=True,
     ):
         """Move, copy, link or hardlink (depending on `operation`)
@@ -491,14 +486,14 @@ class Album(LibModel):
         if store:
             self.store()
 
-    def item_dir(self):
+    def item_dir(self) -> Path:
         """Return the directory containing the album's first item,
         provided that such an item exists.
         """
         item = self.items().get()
         if not item:
             raise ValueError(f"empty album for album id {self.id}")
-        return os.path.dirname(item.path)
+        return item.filepath.parent
 
     def _albumtotal(self):
         """Return the total number of tracks on all discs on the album."""
@@ -521,8 +516,8 @@ class Album(LibModel):
         return total
 
     def art_destination(
-        self, image: util.PathLike, item_dir: bytes | None = None
-    ) -> bytes:
+        self, image: util.PathLike, item_dir: Path | None = None
+    ) -> Path:
         """Return a path to the destination for the album art image
         for the album.
 
@@ -541,12 +536,9 @@ class Album(LibModel):
         if beets.config["asciify_paths"]:
             subpath = util.asciify_path(subpath)
         subpath = util.sanitize_path(subpath, replacements=self.db.replacements)
-        subpath_bytes = bytestring_path(subpath)
 
-        _, ext = os.path.splitext(image)
-        dest = os.path.join(item_dir, subpath_bytes + ext)
-
-        return bytestring_path(dest)
+        ext = Path(os.fsdecode(image)).suffix
+        return (item_dir / subpath).with_suffix(ext)
 
     def set_art(self, path, copy=True):
         """Set the album's cover art to the image at the given path.
@@ -1190,9 +1182,9 @@ class Item(LibModel):
     def destination(
         self,
         relative_to_libdir: bool = False,
-        basedir: bytes | None = None,
+        basedir: Path | None = None,
         path_formats: list[PathFormat] | None = None,
-    ) -> bytes:
+    ) -> Path:
         """Return the path in the library directory designated for the item
         (i.e., where the file ought to be).
 
@@ -1244,12 +1236,12 @@ class Item(LibModel):
                 "the filename.",
                 subpath,
             )
-        lib_path_bytes = util.bytestring_path(lib_path_str)
+        lib_path = Path(lib_path_str)
 
         if relative_to_libdir:
-            return lib_path_bytes
+            return lib_path
 
-        return normpath(os.path.join(basedir, lib_path_bytes))
+        return basedir / lib_path
 
 
 def _int_arg(s):
