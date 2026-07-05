@@ -575,7 +575,7 @@ class ConvertPlugin(BeetsPlugin):
 
         # The stored art path may point to a missing file (e.g. the cover
         # lives in the album's root directory rather than a per-disc one).
-        if not os.path.isfile(util.syspath(album.artpath)):
+        if not album.art_filepath.is_file():
             self._log.info(
                 "Skipping {.art_filepath} (source file not found)", album
             )
@@ -593,7 +593,7 @@ class ConvertPlugin(BeetsPlugin):
         # Remove item from the path.
         dest = os.path.join(*util.components(dest)[:-1])
 
-        dest = album.art_destination(album.artpath, item_dir=dest)
+        dest = album.art_destination(album.art_filepath, item_dir=dest)
         if album.artpath == dest:
             return
 
@@ -608,7 +608,7 @@ class ConvertPlugin(BeetsPlugin):
 
         dest_path = Path(os.fsdecode(dest))
         # Decide whether we need to resize the cover-art image.
-        maxwidth = self._get_art_resize(album.artpath)
+        maxwidth = self._get_art_resize(album.art_filepath)
 
         # Either copy or resize (while copying) the image.
         if maxwidth is not None:
@@ -641,11 +641,11 @@ class ConvertPlugin(BeetsPlugin):
                     dest_path,
                 )
                 if hardlink:
-                    util.hardlink(album.artpath, dest)
+                    util.hardlink(album.art_filepath, dest)
                 elif link:
-                    util.link(album.artpath, dest)
+                    util.link(album.art_filepath, dest)
                 else:
-                    util.copy(album.artpath, dest)
+                    util.copy(album.art_filepath, dest)
 
     def convert_func(
         self, lib: Library, opts: optparse.Values, args: list[str]
@@ -743,7 +743,7 @@ class ConvertPlugin(BeetsPlugin):
                 )
                 util.remove(source_path, False)
 
-    def _get_art_resize(self, artpath: bytes) -> int | None:
+    def _get_art_resize(self, artpath: util.PathLike) -> int | None:
         """For a given piece of album art, determine whether or not it needs
         to be resized according to the user's settings. If so, returns the
         new size. If not, returns None.

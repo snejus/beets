@@ -37,6 +37,7 @@ if TYPE_CHECKING:
 
     from beets.dbcore.query import FieldQuery, FieldQueryType
     from beets.dbcore.sort import FieldSort
+    from beets.util.pathformats import PathFormat
 
     from .library import Library  # noqa: F401
 
@@ -257,7 +258,7 @@ class Album(LibModel):
     Reflects the library's "albums" table, including album art.
     """
 
-    artpath: bytes
+    artpath: bytes | None
 
     _table = "albums"
     _flex_table = "album_attributes"
@@ -393,7 +394,11 @@ class Album(LibModel):
             for item in self.items():
                 item.remove(delete, False)
 
-    def move_art(self, operation=MoveOperation.MOVE, item_dir=None):
+    def move_art(
+        self,
+        operation: MoveOperation = MoveOperation.MOVE,
+        item_dir: bytes | None = None,
+    ) -> None:
         """Move, copy, link or hardlink (depending on `operation`) any
         existing album art so that it remains in the same directory as
         the items.
@@ -430,7 +435,7 @@ class Album(LibModel):
             util.move(old_art, new_art)
             util.prune_dirs(
                 os.path.dirname(old_art),
-                self._db.directory,
+                self.db.directory,
                 clutter=beets.config["clutter"].as_str_seq(),
             )
         elif operation == MoveOperation.COPY:
@@ -515,7 +520,9 @@ class Album(LibModel):
 
         return total
 
-    def art_destination(self, image, item_dir=None):
+    def art_destination(
+        self, image: util.PathLike, item_dir: bytes | None = None
+    ) -> bytes:
         """Return a path to the destination for the album art image
         for the album.
 
@@ -533,13 +540,11 @@ class Album(LibModel):
         subpath = self.evaluate_template(filename_tmpl, True)
         if beets.config["asciify_paths"]:
             subpath = util.asciify_path(subpath)
-        subpath = util.sanitize_path(
-            subpath, replacements=self._db.replacements
-        )
-        subpath = bytestring_path(subpath)
+        subpath = util.sanitize_path(subpath, replacements=self.db.replacements)
+        subpath_bytes = bytestring_path(subpath)
 
         _, ext = os.path.splitext(image)
-        dest = os.path.join(item_dir, subpath + ext)
+        dest = os.path.join(item_dir, subpath_bytes + ext)
 
         return bytestring_path(dest)
 
@@ -1183,7 +1188,10 @@ class Item(LibModel):
     # Templating.
 
     def destination(
-        self, relative_to_libdir=False, basedir=None, path_formats=None
+        self,
+        relative_to_libdir: bool = False,
+        basedir: bytes | None = None,
+        path_formats: list[PathFormat] | None = None,
     ) -> bytes:
         """Return the path in the library directory designated for the item
         (i.e., where the file ought to be).
