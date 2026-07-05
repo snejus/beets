@@ -1,5 +1,6 @@
 import os
 import shutil
+from pathlib import Path
 
 import pytest
 
@@ -12,8 +13,8 @@ from beets.util import syspath
 
 
 class QueryTest(BeetsTestCase):
-    def add_item(self, filename=b"srcfile", templatefile=b"full.mp3"):
-        itempath = os.path.join(self.libdir, filename)
+    def add_item(self, filename=Path("srcfile"), templatefile=b"full.mp3"):
+        itempath = self.lib_path / filename
         shutil.copy(
             syspath(os.path.join(_common.RSRC, templatefile)), syspath(itempath)
         )
