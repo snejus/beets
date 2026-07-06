@@ -515,7 +515,7 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
         )
 
         album = re.sub(r" +", " ", result.title)
-        album_id = str(result.data["id"])
+        album_id = result.data["id"]
         # Use `.data` to access the tracklist directly instead of the
         # convenient `.tracklist` property, which will strip out useful artist
         # information and leave us with skeleton `Artist` objects that will
@@ -535,6 +535,8 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
 
         if self.config["append_style_genre"]:
             genres.extend(styles)
+
+        discogs_albumid = self._extract_id(result.data.get("uri"))
 
         # Extract information for the optional AlbumInfo fields that are
         # contained on nested discogs fields.
@@ -619,7 +621,7 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             original_day=original_day,
             data_source=self.data_source,
             data_url=data_url,
-            discogs_albumid=album_id,
+            discogs_albumid=discogs_albumid,
             discogs_labelid=label["id"] if label else None,
             discogs_artistid=albumartist.artist_id,
             cover_art_url=cover_art_url,
