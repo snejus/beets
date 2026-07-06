@@ -495,12 +495,13 @@ class BeatportPlugin(MetadataSourcePlugin):
         )
 
     def _get_artist(
-        self, artists: Iterable[tuple[str, str]] | None
+        self, artists: Sequence[tuple[str, str]] | None
     ) -> tuple[str, str | None]:
         """Returns an artist string (all artists) and an artist_id (the main
         artist) for a list of Beatport release or track artists.
         """
-        return self.get_artist(artists or [], id_key=0, name_key=1)  # type: ignore[arg-type]
+        artist_id, _ = artists[0]
+        return ", ".join(a for _, a in artists), artist_id
 
     def _get_tracks(self, query: str) -> list[TrackInfo]:
         """Returns a list of TrackInfo objects for a Beatport query."""
