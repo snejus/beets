@@ -420,7 +420,7 @@ def input_select_objects(
     objects individually.
     """
     choice = input_options(
-        ("y", "n", "s"), False, f"{prompt_all or prompt}? (Yes/no/select)"
+        ("y", "n", "s"), True, f"{prompt_all or prompt}? (Yes/no/select)"
     )
     print()  # Blank line.
 
