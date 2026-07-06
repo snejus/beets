@@ -572,7 +572,7 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             label=self.strip_disambiguation(label["name"]) if label else None,
             comments=result.data.get("notes"),
             mediums=len(set(mediums)),
-            releasegroup_id=master_id,
+            releasegroup_id=str(master_id) if master_id else None,
             catalognum=(
                 catnum
                 if (label and (catnum := label["catno"]) and catnum != "none")
