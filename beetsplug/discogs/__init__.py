@@ -563,7 +563,7 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
         label = labels[0] if (labels := result.data.get("labels")) else None
         return AlbumInfo(
             album=album,
-            album_id=album_id,
+            album_id=str(album_id),
             **albumartist.info,  # Unpacks values to satisfy the keyword arguments
             tracks=track_infos,
             albumstatus=albumstatus,
@@ -600,9 +600,9 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             original_year=original_year,
             data_source=self.data_source,
             data_url=data_url,
-            discogs_albumid=discogs_albumid,
+            discogs_albumid=int(discogs_albumid),
             discogs_labelid=label["id"] if label else None,
-            discogs_artistid=albumartist.artist_id,
+            discogs_artistid=int(albumartist.artist_id),
             cover_art_url=cover_art_url,
         )
 
