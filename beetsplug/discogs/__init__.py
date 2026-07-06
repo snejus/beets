@@ -800,7 +800,6 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             prefix = ", ".join(divisions)
             if prefix:
                 title = f"{prefix}: {title}"
-        track_id = None
         medium, medium_index, _ = self.get_track_index(track["position"])
 
         length = self.get_track_length(track["duration"])
@@ -815,11 +814,7 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
 
         return (
             TrackInfo(
-                title=title,
-                track_id=track_id,
-                **artistinfo.info,
-                length=length,
-                index=index,
+                title=title, **artistinfo.info, length=length, index=index
             ),
             medium,
             medium_index,
