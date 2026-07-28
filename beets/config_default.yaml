@@ -181,6 +181,7 @@ match:
         data_source: 2.0
         artist: 3.0
         album: 3.0
+        albumstatus: 1.0
         media: 1.0
         mediums: 1.0
         year: 1.0

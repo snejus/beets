@@ -513,6 +513,16 @@ def distance(
     elif original.country and album_info.country:
         dist.add_string("country", original.country, album_info.country)
 
+    # Albumstatus.
+    if albumstatus := album_info.albumstatus:
+        if options := [
+            re.compile(pat, re.I)
+            for pat in preferred_config["albumstatus"].as_str_seq()
+        ]:
+            dist.add_priority("albumstatus", albumstatus, options)
+        elif original_albumstatus := likelies["albumstatus"]:
+            dist.add_string("albumstatus", original_albumstatus, albumstatus)
+
     # Label.
     if original.label and album_info.label:
         dist.add_string("label", original.label, album_info.label)

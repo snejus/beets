@@ -807,6 +807,7 @@ def get_most_common_tags(items: Sequence[Item]) -> Likelies:
     fields = [
         "artist",
         "album",
+        "albumstatus",
         "albumartist",
         "year",
         "disctotal",
