@@ -92,6 +92,7 @@ FIELDS_TO_DISCOGS_KEYS = {
 split_country = re.compile(r"\b(?:, |,? & )\b").split
 remove_va_ft = partial(re.compile(r"va\b|\bf(ea)?t.*", re.I).sub, "")
 remove_disc = partial(re.compile(r"(?i)\b(CD|disc|vinyl)\s*\d+", re.I).sub, "")
+get_first_artist = partial(re.compile(r"(, | & | f(ea)?t).*", re.I).sub, "")
 
 
 def clean_query(query: str) -> str:
@@ -237,8 +238,15 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
         name = album or item.album or item.title
         if "various" in artist.lower():
             artist = item.artist
-        query = f"{remove_va_ft(artist).strip()} - {name}"
-        results.extend(self.get_albums(clean_query(query)))
+
+        def get_query(artist: str) -> str:
+            return clean_query(f"{remove_va_ft(artist).strip()} - {name}")
+
+        _results: Iterable[AlbumInfo]
+        if not (_results := list(self.get_albums(get_query(artist)))):
+            _results = self.get_albums(get_query(get_first_artist(artist)))
+        results.extend(_results)
+
         if not results and items and item.label and item.album:
             query = f"{item.label} {item.album}"
             results.extend(self.get_albums(clean_query(query)))
