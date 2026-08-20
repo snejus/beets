@@ -239,17 +239,22 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
         if "various" in artist.lower():
             artist = item.artist
 
-        def get_query(artist: str) -> str:
-            return clean_query(f"{remove_va_ft(artist).strip()} - {name}")
+        artist = remove_va_ft(artist).strip()
 
-        _results: Iterable[AlbumInfo]
-        if not (_results := list(self.get_albums(get_query(artist)))):
-            _results = self.get_albums(get_query(get_first_artist(artist)))
+        def get_albums(query: str) -> Iterator[AlbumInfo]:
+            return self.get_albums(clean_query(query))
+
+        queries = (
+            f"{artist} - {name}",
+            f"{get_first_artist(artist)} - {name}",
+            f"{artist} - {get_title_without_remix(name)}",
+        )
+        _results = next((filter(None, map(list, map(get_albums, queries)))), [])
         results.extend(_results)
 
         if not results and items and item.label and item.album:
             query = f"{item.label} {item.album}"
-            results.extend(self.get_albums(clean_query(query)))
+            results.extend(get_albums(query))
 
         return results
 
