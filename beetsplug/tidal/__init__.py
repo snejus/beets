@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import itertools
 import os
 import re
 import time
@@ -11,7 +10,7 @@ from typing import TYPE_CHECKING, ClassVar, Literal, Protocol, overload
 import confuse
 
 from beets import ui
-from beets.autotag import AlbumInfo, TrackInfo
+from beets.autotag import AlbumInfo, TrackInfo, string_dist
 from beets.dbcore import types
 from beets.exceptions import UserError
 from beets.logging import getLogger
@@ -20,7 +19,7 @@ from beets.metadata_plugins import MetadataSourcePlugin
 from .api import TidalAPI
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Sequence
+    from collections.abc import Callable, Iterable, Iterator, Sequence
 
     from beets.autotag import Info
     from beets.importer import ImportSession
@@ -139,6 +138,61 @@ class TidalPlugin(MetadataSourcePlugin):
     def tracks_for_ids(self, ids: Iterable[str]) -> Iterable[TrackInfo | None]:
         yield from self.search_tracks_by_ids(ids=ids)
 
+    def score_albums_from_tracks_query(
+        self, query: str
+    ) -> Iterator[tuple[AlbumInfo, float]]:
+        """Yield album matches inferred from track search results.
+
+        This provides a fallback lookup path when a release is easier to find by
+        song title than by album metadata. Track matches are ranked by textual
+        similarity to the search text, then expanded into the albums linked to
+        those tracks so callers can evaluate likely release candidates.
+        """
+        tracks_doc = self.api.search_results(
+            query, include=["tracks.artists", "tracks.albums"]
+        )
+
+        incl = tracks_doc["included"]
+        tracks = [i for i in incl if i["type"] == "tracks"]
+        artist_by_id = {i["id"]: i for i in incl if i["type"] == "artists"}
+
+        def get_artist_name(track: TidalTrack) -> str:
+            """Build the display name used when scoring a track match."""
+            return ", ".join(
+                artist_by_id[r["id"]]["attributes"]["name"]
+                for r in track["relationships"]["artists"]["data"]
+            )
+
+        scores = [
+            string_dist(
+                query, " ".join([get_artist_name(t), t["attributes"]["title"]])
+            )
+            for t in tracks
+        ]
+        tracks_with_scores = list(zip(tracks, scores))
+        tracks_with_scores.sort(key=lambda x: x[1])
+        return (
+            (ainfo, s)
+            for t, s in tracks_with_scores
+            for a in t["relationships"]["albums"]["data"]
+            for ainfo in self.search_albums_by_ids(tidal_ids=[a["id"]])
+            if ainfo
+        )
+
+    def score_albums_from_albums_query(
+        self, query: str
+    ) -> list[tuple[AlbumInfo, float]]:
+        """Rank album search results by how closely they match a free-form query.
+
+        This helps callers turn a broad album lookup into an ordered list where
+        the most relevant matches appear first.
+        """
+        albums = self.search_albums_by_query(query)
+        scores = [string_dist(query, f"{a.artist} {a.album}") for a in albums]
+        return sorted(
+            ((a, s) for a, s in zip(albums, scores)), key=lambda x: x[1]
+        )
+
     def candidates(
         self, items: Sequence[Item], artist: str, album: str, va_likely: bool
     ) -> Iterable[AlbumInfo]:
@@ -156,13 +210,19 @@ class TidalPlugin(MetadataSourcePlugin):
         ):
             return candidates[: self.search_limit]
 
-        return islice(
-            chain.from_iterable(
-                self.search_albums_by_query(q)
-                for q in self._album_queries(items)
-            ),
-            self.search_limit,
+        first_item = items[0]
+        # get best `search_limit` results from each iterable
+        results = chain.from_iterable(
+            islice(it, self.search_limit)
+            for it in (
+                self.score_albums_from_tracks_query(
+                    f"{first_item.artist} {first_item.title}"
+                ),
+                self.score_albums_from_albums_query(f"{artist} {album}"),
+            )
         )
+        sorted_results = sorted(results, key=lambda x: x[1])
+        return (a for a, _ in sorted_results[: self.search_limit])
 
     def item_candidates(
         self, item: Item, artist: str, title: str
@@ -191,16 +251,6 @@ class TidalPlugin(MetadataSourcePlugin):
 
         if item.artist:
             yield f"{item.artist} {item.title}"
-
-    @staticmethod
-    def _album_queries(items: Sequence[Item]) -> Iterable[str]:
-        """Search queries for albums."""
-
-        album_names = set(i.album for i in items)
-        artist_names = set(i.artist for i in items)
-
-        for album, artist in itertools.product(album_names, artist_names):
-            yield f"{artist} {album}"
 
     def search_tracks_by_query(self, query: str) -> Iterable[TrackInfo]:
         """Search for tracks given a string query."""
@@ -317,7 +367,7 @@ class TidalPlugin(MetadataSourcePlugin):
         ids: Iterable[str] | None = None,
         tidal_ids: Iterable[str] | None = None,
         barcode_ids: Iterable[str] | None = None,
-    ) -> Iterable[AlbumInfo | None]:
+    ) -> Iterator[AlbumInfo | None]:
         _ids: list[str | None] = list(tidal_ids or [])
         barcode_ids = list(barcode_ids or [])
         if ids:
