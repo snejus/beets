@@ -390,6 +390,10 @@ class SearchApiMetadataSourcePlugin(
 
         raise NotImplementedError
 
+    @cached_property
+    def search_limit(self) -> int:
+        return self.config["search_limit"].get(int)
+
     def _search_api(
         self, query_type: QueryType, query: str, filters: dict[str, str]
     ) -> Sequence[R]:
@@ -406,8 +410,7 @@ class SearchApiMetadataSourcePlugin(
             self._log.debug("Skipping search with empty query and filters")
             return ()
 
-        limit = self.config["search_limit"].get(int)
-        params = SearchParams(query_type, query, filters, limit)
+        params = SearchParams(query_type, query, filters, self.search_limit)
 
         self._log.debug("Searching for '{}' with {}", query, filters)
         try:
