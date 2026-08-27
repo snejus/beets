@@ -120,6 +120,7 @@ databases. They share the following configuration options:
     rewrite
     scrub
     smartplaylist
+    soundcloud
     sonosupdate
     spotify
     subsonicplaylist
@@ -161,6 +162,9 @@ Autotagger Extensions
 :doc:`spotify <spotify>`
     Search for releases in the Spotify_ database.
 
+:doc:`soundcloud <soundcloud>`
+    Search for public tracks and releases in the SoundCloud_ catalog.
+
 :doc:`tidal <tidal>`
     Search for releases in the Tidal_ catalog.
 
@@ -171,6 +175,8 @@ Autotagger Extensions
 .. _musicbrainz: https://www.musicbrainz.com
 
 .. _spotify: https://open.spotify.com/
+
+.. _soundcloud: https://soundcloud.com/
 
 .. _tidal: https://tidal.com/
 
