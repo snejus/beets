@@ -17,6 +17,9 @@ New features
   new tracks, and keeps the album together rather than splitting it. The option
   is available both through configuration and from the interactive duplicate
   prompt. :bug:`4471`
+- :doc:`plugins/soundcloud`: Add public SoundCloud track and release matches to
+  the autotagger, including direct URL and URN lookup, renewable application
+  authentication, and stable catalog metadata.
 
 Bug fixes
 ~~~~~~~~~
