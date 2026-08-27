@@ -36,14 +36,14 @@ from beets.metadata_plugins import (
     IDResponse,
     QueryType,
     SearchApiMetadataSourcePlugin,
+    SearchParams,
 )
 from beets.util import chunks
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, Sequence
+    from collections.abc import Iterable, Iterator, Mapping, Sequence
 
     from beets.library import Item, Library
-    from beets.metadata_plugins import SearchParams
 
 DEFAULT_WAITING_TIME = 5
 
@@ -598,6 +598,26 @@ class SpotifyPlugin(SearchApiMetadataSourcePlugin[SearchResponse]):
         self, query_type: QueryType, query: str, filters: dict[str, str]
     ) -> Sequence[SearchResponse]:
         return super()._search_api(query_type, query, filters)
+
+    def albums_from_tracks_query(self, query: str) -> Iterator[AlbumInfo]:
+        search_params = SearchParams(
+            query_type="track", query=query, filters={}, limit=self.search_limit
+        )
+        for track in self.get_search_response(search_params):
+            if album := self.album_for_id(track["album"]["id"]):
+                yield album
+
+    def candidates(
+        self, items: Sequence[Item], artist: str, album: str, va_likely: bool
+    ) -> Iterator[AlbumInfo]:
+        first_item = items[0]
+        track_query = f"{first_item.artist} - {first_item.title}"
+        yield from self.albums_from_tracks_query(track_query)
+
+        results = self._get_candidates("album", items, artist, album, va_likely)
+        yield from filter(
+            None, self.albums_for_ids(str(r["id"]) for r in results)
+        )
 
     def commands(self) -> list[ui.Subcommand]:
         # autotagger import command

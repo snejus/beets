@@ -12,16 +12,20 @@ from typing_extensions import NotRequired
 from beets import config, ui
 from beets.autotag import AlbumInfo, TrackInfo
 from beets.dbcore import types
-from beets.metadata_plugins import IDResponse, SearchApiMetadataSourcePlugin
+from beets.metadata_plugins import (
+    IDResponse,
+    SearchApiMetadataSourcePlugin,
+    SearchParams,
+)
 
 VARIOUS_ARTISTS_ID = 5080
 
 if TYPE_CHECKING:
     import optparse
-    from collections.abc import Sequence
+    from collections.abc import Iterator, Sequence
 
     from beets.library import Item, Library
-    from beets.metadata_plugins import QueryType, SearchParams
+    from beets.metadata_plugins import QueryType
 
 
 class Artist(TypedDict):
@@ -353,6 +357,26 @@ class DeezerPlugin(SearchApiMetadataSourcePlugin[SearchTrack | SearchAlbum]):
         )
         response.raise_for_status()
         return response.json()["data"]
+
+    def albums_from_tracks_query(self, query: str) -> Iterator[AlbumInfo]:
+        search_params = SearchParams(
+            query_type="track", query=query, filters={}, limit=self.search_limit
+        )
+        for track in self.get_search_response(search_params):
+            if album := self.album_for_id(track["album"]["id"]):
+                yield album
+
+    def candidates(
+        self, items: Sequence[Item], artist: str, album: str, va_likely: bool
+    ) -> Iterator[AlbumInfo]:
+        first_item = items[0]
+        track_query = f"{first_item.artist} - {first_item.title}"
+        yield from self.albums_from_tracks_query(track_query)
+
+        results = self._get_candidates("album", items, artist, album, va_likely)
+        yield from filter(
+            None, self.albums_for_ids(str(r["id"]) for r in results)
+        )
 
     def deezerupdate(self, items: Sequence[Item], write: bool) -> None:
         """Obtain rank information from Deezer."""
