@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 import os
 import sys
+from functools import partial
 from typing import TYPE_CHECKING
 
 import pytest
@@ -98,6 +99,52 @@ def pytest_assertrepr_compare(op, left, right):
     if isinstance(left, Distance) or isinstance(right, Distance):
         return [f"Comparing Distance: {float(left)} {op} {float(right)}"]
     return None
+
+
+def pytest_xdist_auto_num_workers(config: pytest.Config) -> int:
+    """Choose an xdist worker count that fits the scope of the current test run.
+
+    This keeps focused runs predictable by avoiding parallelism for a single
+    target or filtered selection, while allowing broader runs to scale either
+    from explicit overrides, the number of requested paths, or available CPU
+    capacity.
+
+    Notably, for a single test file -n0 is much faster than -n auto.
+
+    Examples:
+    `pytest -n auto tests/unit/test_service.py`
+        Disables xdist for a single targeted file.
+
+    `pytest -n auto tests/unit tests/integration`
+        Uses up to two workers because two paths were requested.
+
+    `pytest -n auto -k refund`
+        Disables xdist for a filtered run to keep feedback predictable.
+
+    `pytest -n4`
+        Use 4 workers, skipping this logic.
+    """
+
+    logical = os.cpu_count() or 1
+    stderr = partial(print, file=sys.stderr)
+
+    if len(args := config.getoption("file_or_dir")) == 1 or config.getoption(
+        "-k"
+    ):
+        stderr("Not using xdist due to '-k' option or single path provided.")
+        count = 0
+    elif args:
+        stderr(
+            f"Auto-detecting number of workers based on {len(args)} paths provided"
+        )
+        count = min(len(args), config.getoption("maxprocesses") or logical)
+    else:
+        stderr(
+            "No files or directories specified, defaulting to logical CPU count"
+        )
+        return logical
+
+    return count
 
 
 class _CurrentStderrHandler(logging.StreamHandler):  # type: ignore[type-arg]
