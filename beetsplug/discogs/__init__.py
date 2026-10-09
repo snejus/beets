@@ -79,10 +79,6 @@ TRACK_INDEX_RE = re.compile(
     re.VERBOSE,
 )
 
-RELEASE_DATE_RE = re.compile(
-    r"(?P<year>\d{4})(?:-(?P<month>\d{1,2})(?:-(?P<day>\d{1,2}))?)?"
-)
-
 FIELDS_TO_DISCOGS_KEYS = {
     "barcode": "barcode",
     "catalognum": "catno",
@@ -94,27 +90,6 @@ FIELDS_TO_DISCOGS_KEYS = {
 split_country = re.compile(r"\b(?:, |,? & )\b").split
 
 MEDIA_FORMAT_ALIASES = {"digital media", "web"}
-
-
-def parse_release_date(
-    released: str | None, year: int | None
-) -> tuple[int | None, int | None, int | None]:
-    """Return the ``(year, month, day)`` a release was issued on.
-
-    Discogs reports the year of a release in its own field but the rest of
-    the date only as part of `released`, which is absent or partial for many
-    releases. `year` is therefore used for any component `released` does not
-    provide.
-    """
-    if not (m := RELEASE_DATE_RE.fullmatch((released or "").strip())):
-        return year, None, None
-
-    released_year, month, day = (
-        int(i) if i else 0 for i in m.group("year", "month", "day")
-    )
-
-    # A zero stands for "unknown" in Discogs' dates, as does a missing group.
-    return released_year or year, month or None, day or None
 
 
 def get_title_without_remix(name: str) -> str:
@@ -476,9 +451,6 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
 
         # Extract information for the optional AlbumInfo fields, if possible.
         va = albumartist.artist == config["va_name"].as_str()
-        year, month, day = parse_release_date(
-            result.data.get("released"), result.data.get("year")
-        )
         mediums = [t["medium"] for t in tracks]
         data_url = result.data.get("uri")
         # we swap genre and style since discogs genres are more general and
@@ -515,6 +487,11 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
 
         # Retrieve master release id (returns None if there isn't one).
         master_id = result.data.get("master_id")
+
+        released = (result.data.get("released") or "").split("-")
+        year = int(released[0]) if released[0] else result.data.get("year")
+        month = int(released[1]) if len(released) > 1 else None
+        day = int(released[2]) if len(released) > 2 else None
         # Assume this release *is* the original when it has no master
         # release, otherwise fetch the master release. Only its year is
         # available, so the original month and day stay unknown there.

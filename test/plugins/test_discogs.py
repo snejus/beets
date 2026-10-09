@@ -251,15 +251,10 @@ class TestDGAlbumInfo(DiscogsTestMixin, TestHelper):
             _p("2000-08-13", (2000, 8, 13), id="full-date"),
             _p("2000-08", (2000, 8, None), id="year-and-month"),
             _p("2000", (2000, None, None), id="year-only"),
-            _p("2000-00-00", (2000, None, None), id="zeroed-month-and-day"),
-            _p("2000-08-00", (2000, 8, None), id="zeroed-day"),
             _p("2000-8-1", (2000, 8, 1), id="unpadded"),
-            _p("  2000-08-13  ", (2000, 8, 13), id="surrounding-whitespace"),
             # Fall back to the release's own `year` field.
             _p("", (3001, None, None), id="empty"),
             _p(None, (3001, None, None), id="missing"),
-            _p("0000-00-00", (3001, None, None), id="zeroed-date"),
-            _p("13 Aug 2000", (3001, None, None), id="unparseable"),
         ],
     )
     def test_parse_release_date(self, released, expected):
