@@ -538,6 +538,7 @@ class DiscogsPlugin(SearchApiMetadataSourcePlugin[IDResponse]):
             month=month,
             day=day,
             label=self.strip_disambiguation(label["name"]) if label else None,
+            comments=result.data.get("notes"),
             mediums=len(set(mediums)),
             releasegroup_id=master_id,
             catalognum=(
